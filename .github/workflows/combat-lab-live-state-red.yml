@@ -14,10 +14,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          show-progress: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
       - name: Run new regression before implementation
-        run: node scripts/combat_lab_live_state_regression_smoke.mjs
+        shell: bash
+        run: |
+          set +e
+          node scripts/combat_lab_live_state_regression_smoke.mjs > combat-lab-live-state.log 2>&1
+          STATUS=$?
+          tail -n 120 combat-lab-live-state.log
+          exit "$STATUS"
+      - name: Upload focused regression output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-live-state-log
+          path: combat-lab-live-state.log
+          if-no-files-found: error
