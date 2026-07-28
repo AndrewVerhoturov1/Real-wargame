@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 0
           show-progress: false
 
-      - name: Fix signed-zero assertion and remove transport files
+      - name: Fix signed-zero assertion and remove patch chunks
         shell: bash
         run: |
           set -euo pipefail
@@ -39,17 +39,28 @@ jobs:
               "assert.equal(shot.dispersionYawRadians, 0, 'Zero randomness must remove the random yaw sample only.');":
                   "assert.equal(Math.abs(shot.dispersionYawRadians), 0, 'Zero randomness must remove the random yaw sample only.');",
           }
+          changed = False
           for before, after in replacements.items():
-              if text.count(before) != 1:
-                  raise SystemExit(f'Expected exactly one assertion to replace: {before}')
-              text = text.replace(before, after)
-          path.write_text(text, encoding='utf-8')
+              if before in text:
+                  text = text.replace(before, after)
+                  changed = True
+              elif after not in text:
+                  raise SystemExit(f'Neither old nor corrected assertion was found: {before}')
+          if changed:
+              path.write_text(text, encoding='utf-8')
           PY
           rm -f .github/temporary-combat-lab-honest-accuracy.patch.part-{00..07}
-          rm -f .github/workflows/temporary-source-export.yml
           git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
+          git add scripts/combat_lab_accuracy_controls_regression_smoke.ts
+          git add -u .github/temporary-combat-lab-honest-accuracy.patch.part-00 \
+            .github/temporary-combat-lab-honest-accuracy.patch.part-01 \
+            .github/temporary-combat-lab-honest-accuracy.patch.part-02 \
+            .github/temporary-combat-lab-honest-accuracy.patch.part-03 \
+            .github/temporary-combat-lab-honest-accuracy.patch.part-04 \
+            .github/temporary-combat-lab-honest-accuracy.patch.part-05 \
+            .github/temporary-combat-lab-honest-accuracy.patch.part-06 \
+            .github/temporary-combat-lab-honest-accuracy.patch.part-07
           git commit -m 'test: accept signed zero in accuracy regression'
           git push origin HEAD:feature/20260726-shooting-stage-09v-combat-lab
