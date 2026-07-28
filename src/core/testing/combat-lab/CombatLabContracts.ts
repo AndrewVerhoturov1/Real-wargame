@@ -1,6 +1,6 @@
 import type { UnitPosture } from '../../behavior/BehaviorModel';
 import type { HitZone } from '../../combat/UnitHitShapes';
-import type { FireMode } from '../../infantry-combat/catalogs/CombatCatalogTypes';
+import type { FireMode, WeaponProficiency } from '../../infantry-combat/catalogs/CombatCatalogTypes';
 import type { SimulationState } from '../../simulation/SimulationState';
 
 export const COMBAT_LAB_SCHEMA_VERSION = 1 as const;
@@ -82,6 +82,17 @@ export interface CombatLabControlDistanceV1 {
   readonly metres: number;
 }
 
+export interface CombatLabAccuracyOverridesV1 {
+  readonly schemaVersion: 1;
+  readonly dispersionMultiplier: number;
+  readonly aimTimeSeconds: number;
+  readonly shootingSkill: number;
+  readonly weaponProficiency: WeaponProficiency;
+  readonly randomnessMultiplier: number;
+  readonly randomSeed: number;
+  readonly usePhysicalAimThreshold: true;
+}
+
 export type CombatLabScriptCommandV1 =
   | {
       readonly kind: 'fire';
@@ -91,6 +102,12 @@ export type CombatLabScriptCommandV1 =
       readonly mode: FireMode;
       readonly targetRadiusMetres: number;
       readonly minimumSolutionQuality: number;
+      /** Independent decision threshold for a production perception contact. */
+      readonly minimumPerceptionQuality?: number;
+      /** Bypasses only the perception decision threshold; a unit target still requires a real contact. */
+      readonly forceFire?: boolean;
+      /** Session-local test override snapshot. Production player/AI commands never set this. */
+      readonly accuracyOverrides?: CombatLabAccuracyOverridesV1 | null;
     }
   | {
       readonly kind: 'cancel_fire';
