@@ -129,13 +129,17 @@ assert.match(combatEffectsRenderer, /processedShotIds/, 'Shot IDs must be de-dup
 assert.equal((combatEffectsRenderer.match(/playRifleShot\(\)/g) ?? []).length, 1, 'One committed shot must produce exactly one rifle sound.');
 
 for (const marker of [
-  'getWeaponRuntime(unit)',
-  'getWeaponDefinition(runtime.weaponId)',
-  'weaponVisualKind(definition)',
-  'weaponSilhouette(kind)',
+  'buildUnitBarSnapshot(unit)',
+  'unit.infantryCombatRuntime',
+  'primary?.roundsInWeapon',
+  'infantry.ammoInventory.reserves',
+  'infantry.physiology.blood.bloodLoss',
+  'infantry.suppression.suppressionLevel',
+  'weaponVisualKindFromText',
+  'weaponSilhouette(snapshot.weaponVisualKind)',
   'unit-bar-weapon',
   'Технический идентификатор:',
-]) assert.ok(unitBarPresentation.includes(marker), `Weapon-aware shared soldier panel must contain ${marker}.`);
+]) assert.ok(unitBarPresentation.includes(marker), `Production shared soldier panel must contain ${marker}.`);
 
 assert.match(gameStyles, /TacticalWorkspaceLayoutEnhancements/);
 assert.match(gameStyles, /tactical-workspace-production\.css/);
