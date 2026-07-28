@@ -12,12 +12,12 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout corrected product head
         uses: actions/checkout@v4
         with:
-          ref: ac4779dcfd1353ace4cd1c8664de502626cb31c7
+          ref: 8cbad1df40eeb2699d9c2cf97866dabdacb89666
           fetch-depth: 0
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
@@ -26,21 +26,13 @@ jobs:
           cache: npm
       - name: Install exact dependencies
         run: npm ci --no-audit --no-fund
-      - name: Capture Stage 5 aim verification
-        id: stage5
-        shell: bash
-        run: |
-          set +e
-          npm run infantry-combat-stage5:verify > "$RUNNER_TEMP/stage5-angular.log" 2>&1
-          status=$?
-          cat "$RUNNER_TEMP/stage5-angular.log"
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          exit 0
-      - name: Upload Stage 5 verification log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: infantry-combat-stage5-angular-log
-          path: ${{ runner.temp }}/stage5-angular.log
-      - name: Require Stage 5 aim verification success
-        run: test "${{ steps.stage5.outputs.status }}" -eq 0
+      - name: Run camera and aim regression
+        run: node scripts/combat_lab_camera_aim_regression_smoke.mjs
+      - name: Run Stage 5 aim verification
+        run: npm run infantry-combat-stage5:verify
+      - name: Run Combat Lab workspace contract
+        run: node scripts/combat_lab_workspace_layout_smoke.mjs
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
