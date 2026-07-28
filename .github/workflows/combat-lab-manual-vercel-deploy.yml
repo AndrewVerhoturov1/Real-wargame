@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: combat-lab-manual-vercel-8cbad1df40eeb2699d9c2cf97866dabdacb89666
+  group: combat-lab-manual-vercel-dcf222268847f9954971615a20374d62168c9d33
   cancel-in-progress: false
 
 jobs:
@@ -21,12 +21,12 @@ jobs:
     env:
       EXPECTED_VERCEL_PROJECT_NAME: repo
       DEPLOY_REF: feature/20260726-shooting-stage-09v-combat-lab
-      DEPLOY_SHA: 8cbad1df40eeb2699d9c2cf97866dabdacb89666
+      DEPLOY_SHA: dcf222268847f9954971615a20374d62168c9d33
     steps:
       - name: Checkout exact product commit
         uses: actions/checkout@v4
         with:
-          ref: 8cbad1df40eeb2699d9c2cf97866dabdacb89666
+          ref: dcf222268847f9954971615a20374d62168c9d33
           fetch-depth: 0
 
       - name: Verify exact source
