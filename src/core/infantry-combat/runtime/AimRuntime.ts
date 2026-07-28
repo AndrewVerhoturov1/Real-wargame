@@ -62,6 +62,7 @@ export function updateAimTrackingAtBoundary(
   boundarySeconds: number,
 ): AimSolutionRuntimeV1 {
   const solution = updateAimTrackingAtBoundaryStage5(state, shooter, task, weapon, boundarySeconds);
+  synchronizeElevationWithDesiredDirection(solution);
   applyDirectionGate(task);
   return solution;
 }
@@ -121,6 +122,28 @@ export function resolveProductionAimFactors(
   });
   const mode = shooter.infantryCombatRuntime.activeFireTask?.mode ?? 'single';
   return applyMachineGunFireFactors(base, weapon, mode);
+}
+
+function synchronizeElevationWithDesiredDirection(solution: AimSolutionRuntimeV1): void {
+  if (!solution.valid) return;
+  const current = normalizeDirection(solution.currentDirection);
+  const desired = normalizeDirection(solution.desiredDirection);
+  const currentHorizontal = Math.hypot(current.x, current.y);
+  const desiredHorizontal = Math.hypot(desired.x, desired.y);
+
+  if (currentHorizontal <= DIRECTION_MAGNITUDE_EPSILON || desiredHorizontal <= DIRECTION_MAGNITUDE_EPSILON) {
+    solution.currentDirection = structuredClone(desired);
+    solution.directionSegmentStart = structuredClone(desired);
+    return;
+  }
+
+  const elevatedCurrent = normalizeDirection({
+    x: current.x / currentHorizontal * desiredHorizontal,
+    y: current.y / currentHorizontal * desiredHorizontal,
+    z: desired.z,
+  });
+  solution.currentDirection = elevatedCurrent;
+  solution.directionSegmentStart = structuredClone(elevatedCurrent);
 }
 
 function applyDirectionGate(task: FireTaskRuntimeV1): void {
