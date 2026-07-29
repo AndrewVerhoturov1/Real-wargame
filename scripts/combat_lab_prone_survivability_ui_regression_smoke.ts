@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { CombatLabVisualSession } from '../src/combat-lab/runtime/CombatLabVisualSession';
 import { advanceVisualContact } from '../src/core/perception/PerceptionContact';
 import { tickSimulation } from '../src/core/simulation/SimulationTick';
 import {
@@ -14,11 +15,14 @@ import { combatLabMetricLabelRu } from '../src/combat-lab/ui/CombatLabMetricLabe
 verifyProneContactHeightReachesPhysicalHit();
 verifyOnlyLaboratoryTargetsAreKeptAlive();
 verifyRifleTargetsUseSeparatedFiringLanes();
+verifyAutomaticWeaponTargetsUseSeparatedFiringLanes();
+verifyJournalReportsPhysicalMisses();
+verifyJournalReportsProductionMoralEffects();
 verifyToolbarCannotCoverScrolledControls();
 verifyWorkspaceResizeWaitsForCssTransition();
 verifyMetricCardsHaveRussianLabels();
 
-console.log('Combat Lab prone target, survivability and UI regression smoke passed.');
+console.log('Combat Lab prone target, firing lanes, journal, survivability and UI regression smoke passed.');
 
 function verifyProneContactHeightReachesPhysicalHit(): void {
   const built = buildCombatLabInitialState('rifle-distance-baseline', 1, 9041);
@@ -50,16 +54,7 @@ function verifyProneContactHeightReachesPhysicalHit(): void {
     minimumSolutionQuality: 0.5,
     minimumPerceptionQuality: 0,
     forceFire: true,
-    accuracyOverrides: {
-      schemaVersion: 1,
-      dispersionMultiplier: 0.05,
-      aimTimeSeconds: 0.05,
-      shootingSkill: 1,
-      weaponProficiency: 'specialist',
-      randomnessMultiplier: 0,
-      randomSeed: 9041,
-      usePhysicalAimThreshold: true,
-    },
+    accuracyOverrides: deterministicAccuracyOverrides(9041),
   }, {
     ownerId: 'prone-height-regression',
     commandSequence: 1,
@@ -105,19 +100,147 @@ function verifyOnlyLaboratoryTargetsAreKeptAlive(): void {
 
 function verifyRifleTargetsUseSeparatedFiringLanes(): void {
   const built = buildCombatLabInitialState('rifle-distance-baseline', 1, 9041);
-  const shooter = requireUnit(built, 'rifle-distance-shooter');
-  const targets = ['rifle-target-25', 'rifle-target-50', 'rifle-target-100', 'rifle-target-200']
-    .map((unitId) => requireUnit(built, unitId));
-  const bearings = targets.map((target) => Math.atan2(
-    target.position.y - shooter.position.y,
-    target.position.x - shooter.position.x,
-  ) * 180 / Math.PI).sort((left, right) => left - right);
+  verifyFiringLaneSet(built, 'rifle-distance-shooter', [
+    { unitId: 'rifle-target-25', distanceMetres: 25 },
+    { unitId: 'rifle-target-50', distanceMetres: 50 },
+    { unitId: 'rifle-target-100', distanceMetres: 100 },
+    { unitId: 'rifle-target-200', distanceMetres: 200 },
+  ], 6);
+}
+
+function verifyAutomaticWeaponTargetsUseSeparatedFiringLanes(): void {
+  const ppsh = buildCombatLabInitialState('ppsh-burst-recoil', 1, 9043);
+  verifyFiringLaneSet(ppsh, 'ppsh-shooter', [
+    { unitId: 'ppsh-target-15', distanceMetres: 15 },
+    { unitId: 'ppsh-target-30', distanceMetres: 30 },
+    { unitId: 'ppsh-target-60', distanceMetres: 60 },
+  ], 10);
+
+  const dp27 = buildCombatLabInitialState('dp27-portable-deployed', 1, 9044);
+  verifyFiringLaneSet(dp27, 'dp-portable-gunner', [
+    { unitId: 'dp-portable-target-50', distanceMetres: 50 },
+    { unitId: 'dp-portable-target-100', distanceMetres: 100 },
+    { unitId: 'dp-portable-target-150', distanceMetres: 150 },
+  ], 8);
+}
+
+function verifyJournalReportsPhysicalMisses(): void {
+  const session = new CombatLabVisualSession('rifle-distance-baseline', 9041);
+  const shooter = requireUnit(session, 'rifle-distance-shooter');
+  const result = session.executeInteractive({
+    kind: 'fire',
+    shooterUnitId: shooter.id,
+    targetUnitId: null,
+    targetPointMetres: { xMetres: 28, yMetres: 6, zMetres: 0.05 },
+    mode: 'single',
+    targetRadiusMetres: 0,
+    minimumSolutionQuality: 0.5,
+    minimumPerceptionQuality: 0,
+    forceFire: true,
+    accuracyOverrides: deterministicAccuracyOverrides(9049),
+  });
+  assert.equal(result.accepted, true, result.reasonRu);
+
+  stepSessionUntil(session, (entry) => entry.includes('промах'), 360);
+  assert.ok(
+    session.getSnapshot().eventJournal.some((entry) => entry.includes('промах')),
+    'A physical projectile that does not hit a unit must be explicitly described as a miss.',
+  );
+}
+
+function verifyJournalReportsProductionMoralEffects(): void {
+  const session = new CombatLabVisualSession('rifle-distance-baseline', 9041);
+  const shooter = requireUnit(session, 'rifle-distance-shooter');
+  const target = requireUnit(session, 'rifle-target-25');
+  shooter.perceptionKnowledge.contacts = [advanceVisualContact(null, {
+    id: `${shooter.id}:contact:${target.id}`,
+    stimulusId: target.id,
+    sourceUnitId: target.id,
+    labelRu: 'Наблюдаемая мишень',
+    position: { ...target.position },
+    targetHeightMeters: 1.1,
+    evidencePerSecond: 200,
+    deltaSeconds: 1,
+    nowSeconds: 0,
+  })];
+
+  const result = session.executeInteractive({
+    kind: 'fire',
+    shooterUnitId: shooter.id,
+    targetUnitId: target.id,
+    targetPointMetres: null,
+    mode: 'single',
+    targetRadiusMetres: 0,
+    minimumSolutionQuality: 0.5,
+    minimumPerceptionQuality: 0,
+    forceFire: true,
+    accuracyOverrides: deterministicAccuracyOverrides(9050),
+  });
+  assert.equal(result.accepted, true, result.reasonRu);
+
+  stepSessionUntil(session, (entry) => entry.includes('Моральное воздействие:'), 480);
+  assert.ok(
+    session.state.infantryCombatProjectiles.impacts.some((impact) => impact.hitUnitId === target.id),
+    'The moral-effect journal regression must be driven by a real physical hit.',
+  );
+  const effectEntry = session.getSnapshot().eventJournal.find((entry) => (
+    entry.includes('Моральное воздействие:') && entry.includes(`[${target.id}]`)
+  ));
+  assert.ok(effectEntry, 'A production suppression update must create a journal entry for the affected target.');
+  assert.match(effectEntry, /подавление \d+(?:,\d)?→\d+(?:,\d)?%/);
+  assert.match(effectEntry, /стресс \d+(?:,\d)?→\d+(?:,\d)?%/);
+  assert.match(effectEntry, /боевой дух \d+(?:,\d)?→\d+(?:,\d)?%/);
+}
+
+function verifyFiringLaneSet(
+  built: Pick<ReturnType<typeof buildCombatLabInitialState>, 'state'>,
+  shooterUnitId: string,
+  targets: readonly { readonly unitId: string; readonly distanceMetres: number }[],
+  minimumBearingSeparationDegrees: number,
+): void {
+  const shooter = requireUnit(built, shooterUnitId);
+  const bearings = targets.map(({ unitId, distanceMetres }) => {
+    const target = requireUnit(built, unitId);
+    const deltaX = target.position.x - shooter.position.x;
+    const deltaY = target.position.y - shooter.position.y;
+    const actualDistance = Math.hypot(deltaX, deltaY) * built.state.map.metersPerCell;
+    assert.ok(
+      Math.abs(actualDistance - distanceMetres) < 1e-6,
+      `${unitId} must preserve ${distanceMetres} m, got ${actualDistance} m.`,
+    );
+    return Math.atan2(deltaY, deltaX) * 180 / Math.PI;
+  }).sort((left, right) => left - right);
+
   for (let index = 1; index < bearings.length; index += 1) {
     assert.ok(
-      bearings[index]! - bearings[index - 1]! >= 6,
-      `Neighbouring firing lanes must differ by at least 6°, got ${bearings[index - 1]}° and ${bearings[index]}°`,
+      bearings[index]! - bearings[index - 1]! >= minimumBearingSeparationDegrees,
+      `Neighbouring firing lanes must differ by at least ${minimumBearingSeparationDegrees}°, got ${bearings[index - 1]}° and ${bearings[index]}°`,
     );
   }
+}
+
+function stepSessionUntil(
+  session: CombatLabVisualSession,
+  predicate: (entry: string) => boolean,
+  maximumSteps: number,
+): void {
+  for (let step = 0; step < maximumSteps; step += 1) {
+    session.stepOnce();
+    if (session.getSnapshot().eventJournal.some(predicate)) return;
+  }
+}
+
+function deterministicAccuracyOverrides(randomSeed: number) {
+  return {
+    schemaVersion: 1 as const,
+    dispersionMultiplier: 0.05,
+    aimTimeSeconds: 0.05,
+    shootingSkill: 1,
+    weaponProficiency: 'specialist' as const,
+    randomnessMultiplier: 0,
+    randomSeed,
+    usePhysicalAimThreshold: true as const,
+  };
 }
 
 function verifyToolbarCannotCoverScrolledControls(): void {
@@ -146,7 +269,7 @@ function verifyMetricCardsHaveRussianLabels(): void {
 }
 
 function requireUnit(
-  built: ReturnType<typeof buildCombatLabInitialState>,
+  built: Pick<ReturnType<typeof buildCombatLabInitialState>, 'state'>,
   unitId: string,
 ) {
   const unit = built.state.units.find((candidate) => candidate.id === unitId);
