@@ -250,10 +250,12 @@ function verifySettingsNormalizeFromSceneData(): void {
 }
 
 function verifySceneExportIncludesSettings(): void {
-  const source = readFileSync('src/ui/SceneExport.ts', 'utf8');
-  assert.ok(source.includes('tacticalPositionSettings: serializeTacticalPositionSettings(unit)'));
-  assert.ok(source.includes('getTacticalPositionSearchService(state)'));
-  assert.ok(source.includes('tacticalPositionSearchService?.clearUnit(unit.id)'));
+  const facade = readFileSync('src/ui/SceneExport.ts', 'utf8');
+  const snapshot = readFileSync('src/core/simulation/SceneSnapshot.ts', 'utf8');
+  assert.ok(facade.includes('buildSceneSnapshot(state'));
+  assert.ok(snapshot.includes('tacticalPositionSettings: serializeTacticalPositionSettings(unit)'));
+  assert.ok(snapshot.includes('getTacticalPositionSearchService(state)'));
+  assert.ok(snapshot.includes('tacticalPositionSearchService?.clearUnit(unit.id)'));
 }
 
 function verifyOccupationAndEditorContracts(): void {
