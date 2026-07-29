@@ -1,0 +1,22 @@
+# Generated Repository Context
+
+- Project: `Real-wargame`
+- Default branch: `main`
+- Temporary branch required: yes
+- Never create from another active feature branch: yes
+- Explicit base branch required: yes
+- Remote base verification required: yes
+- No early PR: yes
+- One PR per finished task: yes
+- Deployment requires explicit request: yes
+- Canonical deployment path: manual GitHub Actions workflow `.github/workflows/manual-vercel-preview.yml`
+- Publication-only deployment: yes
+- Exact source required: yes
+- One deployment per verified SHA: yes
+- Emergency fallback: project-pinned exact-source Vercel CLI deployment from an exact local checkout
+- Preview URL is not branch transfer: yes
+- Required deployment pages: `/index.html`, `/ai-node-editor.html`, `/combat-lab.html`
+- Performance source: `docs/performance/PERFORMANCE_PRINCIPLES.md`
+- Visual QA source: `docs/quality/VISUAL_QA_POLICY.md`
+- Static inspection is live QA: no
+- Browser automation requires permission: yes

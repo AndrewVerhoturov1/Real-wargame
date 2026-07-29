@@ -1,0 +1,359 @@
+:root {
+  --workspace-sidebar: 370px;
+  --workspace-bottom: 96px;
+  --combat-lab-dock-width: 370px;
+}
+
+.tactical-workspace-bar {
+  grid-template-columns: minmax(150px, 0.7fr) auto auto minmax(300px, 1.2fr);
+  gap: 8px;
+}
+
+.workspace-time-controls {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px;
+  border: 1px solid rgba(255, 240, 161, 0.2);
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.workspace-time-controls-label {
+  padding: 0 4px 0 7px;
+  color: var(--workspace-muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.workspace-time-controls > [data-action="pause"],
+.workspace-time-controls .unit-bar-speed-group button {
+  box-sizing: border-box;
+  min-width: 38px;
+  min-height: 30px;
+  height: 30px;
+  padding: 4px 7px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.workspace-time-controls > [data-action="pause"] {
+  min-width: 72px;
+}
+
+.workspace-time-controls .unit-bar-speed-group {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(38px, 1fr));
+  gap: 3px;
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.simulation-unit-bar {
+  box-sizing: border-box;
+  min-height: 86px;
+  max-height: 96px;
+  grid-template-columns: minmax(155px, 0.58fr) minmax(0, 1.42fr);
+  grid-template-areas:
+    "identity stats"
+    "posture controls";
+  gap: 5px 10px;
+  padding: 7px 9px;
+  overflow: hidden;
+}
+
+.simulation-unit-bar > * {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.unit-bar-identity {
+  grid-area: identity;
+  align-self: stretch;
+  align-content: center;
+  overflow: hidden;
+}
+
+.unit-bar-identity strong {
+  overflow: hidden;
+  color: var(--workspace-accent);
+  font-size: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.unit-bar-identity > span,
+.unit-bar-current span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.simulation-unit-bar .unit-bar-current {
+  margin-top: 2px;
+  display: grid;
+  gap: 1px;
+  color: var(--workspace-muted);
+  font-size: 9px;
+  line-height: 1.15;
+}
+
+.unit-bar-stats {
+  grid-area: stats;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(48px, 1fr));
+  gap: 5px;
+  align-self: center;
+}
+
+.unit-bar-stat {
+  min-width: 0;
+  padding: 4px 5px;
+  overflow: hidden;
+}
+
+.unit-bar-stat span,
+.unit-bar-stat b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.posture-group {
+  grid-area: posture;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  min-width: 0;
+  overflow: visible;
+}
+
+.simulation-controls {
+  grid-area: controls;
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.simulation-unit-bar .posture-group button,
+.simulation-unit-bar .simulation-controls button {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 28px;
+  height: 28px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  overflow: hidden;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.simulation-unit-bar .simulation-controls button {
+  min-width: 104px;
+}
+
+.simulation-unit-bar > .unit-bar-speed-group,
+.simulation-unit-bar .unit-bar-route-controls,
+.simulation-unit-bar [data-role="state-plan-panel"],
+.simulation-unit-bar .unit-attention-profile,
+.simulation-unit-bar .unit-attention-mode,
+.simulation-unit-bar [data-action="step"],
+.simulation-unit-bar [data-action="evaluate"],
+.simulation-unit-bar [data-action="execute"],
+.simulation-unit-bar [data-action="reset-unit"] {
+  display: none !important;
+}
+
+.workspace-resize-handle {
+  position: absolute;
+  z-index: 8;
+  top: 62px;
+  bottom: 8px;
+  width: 10px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.workspace-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(255, 240, 161, 0.14);
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.workspace-resize-handle:hover::after,
+body.workspace-panel-resizing .workspace-resize-handle::after {
+  background: rgba(255, 240, 161, 0.75);
+  box-shadow: 0 0 8px rgba(255, 240, 161, 0.28);
+}
+
+.workspace-resize-handle-right {
+  left: -5px;
+}
+
+.workspace-resize-handle-right::after {
+  left: 4px;
+}
+
+.workspace-resize-handle-left {
+  right: -5px;
+}
+
+.workspace-resize-handle-left::after {
+  right: 4px;
+}
+
+body.sidebar-collapsed .workspace-resize-handle-right,
+body.combat-lab-dock-collapsed .workspace-resize-handle-left {
+  display: none;
+}
+
+body.workspace-panel-resizing {
+  cursor: ew-resize !important;
+  user-select: none !important;
+}
+
+body.workspace-panel-resizing * {
+  cursor: ew-resize !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root {
+  width: var(--combat-lab-dock-width);
+}
+
+body.app-shell-mode-combat-lab .combat-lab-dock,
+body.app-shell-mode-combat-lab .combat-lab-drawer {
+  border: 1px solid var(--workspace-line);
+  border-radius: 14px;
+  color: var(--workspace-text);
+  background: var(--workspace-bg);
+  box-shadow: 10px 14px 34px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(7px);
+}
+
+body.app-shell-mode-combat-lab .combat-lab-dock-header {
+  min-height: 58px;
+  padding: 10px 10px 8px 14px;
+  border-bottom: 1px solid rgba(255, 240, 161, 0.12);
+  background: transparent;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-dock-brand strong {
+  color: var(--workspace-accent);
+  font-size: 16px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-dock-brand span,
+body.app-shell-mode-combat-lab .combat-lab-dock-status {
+  color: var(--workspace-muted);
+  font-size: 10px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root button,
+body.app-shell-mode-combat-lab #combat-lab-extension-root select,
+body.app-shell-mode-combat-lab #combat-lab-extension-root input {
+  border-color: rgba(255, 240, 161, 0.24);
+  color: var(--workspace-text);
+  background: var(--workspace-soft);
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root button:hover:not(:disabled),
+body.app-shell-mode-combat-lab #combat-lab-extension-root button.active {
+  border-color: rgba(255, 240, 161, 0.62);
+  background: rgba(255, 240, 161, 0.12);
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root button.primary,
+body.app-shell-mode-combat-lab .combat-lab-tab-list button.active {
+  color: #141910;
+  border-color: var(--workspace-accent);
+  background: var(--workspace-accent);
+}
+
+body.app-shell-mode-combat-lab .combat-lab-tab-list {
+  gap: 5px;
+  padding: 8px;
+  border-bottom: 1px solid rgba(255, 240, 161, 0.11);
+  background: transparent;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-tab-list button {
+  min-height: 34px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-tab-panel,
+body.app-shell-mode-combat-lab .combat-lab-run-toolbar {
+  background: transparent;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-run-toolbar {
+  border-bottom-color: rgba(255, 240, 161, 0.11);
+}
+
+body.app-shell-mode-combat-lab .combat-lab-panel,
+body.app-shell-mode-combat-lab .combat-lab-run-more,
+body.app-shell-mode-combat-lab .combat-lab-details,
+body.app-shell-mode-combat-lab .combat-lab-advanced,
+body.app-shell-mode-combat-lab .combat-lab-metric-card,
+body.app-shell-mode-combat-lab .combat-lab-status,
+body.app-shell-mode-combat-lab .combat-lab-journal {
+  border-color: rgba(255, 240, 161, 0.13);
+  background: rgba(255, 242, 168, 0.035);
+}
+
+body.app-shell-mode-combat-lab .combat-lab-run-controls.scenario-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.app-shell-mode-combat-lab .combat-lab-run-controls.scenario-only > button {
+  width: 100%;
+}
+
+@media (max-width: 1260px) {
+  .workspace-brand {
+    display: none;
+  }
+
+  .tactical-workspace-bar {
+    grid-template-columns: auto auto minmax(260px, 1fr);
+  }
+}
+
+@media (max-width: 940px) {
+  :root {
+    --workspace-sidebar: min(360px, calc(100vw - 20px));
+    --workspace-bottom: 132px;
+  }
+
+  .workspace-time-controls-label {
+    display: none;
+  }
+
+  .workspace-time-controls .unit-bar-speed-group {
+    grid-template-columns: repeat(3, minmax(38px, 1fr));
+  }
+
+  .simulation-unit-bar {
+    min-height: 120px;
+    max-height: 132px;
+    grid-template-columns: minmax(130px, 0.55fr) minmax(0, 1.45fr);
+  }
+}

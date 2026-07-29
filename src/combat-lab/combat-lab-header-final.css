@@ -1,0 +1,43 @@
+body.app-shell-mode-combat-lab .combat-lab-dock-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "brand toggle"
+    "status toggle";
+  align-items: center;
+  min-height: 58px;
+  gap: 1px 7px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-dock-brand {
+  grid-area: brand;
+  min-width: 0;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-dock-brand strong {
+  display: block;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-dock-brand span {
+  display: none;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-dock-clock {
+  grid-area: status;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 8px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-dock-toggle {
+  grid-area: toggle;
+  align-self: stretch;
+  min-height: 36px;
+}

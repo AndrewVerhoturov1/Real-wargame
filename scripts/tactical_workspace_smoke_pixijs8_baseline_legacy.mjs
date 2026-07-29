@@ -275,8 +275,6 @@ expectIncludes('src/rendering/PixiVisibilityHeatmapRenderer.ts', [
   'const image = context.createImageData(mapWidth, mapHeight)',
 ]);
 expectIncludes('src/ui/AttentionRuntimePanel.ts', [
-  'attention-compact-legend', 'Хорошо видно', 'Средне', 'Слабо', 'Не видно',
-  'Текущий контакт', 'Последнее место', 'Подозрение', 'Звук',
   "metric('Полей в кеше', String(fieldDiagnostics.cachedFieldCount))",
   'Повторных использований с запуска',
 ]);
@@ -382,10 +380,13 @@ expectIncludes('src/core/debug/BuildIdentity.ts', [
 expectIncludes('src/core/editor/GameEditorPlacement.ts', [
   'rememberSelectedUnitForTest', 'state.units.push(unit)', 'rememberSelectedUnitForTest(state)',
 ]);
-expectIncludes('src/main.ts', [
-  'installTacticalWorkspace(state, aiGameBridge',
+expectIncludes('src/game/GameApplication.ts', [
+  'installTacticalWorkspace(this.state, aiGameBridge',
   'installEditorHeaderPlacement()', 'installWorkspaceTooltipGuard()', 'languageToggle.click()',
-  'installCombatControls(state', 'installCombatEffectsRenderer(tacticalBoard, state)',
+  'installCombatControls(this.state', 'installCombatEffectsRenderer(this.board, state)',
+]);
+expectIncludes('src/main.ts', [
+  'GameApplication.create({', "mode: 'game'", 'collectGameApplicationElements()',
 ]);
 expectIncludes('src/ui/CombatControls.ts', [
   'installCombatControls', 'Стрельба: запрещена', 'Стрельба: разрешена',

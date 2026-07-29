@@ -14,6 +14,8 @@ export interface PerceptionContactMemory {
   confidence: number;
   uncertaintyCells: number;
   lastKnownPosition: GridPosition;
+  /** Last visually observed target height; absent for reports/sounds that never observed posture. */
+  lastKnownTargetHeightMeters?: number;
   visibleNow: boolean;
   observedNow: boolean;
   lastObservedSeconds: number;
@@ -35,6 +37,7 @@ export interface VisualContactInput {
   sourceUnitId?: string | null;
   labelRu: string;
   position: GridPosition;
+  targetHeightMeters?: number;
   evidencePerSecond: number;
   detectionVariance?: number;
   deltaSeconds: number;
@@ -49,6 +52,7 @@ export interface ReportedContactInput {
   sourceUnitId?: string | null;
   labelRu: string;
   position: GridPosition;
+  targetHeightMeters?: number;
   confidence: number;
   uncertaintyCells: number;
   nowSeconds: number;
@@ -144,6 +148,7 @@ export function advanceVisualContact(
     confidence,
     uncertaintyCells,
     lastKnownPosition: { ...input.position },
+    ...targetHeightMemory(input.targetHeightMeters ?? previous?.lastKnownTargetHeightMeters),
     visibleNow: contactStageRank(stage) >= contactStageRank('identified'),
     observedNow: contactStageRank(stage) >= contactStageRank('contact'),
     lastObservedSeconds: input.nowSeconds,
@@ -184,6 +189,7 @@ export function advanceReportedContact(
     confidence: Math.max(previous?.confidence ?? 0, confidence),
     uncertaintyCells: Math.max(0.25, input.uncertaintyCells),
     lastKnownPosition: { ...input.position },
+    ...targetHeightMemory(input.targetHeightMeters ?? previous?.lastKnownTargetHeightMeters),
     visibleNow: false,
     observedNow: false,
     lastObservedSeconds: previous?.lastObservedSeconds ?? -1,
@@ -273,6 +279,7 @@ function normalizeContact(value: Partial<PerceptionContactMemory>): PerceptionCo
     confidence: clamp(number(value.confidence, evidence / 1.5), 0, 100),
     uncertaintyCells: Math.max(0.25, number(value.uncertaintyCells, 6)),
     lastKnownPosition: normalizePosition(value.lastKnownPosition),
+    ...targetHeightMemory(value.lastKnownTargetHeightMeters),
     visibleNow: Boolean(value.visibleNow),
     observedNow: Boolean(value.observedNow),
     lastObservedSeconds: number(value.lastObservedSeconds, -1),
@@ -289,6 +296,17 @@ function isContactStage(value: unknown): value is PerceptionContactStage {
 
 function isContactSource(value: unknown): value is PerceptionContactSource {
   return value === 'visual' || value === 'sound' || value === 'reported' || value === 'fire_pressure';
+}
+
+function targetHeightMemory(value: unknown): Pick<PerceptionContactMemory, 'lastKnownTargetHeightMeters'> | Record<string, never> {
+  const normalized = normalizeTargetHeightMeters(value);
+  return normalized === undefined ? {} : { lastKnownTargetHeightMeters: normalized };
+}
+
+function normalizeTargetHeightMeters(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? clamp(value, 0.1, 3)
+    : undefined;
 }
 
 function normalizePosition(value: unknown): GridPosition {
@@ -309,6 +327,9 @@ function contactFingerprint(contact: PerceptionContactMemory): string {
     uncertainty: Math.round(contact.uncertaintyCells * 10),
     x: Math.round(contact.lastKnownPosition.x * 10),
     y: Math.round(contact.lastKnownPosition.y * 10),
+    targetHeight: contact.lastKnownTargetHeightMeters === undefined
+      ? null
+      : Math.round(contact.lastKnownTargetHeightMeters * 100),
     visibleNow: contact.visibleNow,
     observedNow: contact.observedNow,
     detectionVariance: Math.round(contact.detectionVariance * 1000),

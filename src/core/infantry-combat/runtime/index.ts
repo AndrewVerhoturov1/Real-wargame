@@ -6,6 +6,7 @@ export * from './AmmoInventoryRuntime';
 export * from './AutomaticFireRuntime';
 export * from './AutomaticFireSupportPoints';
 export * from './AimRuntime';
+export * from './FireTaskTestOverrides';
 export * from './MachineGunFireModifiers';
 export * from './MachineGunAssistant';
 export * from './WeaponDeploymentTypes';

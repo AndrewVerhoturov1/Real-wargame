@@ -112,6 +112,18 @@ export class CameraController {
     return this.worldContainer.scale.x;
   }
 
+  /**
+   * Keeps the same world point under the centre when a surrounding panel
+   * changes the viewport size. The camera owns the transform and publishes the
+   * updated diagnostics used by DOM overlays such as the front zones.
+   */
+  preserveViewportCentre(deltaWidth: number, deltaHeight: number): void {
+    if (!Number.isFinite(deltaWidth) || !Number.isFinite(deltaHeight)) return;
+    if (Math.abs(deltaWidth) < 0.5 && Math.abs(deltaHeight) < 0.5) return;
+    this.panWorldBy(deltaWidth / 2, deltaHeight / 2);
+    this.publishDiagnostics();
+  }
+
   private readonly handleWheel = (event: WheelEvent): void => {
     event.preventDefault();
     this.diagnostics.wheelEventCount += 1;

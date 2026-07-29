@@ -5,7 +5,7 @@ import process from 'node:process';
 const options = parseArgs(process.argv.slice(2));
 const outputDirectory = path.resolve(options.root ?? 'dist');
 const requireSource = options['require-source'] === true;
-const requiredPages = ['index.html', 'ai-node-editor.html'];
+const requiredPages = ['index.html', 'ai-node-editor.html', 'combat-lab.html'];
 const failures = [];
 
 for (const page of requiredPages) {

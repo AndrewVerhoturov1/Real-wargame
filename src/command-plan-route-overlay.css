@@ -9,6 +9,11 @@
   display: none !important;
 }
 
+/* Keep command and route diagnostics in the right inspector; never open them as a map-obscuring lower-bar popover. */
+.unit-bar-route-controls > .unit-route-details {
+  display: none !important;
+}
+
 .command-plan-route-status {
   display: block;
   overflow: hidden;

@@ -1,0 +1,210 @@
+:root {
+  --combat-lab-dock-width: 370px;
+}
+
+body.app-shell-mode-combat-lab.workspace-simulation #app {
+  min-width: 0;
+  min-height: 0;
+}
+
+body.app-shell-mode-combat-lab.workspace-simulation #app canvas {
+  display: block;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root,
+body.app-shell-mode-combat-lab .combat-lab-dock,
+body.app-shell-mode-combat-lab .combat-lab-tab-panels,
+body.app-shell-mode-combat-lab .combat-lab-tab-panel {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-dock-header {
+  min-height: 54px;
+  gap: 6px;
+  padding: 8px 8px 7px 12px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-dock-brand strong {
+  font-size: 16px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-dock-toggle {
+  min-width: 70px;
+  min-height: 30px;
+  padding: 4px 7px;
+  font-size: 10px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-tab-list {
+  gap: 4px;
+  padding: 6px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-tab-list button {
+  min-height: 30px;
+  padding: 4px 5px;
+  border-radius: 7px;
+  font-size: 10px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-tab-panel {
+  padding: 7px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root button,
+body.app-shell-mode-combat-lab #combat-lab-extension-root select,
+body.app-shell-mode-combat-lab #combat-lab-extension-root input {
+  min-height: 28px;
+  border-radius: 6px;
+  font-size: 10px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root button {
+  padding: 4px 7px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root select,
+body.app-shell-mode-combat-lab #combat-lab-extension-root input {
+  padding: 3px 6px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-run-toolbar {
+  gap: 5px;
+  margin: -7px -7px 7px;
+  padding: 7px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-scenario-row {
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 5px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-run-controls {
+  gap: 4px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-run-controls.scenario-only > button {
+  min-height: 30px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-left {
+  gap: 6px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-panel {
+  gap: 5px;
+  padding: 7px;
+  border-radius: 7px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-section-title,
+body.app-shell-mode-combat-lab .combat-lab-tab-heading {
+  font-size: 12px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-field {
+  gap: 2px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-field > span {
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-row {
+  gap: 4px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-run-more,
+body.app-shell-mode-combat-lab .combat-lab-details,
+body.app-shell-mode-combat-lab .combat-lab-advanced {
+  border-radius: 7px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-run-more > summary,
+body.app-shell-mode-combat-lab .combat-lab-details > summary,
+body.app-shell-mode-combat-lab .combat-lab-advanced > summary {
+  min-height: 30px;
+  padding: 5px 7px;
+  font-size: 10px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-run-more > .combat-lab-row,
+body.app-shell-mode-combat-lab .combat-lab-details > :not(summary),
+body.app-shell-mode-combat-lab .combat-lab-advanced > :not(summary),
+body.app-shell-mode-combat-lab .combat-lab-advanced > .combat-lab-panel {
+  margin: 0 6px 6px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-instructions {
+  padding: 0 7px 7px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-instructions h3 {
+  margin-bottom: 3px;
+  font-size: 13px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-instructions p,
+body.app-shell-mode-combat-lab .combat-lab-instructions li {
+  font-size: 10px;
+  line-height: 1.32;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-instructions ol {
+  margin: 4px 0 5px 16px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-layer-list {
+  gap: 4px 7px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-layer-list label {
+  gap: 5px;
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-metric-grid {
+  gap: 5px;
+  margin-bottom: 7px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-metric-card {
+  gap: 2px;
+  padding: 6px 7px;
+  border-radius: 7px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-diagnostics {
+  min-height: 260px;
+  margin: 0 6px 6px;
+  padding: 7px;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-log-panel {
+  gap: 6px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-status {
+  padding: 6px 7px;
+  font-size: 9px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-journal {
+  padding: 4px 6px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-journal-entry {
+  padding: 2px 0;
+  font-size: 9px;
+  line-height: 1.32;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-empty-tab {
+  padding: 9px;
+  font-size: 10px;
+}

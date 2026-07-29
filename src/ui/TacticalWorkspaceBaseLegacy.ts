@@ -47,6 +47,9 @@ import { bindTacticalStatePlanPanel, renderTacticalStatePlanPanelMarkup } from '
 import { exitLab, openEditorTab } from '../shared/AppShellMenu';
 
 export type TacticalWorkspaceMode = 'simulation' | 'editor';
+
+const WORKSPACE_LAYOUT_TRANSITION_MILLISECONDS = 150;
+const WORKSPACE_LAYOUT_RESIZE_SETTLE_MILLISECONDS = 20;
 type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'memory';
 
 type StableDecision = {
@@ -327,7 +330,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     q<HTMLButtonElement>('[data-action="collapse"]').textContent = collapsed ? '›' : '‹';
     for (const item of shell.querySelectorAll<HTMLButtonElement>('[data-mode]')) item.classList.toggle('active', item.dataset.mode === mode);
     updateEditorPlaceButton();
-    window.requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    scheduleWorkspaceViewportResize();
   }
 
   function update(force = false): void {
@@ -756,3 +759,12 @@ function pct(x:number):string{return `${Math.max(0,Math.min(100,Math.round(x)))}
 function direction(x:number):string{const a=((x%360)+360)%360;return ['восток','юго-восток','юг','юго-запад','запад','северо-запад','север','северо-восток'][Math.round(a/45)%8];}
 function sourceLabel(x:string):string{return ({seen:'увидел сам',reported:'получил доклад',heard:'услышал',fire_pressure:'почувствовал воздействие огня'} as Record<string,string>)[x]??x;}
 function esc(x:string):string{return x.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');}
+
+function scheduleWorkspaceViewportResize(): void {
+  const dispatch = (): void => { window.dispatchEvent(new Event('resize')); };
+  window.requestAnimationFrame(dispatch);
+  window.setTimeout(
+    dispatch,
+    WORKSPACE_LAYOUT_TRANSITION_MILLISECONDS + WORKSPACE_LAYOUT_RESIZE_SETTLE_MILLISECONDS,
+  );
+}

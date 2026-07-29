@@ -1,5 +1,6 @@
 import { Container, Graphics } from 'pixi.js';
 import { getCombatEventHistory, type CombatEvent } from '../core/combat/CombatEvents';
+import type { ProjectileImpactV1, ShotCommitRecordV1 } from '../core/infantry-combat/runtime';
 import { gridToWorld } from '../core/map/MapModel';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { playRifleShot } from '../ui/CombatAudio';
@@ -29,7 +30,7 @@ interface ImpactEffect {
   startedMs: number;
   durationMs: number;
   point: ScreenPoint;
-  hitType: Extract<CombatEvent, { kind: 'projectile_impact' }>['hitType'];
+  hitType: 'none' | 'terrain' | 'object' | 'unit';
 }
 
 type CombatVisualEffect = MuzzleEffect | TracerEffect | ImpactEffect;
@@ -39,7 +40,9 @@ const MAX_ACTIVE_EFFECTS = 96;
 export class PixiCombatEffectsRenderer {
   readonly container = new Container();
   private readonly graphics = new Graphics();
-  private readonly processedEventIds = new Set<string>();
+  private readonly processedLegacyEventIds = new Set<string>();
+  private readonly processedShotIds = new Set<string>();
+  private readonly processedImpactIds = new Set<string>();
   private readonly originByShotId = new Map<string, ScreenPoint>();
   private effects: CombatVisualEffect[] = [];
 
@@ -53,7 +56,10 @@ export class PixiCombatEffectsRenderer {
   render(state: SimulationState): void {
     const nowMs = currentTimeMs();
     const history = getCombatEventHistory(state);
-    this.consumeNewEvents(state, history, nowMs);
+    const projectiles = state.infantryCombatProjectiles;
+    this.consumeCommittedShots(state, projectiles.committedShots, nowMs);
+    this.consumeProjectileImpacts(state, projectiles.impacts, nowMs);
+    this.consumeLegacyEvents(state, history, nowMs);
     this.effects = this.effects
       .filter((effect) => nowMs - effect.startedMs <= effect.durationMs)
       .slice(-MAX_ACTIVE_EFFECTS);
@@ -66,62 +72,132 @@ export class PixiCombatEffectsRenderer {
       else drawImpact(this.graphics, effect, progress);
     }
 
-    this.pruneProcessedHistory(history);
+    this.pruneProcessedHistory(history, projectiles.committedShots, projectiles.impacts);
   }
 
   destroy(): void {
     this.effects = [];
-    this.processedEventIds.clear();
+    this.processedLegacyEventIds.clear();
+    this.processedShotIds.clear();
+    this.processedImpactIds.clear();
     this.originByShotId.clear();
     this.container.destroy({ children: true });
   }
 
-  private consumeNewEvents(
+  private consumeCommittedShots(
+    state: SimulationState,
+    committedShots: readonly ShotCommitRecordV1[],
+    nowMs: number,
+  ): void {
+    for (const shot of committedShots) {
+      if (this.processedShotIds.has(shot.shotId)) continue;
+      this.startShotEffect(state, shot.shotId, shot.muzzlePosition, nowMs);
+    }
+  }
+
+  private consumeProjectileImpacts(
+    state: SimulationState,
+    impacts: readonly ProjectileImpactV1[],
+    nowMs: number,
+  ): void {
+    for (const impact of impacts) {
+      if (this.processedImpactIds.has(impact.impactId)) continue;
+      this.processedImpactIds.add(impact.impactId);
+      this.startImpactEffect(state, impact.shotId, impact.point, impact.hitType, nowMs);
+    }
+  }
+
+  private consumeLegacyEvents(
     state: SimulationState,
     history: readonly CombatEvent[],
     nowMs: number,
   ): void {
     for (const event of history) {
-      if (this.processedEventIds.has(event.id)) continue;
-      this.processedEventIds.add(event.id);
+      if (this.processedLegacyEventIds.has(event.id)) continue;
+      this.processedLegacyEventIds.add(event.id);
 
       if (event.kind === 'shot_fired') {
-        const origin = metresToWorld(state, event.origin);
-        this.originByShotId.set(event.shotId, origin);
-        this.effects.push({ kind: 'muzzle', startedMs: nowMs, durationMs: 130, point: origin });
-        playRifleShot();
+        if (!this.processedShotIds.has(event.shotId)) {
+          this.startShotEffect(state, event.shotId, event.origin, nowMs);
+        }
         continue;
       }
 
       if (event.kind === 'projectile_impact') {
-        const impact = metresToWorld(state, event.impactPoint);
-        const origin = this.originByShotId.get(event.shotId)
-          ?? findShotOrigin(state, history, event.shotId);
-        if (origin) {
-          this.effects.push({
-            kind: 'tracer',
-            startedMs: nowMs,
-            durationMs: 210,
-            from: origin,
-            to: impact,
-          });
-        }
-        this.effects.push({
-          kind: 'impact',
-          startedMs: nowMs,
-          durationMs: event.hitType === 'unit' ? 420 : 300,
-          point: impact,
-          hitType: event.hitType,
-        });
+        const legacyImpactId = `legacy:${event.id}`;
+        if (this.processedImpactIds.has(legacyImpactId)) continue;
+        this.processedImpactIds.add(legacyImpactId);
+        this.startImpactEffect(state, event.shotId, event.impactPoint, event.hitType, nowMs);
       }
     }
   }
 
-  private pruneProcessedHistory(history: readonly CombatEvent[]): void {
-    const retainedEventIds = new Set(history.map((event) => event.id));
-    const retainedShotIds = new Set(history.map((event) => event.shotId));
-    for (const eventId of this.processedEventIds) {
-      if (!retainedEventIds.has(eventId)) this.processedEventIds.delete(eventId);
+  private startShotEffect(
+    state: SimulationState,
+    shotId: string,
+    muzzlePosition: { xMetres: number; yMetres: number },
+    nowMs: number,
+  ): void {
+    this.processedShotIds.add(shotId);
+    const origin = metresToWorld(state, muzzlePosition);
+    this.originByShotId.set(shotId, origin);
+    this.effects.push({ kind: 'muzzle', startedMs: nowMs, durationMs: 130, point: origin });
+    playRifleShot();
+  }
+
+  private startImpactEffect(
+    state: SimulationState,
+    shotId: string,
+    point: { xMetres: number; yMetres: number },
+    hitType: 'none' | 'terrain' | 'object' | 'unit',
+    nowMs: number,
+  ): void {
+    const impact = metresToWorld(state, point);
+    const origin = this.originByShotId.get(shotId);
+    if (origin) {
+      this.effects.push({
+        kind: 'tracer',
+        startedMs: nowMs,
+        durationMs: 210,
+        from: origin,
+        to: impact,
+      });
+    }
+    this.effects.push({
+      kind: 'impact',
+      startedMs: nowMs,
+      durationMs: hitType === 'unit' ? 420 : 300,
+      point: impact,
+      hitType,
+    });
+  }
+
+  private pruneProcessedHistory(
+    history: readonly CombatEvent[],
+    committedShots: readonly ShotCommitRecordV1[],
+    impacts: readonly ProjectileImpactV1[],
+  ): void {
+    const retainedLegacyEventIds = new Set(history.map((event) => event.id));
+    const retainedShotIds = new Set([
+      ...history.map((event) => event.shotId),
+      ...committedShots.map((shot) => shot.shotId),
+      ...impacts.map((impact) => impact.shotId),
+    ]);
+    const retainedImpactIds = new Set([
+      ...history
+        .filter((event) => event.kind === 'projectile_impact')
+        .map((event) => `legacy:${event.id}`),
+      ...impacts.map((impact) => impact.impactId),
+    ]);
+
+    for (const eventId of this.processedLegacyEventIds) {
+      if (!retainedLegacyEventIds.has(eventId)) this.processedLegacyEventIds.delete(eventId);
+    }
+    for (const shotId of this.processedShotIds) {
+      if (!retainedShotIds.has(shotId)) this.processedShotIds.delete(shotId);
+    }
+    for (const impactId of this.processedImpactIds) {
+      if (!retainedImpactIds.has(impactId)) this.processedImpactIds.delete(impactId);
     }
     for (const shotId of this.originByShotId.keys()) {
       if (!retainedShotIds.has(shotId)) this.originByShotId.delete(shotId);
@@ -158,15 +234,6 @@ function drawImpact(graphics: Graphics, effect: ImpactEffect, progress: number):
     .stroke({ width: effect.hitType === 'unit' ? 2.5 : 1.8, color, alpha });
   graphics.circle(effect.point.x, effect.point.y, Math.max(1, 3 * (1 - progress)))
     .fill({ color, alpha: alpha * 0.8 });
-}
-
-function findShotOrigin(
-  state: SimulationState,
-  history: readonly CombatEvent[],
-  shotId: string,
-): ScreenPoint | null {
-  const fired = history.find((event) => event.kind === 'shot_fired' && event.shotId === shotId);
-  return fired && fired.kind === 'shot_fired' ? metresToWorld(state, fired.origin) : null;
 }
 
 function metresToWorld(

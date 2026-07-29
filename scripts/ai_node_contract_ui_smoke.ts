@@ -187,13 +187,17 @@ for (const expected of [
   'installSubgraphParameterSync',
 ]) assert.ok(statefulSource.includes(expected), `Missing visible Subgraph UI marker: ${expected}`);
 
-const mainSource = readFileSync('src/ai-node-editor/main.ts', 'utf8');
-assert.ok(!mainSource.includes('Проверить и обновить формат графа'));
-assert.ok(!mainSource.includes('graph-v1-warning'));
-assert.ok(mainSource.includes('graph-validation-issue'));
-assert.ok(mainSource.includes('data-port-id'));
-assert.ok(mainSource.includes('Главный граф'));
-assert.ok(mainSource.includes("document.querySelector<HTMLSelectElement>('#stateful-subgraph-id')?.value"));
-assert.ok(!mainSource.includes("...(graphNavigation.length ? [editorGraph.nameRu ?? editorGraph.name] : [])"));
+const mainFacadeSource = readFileSync('src/ai-node-editor/main.ts', 'utf8');
+assert.ok(mainFacadeSource.includes("import './editor-refinement';"), 'the editor facade must install refinement behavior');
+assert.ok(mainFacadeSource.includes("from './main-ux';"), 'the editor facade must re-export the modular editor implementation');
 
-console.log('AI node contract UI smoke passed: typed ports, convenient attention and contact-investigation controls, persistent custom blackboard selects, authoritative friendly saves, Graph v2-only editor, errors, and visible Russian subgraph controls.');
+const mainUxSource = readFileSync('src/ai-node-editor/main-ux.ts', 'utf8');
+assert.ok(!mainUxSource.includes('Проверить и обновить формат графа'));
+assert.ok(!mainUxSource.includes('graph-v1-warning'));
+assert.ok(mainUxSource.includes('graph-validation-issue'));
+assert.ok(mainUxSource.includes('data-port-id'));
+assert.ok(mainUxSource.includes("getEditorText('mainGraph', uiState.languageMode)"));
+assert.ok(mainUxSource.includes("document.querySelector<HTMLSelectElement>('#stateful-subgraph-id')?.value"));
+assert.ok(!mainUxSource.includes("...(graphNavigation.length ? [editorGraph.nameRu ?? editorGraph.name] : [])"));
+
+console.log('AI node contract UI smoke passed: typed ports, convenient attention and contact-investigation controls, persistent custom blackboard selects, authoritative friendly saves, modular Graph v2-only editor, errors, and visible Russian subgraph controls.');

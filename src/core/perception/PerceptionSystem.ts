@@ -241,6 +241,7 @@ export function tickUnitPerception(
       sourceUnitId: stimulus.sourceUnitId,
       labelRu: stimulus.labelRu,
       position: stimulus.position,
+      targetHeightMeters: stimulus.targetHeightMeters,
       evidencePerSecond: visualSignal.evidencePerSecond,
       detectionVariance,
       // A check grants one bounded observation sample, never the whole time since the previous check.

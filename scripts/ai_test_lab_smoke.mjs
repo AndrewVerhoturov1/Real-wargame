@@ -130,13 +130,19 @@ expectIncludes('src/rendering/PixiThreatEditorRenderer.ts', [
 ]);
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   'buildAwarenessWorldKey',
-  'currentMode',
+  'getSimulationLayerState',
   'STEALTH_PIXEL_LUT',
   'drawAwarenessRasterWords',
-  'new Worker',
-  'AwarenessWorldWorker.ts',
+  'readReadyWorldField',
+  'TacticalPositionInputController',
+  'getTacticalPositionSearchService',
+]);
+expectIncludes('src/runtime/AwarenessWorldRuntime.ts', [
+  "new Worker(new URL('../workers/AwarenessWorldWorker.ts'",
   'workerJobsCoalesced',
   'workerResultsStaleDropped',
+  'readReadyWorldField',
+  'destroy(): void',
 ]);
 expectIncludes('src/workers/AwarenessWorldWorker.ts', [
   'buildAwarenessWorldField',
@@ -177,6 +183,13 @@ expectIncludes('src/ai-test-lab.css', [
   'cursor-crosshair-threat',
 ]);
 expectIncludes('src/core/ai/AiGameBridge.ts', [
+  'AI_GAME_BRIDGE_FACADE_CONTRACT',
+  'evaluateNow:',
+  'tickAiGameBridgeForTrustedUnit',
+  'withAiSimulationExecutionContext',
+  'requestPostureTransition',
+]);
+expectIncludes('src/core/ai/AiGameBridgeLegacy.ts', [
   'evaluateNow()',
   'unit.behaviorRuntime.ammo',
   'unit.behaviorRuntime.weaponReady',
@@ -201,22 +214,39 @@ expectIncludes('src/core/testing/AiTestLabRuntime.ts', [
   'resetAiTestScene',
 ]);
 expectIncludes('src/core/simulation/SimulationTick.ts', [
+  'tickSimulationLegacy',
+  'beginWeaponDeploymentStepLocks',
+  'requestStaticTacticalPositionBasis',
+]);
+expectIncludes('src/core/simulation/SimulationTickLegacy.ts', [
   'getAiTestTimeScale',
   'syncSoldierThreatMemory',
+  'tickAiSimulationScheduler',
+  'tickInfantryCombatSimulation',
 ]);
 expectIncludes('src/ui/SceneExport.ts', [
-  'scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid',
+  'scene-export-v10-physical-posture-action-2m-grid',
   'replaceSceneAtRuntimeResolution',
+  'serializeReferenceProjectileRuntimeState',
+  'staticTacticalPositionArtifact',
   'coverReliability',
   'directionDegrees',
   'initialState',
   'tacticalKnowledge',
 ]);
 expectIncludes('src/ui/TacticalWorkspace.ts', [
+  'STATIC_TACTICAL_TABS',
+  'Наблюдение',
+  'Оборона',
+  'Огонь',
+  'Маршрут',
+  'toggleThreatCones',
+]);
+expectIncludes('src/ui/TacticalWorkspaceBaseLegacy.ts', [
   'Симуляция',
   'Редактирование',
-  'Слой опасности',
-  'Слой скрытности',
+  'Опасность',
+  'Скрытность',
   'Обзор и память',
 ]);
 expectIncludes('tests/preview-screenshots.spec.ts', [

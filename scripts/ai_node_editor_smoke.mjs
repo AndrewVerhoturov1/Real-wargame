@@ -19,6 +19,8 @@ const requiredFiles = [
   'src/ai-node-editor/ai-node-editor-authoring.css',
   'src/ai-node-editor/human-node-ui.css',
   'src/ai-game-bridge.css',
+  'src/game/GameApplication.ts',
+  'src/game/GameStyles.ts',
   'src/shared/AppShellMenu.ts',
   'src/shared/app-shell-menu.css',
   'src/core/simulation/SimulationState.ts',
@@ -130,15 +132,18 @@ const indexHtml = readText('index.html');
 expectContains(indexHtml, 'pause-toggle', 'HUD должен иметь кнопку паузы.');
 
 const appMain = readText('src/main.ts');
-expectContains(appMain, 'installAiGameBridge', 'Игра должна подключать мост AI-графа к SimulationState.');
-expectContains(appMain, 'installAiGameBridge(state)', 'Мост должен запускаться после создания state.');
-expectContains(appMain, './ai-game-bridge.css', 'Игра должна подключать стили реплик бойца.');
+const gameApplication = readText('src/game/GameApplication.ts');
+const gameStyles = readText('src/game/GameStyles.ts');
+expectContains(appMain, 'GameApplication.create', 'Игра должна запускаться через общий GameApplication.');
+expectContains(gameApplication, 'installAiStatefulMoveGameBridge as installAiGameBridge', 'GameApplication должен подключать производственный мост AI-графа.');
+expectContains(gameApplication, 'installAiGameBridge(this.state)', 'Мост должен запускаться после привязки SimulationState.');
+expectContains(gameStyles, "../ai-game-bridge.css", 'Общий набор игровых стилей должен подключать реплики бойца.');
 expectContains(appMain, 'installAppShellMenu', 'Игра должна подключать общее верхнее меню.');
 expectContains(appMain, "mode: 'game'", 'Игра должна использовать game-режим общего меню.');
-expectContains(appMain, 'pause-toggle', 'Игра должна подключать кнопку паузы.');
-expectContains(appMain, 'setPaused(!getPaused())', 'Кнопка паузы должна менять runtime-флаг паузы.');
-expectContains(appMain, 'PausableRuntimeState', 'Пауза должна быть runtime-флагом без изменения основного SimulationState.');
-expectContains(appMain, 'syncPauseStateToDebugTrace', 'Пауза должна обновлять debug trace для редактора.');
+expectContains(gameApplication, 'pauseToggle', 'GameApplication должен подключать кнопку паузы.');
+expectContains(gameApplication, 'controller.toggle()', 'Кнопка паузы должна менять runtime-флаг паузы.');
+expectContains(gameApplication, 'PausableSimulationState', 'Пауза должна быть runtime-флагом без изменения основного SimulationState.');
+expectContains(gameApplication, 'syncPauseStateToDebugTrace', 'Пауза должна обновлять debug trace для редактора.');
 
 const simulationState = readText('src/core/simulation/SimulationState.ts');
 expectContains(simulationState, 'export interface SimulationState', 'SimulationState должен сохраниться полным исходным контрактом.');
@@ -159,7 +164,9 @@ for (const needle of [
   'Новая игра',
   'Выход',
   'Обновить',
-  'Открыть игру',
+  "modeLink('/', 'game', 'Игра', mode)",
+  "modeLink('/ai-node-editor.html', 'editor', 'Редактор ИИ', mode)",
+  "modeLink('/combat-lab.html', 'combat-lab', 'Испытательный полигон', mode)",
   'openEditorTab',
   'openGameTab',
   'requestLabShutdown',

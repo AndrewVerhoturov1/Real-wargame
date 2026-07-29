@@ -1,4 +1,5 @@
 import type { UnitModel } from '../../units/UnitModel';
+import { advanceAimPhysicalProgress, isAimDirectionAligned } from './AimRuntime';
 import { getSuppressionSupportPoint } from './AutomaticFireSupportPoints';
 import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
 import {
@@ -19,6 +20,7 @@ import { isTargetWithinDeployedTraverse } from './WeaponDeploymentRuntime';
 export * from './FireTaskRuntimeStage8';
 
 const EPSILON = 1e-9;
+const BLOCKED_ALIGNMENT_THRESHOLD = 2;
 
 export type Stage9RequestFireTaskResult = RequestFireTaskResult | {
   readonly accepted: false;
@@ -145,11 +147,17 @@ export function tickFireTaskWithTimeBudget(
     const timeToBoundary = Math.max(0, task.aimTracking.nextTrackingBoundarySeconds - now);
     const sliceSeconds = timeToBoundary <= EPSILON ? 0 : Math.min(remainingSeconds, timeToBoundary);
     const beforeBoundary = task.aimTracking.nextTrackingBoundarySeconds;
-    const result = tickBaseFireTaskWithTimeBudget(unit, {
-      ...input,
-      intervalStartSeconds: now,
-      deltaSeconds: sliceSeconds,
-    });
+    const restoreAlignmentThreshold = holdCommitUntilAligned(task);
+    let result: TickFireTaskResult;
+    try {
+      result = tickBaseFireTaskWithTimeBudget(unit, {
+        ...input,
+        intervalStartSeconds: now,
+        deltaSeconds: sliceSeconds,
+      });
+    } finally {
+      restoreAlignmentThreshold();
+    }
     lastResult = result;
     const used = Math.max(0, Math.min(sliceSeconds, result.consumedSeconds));
     consumedSeconds = cleanDuration(consumedSeconds + used);
@@ -160,7 +168,21 @@ export function tickFireTaskWithTimeBudget(
       return composeTickResult(result, consumedSeconds, remainingSeconds);
     }
     if (remainingSeconds <= EPSILON) return composeTickResult(result, consumedSeconds, remainingSeconds);
+
     const current = unit.infantryCombatRuntime.activeFireTask;
+    const alignmentSeconds = Math.min(remainingSeconds, Math.max(0, sliceSeconds - used));
+    if (
+      current?.phase === 'aiming'
+      && !isAimDirectionAligned(current.aimTracking.solution)
+      && alignmentSeconds > EPSILON
+    ) {
+      advanceAimPhysicalProgress(current, current.aimTracking.solution.factors, alignmentSeconds);
+      consumedSeconds = cleanDuration(consumedSeconds + alignmentSeconds);
+      remainingSeconds = cleanDuration(Math.max(0, totalSeconds - consumedSeconds));
+      applyEffectiveAimCapabilities(unit);
+      continue;
+    }
+
     const boundaryAdvanced = Boolean(current && current.aimTracking.nextTrackingBoundarySeconds > beforeBoundary + EPSILON);
     if (sliceSeconds <= EPSILON && !boundaryAdvanced) return composeTickResult(result, consumedSeconds, remainingSeconds);
     if (sliceSeconds > EPSILON && used + EPSILON < sliceSeconds) return composeTickResult(result, consumedSeconds, remainingSeconds);
@@ -212,6 +234,18 @@ export function applyEffectiveAimCapabilities(unit: UnitModel): void {
 
 /** Stage 6 compatibility alias. */
 export const applyWoundAimCapabilities = applyEffectiveAimCapabilities;
+
+function holdCommitUntilAligned(
+  task: NonNullable<UnitModel['infantryCombatRuntime']['activeFireTask']>,
+): () => void {
+  if (isAimDirectionAligned(task.aimTracking.solution)) return () => {};
+  const mutableTask = task as { minimumSolutionQuality: number };
+  const originalThreshold = mutableTask.minimumSolutionQuality;
+  mutableTask.minimumSolutionQuality = BLOCKED_ALIGNMENT_THRESHOLD;
+  return () => {
+    mutableTask.minimumSolutionQuality = originalThreshold;
+  };
+}
 
 function requestFitsDeploymentTraverse(unit: UnitModel, input: RequestFireTaskInput): boolean {
   const weapon = unit.infantryCombatRuntime.primaryWeapon;

@@ -163,6 +163,20 @@
   opacity: 0.72;
 }
 
+/* Keep the compact state/plan summary, but remove the map-obscuring order popover in every game mode. */
+.unit-state-plan > summary {
+  cursor: default;
+  pointer-events: none;
+}
+
+.unit-state-plan[open] {
+  z-index: 1;
+}
+
+.unit-state-plan-popover {
+  display: none !important;
+}
+
 @media (max-width: 1150px) {
   .unit-state-plan-columns {
     grid-template-columns: 1fr;

@@ -25,6 +25,13 @@ const checks = [
   nodeCheck('deployment pages contract', 'deployment_pages_smoke_contract.mjs', 30_000),
   nodeCheck('manual Vercel policy contract', 'manual_vercel_deploy_skill_smoke.mjs', 30_000),
   nodeCheck('manual Vercel workflow contract', 'manual_vercel_preview_workflow_smoke.mjs', 30_000),
+  nodeCheck('Combat Lab shared renderer contract', 'combat_lab_shared_renderer_contract_smoke.mjs', 30_000),
+  nodeCheck('Combat Lab full game contract', 'combat_lab_full_game_contract_smoke.mjs', 30_000),
+  nodeCheck('Combat Lab 1440x900 workspace layout contract', 'combat_lab_workspace_layout_smoke.mjs', 30_000),
+  nodeCheck('Combat Lab camera and aim alignment regression', 'combat_lab_camera_aim_regression_smoke.mjs', 60_000),
+  nodeCheck('Combat Lab live unit state and victim journal regression', 'combat_lab_live_state_regression_smoke.mjs', 60_000),
+  nodeCheck('Combat Lab honest accuracy controls regression', 'combat_lab_accuracy_controls_regression_smoke.mjs', 60_000),
+  nodeCheck('Combat Lab prone target, survivability and UI regression', 'combat_lab_prone_survivability_ui_regression_smoke.mjs', 60_000),
   ...(skipPreviewSmokes ? [] : previewSmokes),
 ];
 const skippedChecks = skipPreviewSmokes
