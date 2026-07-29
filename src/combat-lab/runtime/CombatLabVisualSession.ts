@@ -1,4 +1,8 @@
-import { getEffectiveCombatCapabilities, type WoundSeverity } from '../../core/infantry-combat/runtime';
+import {
+  getEffectiveCombatCapabilities,
+  type SuppressionEventKind,
+  type WoundSeverity,
+} from '../../core/infantry-combat/runtime';
 import { tickSimulation } from '../../core/simulation/SimulationTick';
 import type { SimulationState } from '../../core/simulation/SimulationState';
 import type { UnitModel } from '../../core/units/UnitModel';
@@ -25,6 +29,7 @@ import { createCombatLabCheckpoint, restoreCombatLabCheckpoint, type CombatLabCh
 export const COMBAT_LAB_VISUAL_SPEEDS = [0.25, 0.5, 1, 2, 4, 10] as const;
 const MAX_ACCUMULATED_SECONDS = 0.5;
 const MAX_JOURNAL_ENTRIES = 256;
+const MAX_OBSERVED_SHOT_IDS = 4096;
 
 interface CombatLabVisualCheckpointBookkeepingV1 {
   readonly metrics: CombatLabMetricCollectorV1;
@@ -33,6 +38,13 @@ interface CombatLabVisualCheckpointBookkeepingV1 {
   readonly lastProgramCommandResult: CombatLabCommandResultV1 | null;
   readonly lastCommandResult: CombatLabCommandResultV1 | null;
   readonly commandSequence: number;
+}
+
+interface CombatLabObservedMoralStateV1 {
+  readonly suppressionUpdateCount: number;
+  readonly suppressionLevel: number;
+  readonly stress: number;
+  readonly morale: number;
 }
 
 export interface CombatLabVisualSnapshotV1 {
@@ -68,6 +80,10 @@ export class CombatLabVisualSession {
   private readonly journal: string[] = [];
   private observedShots = 0;
   private observedImpacts = 0;
+  private observedTerminations = 0;
+  private readonly shooterIdByShotId = new Map<string, string>();
+  private readonly resolvedShotIds = new Set<string>();
+  private readonly observedMoralStateByUnitId = new Map<string, CombatLabObservedMoralStateV1>();
   private stateRevision = 0;
 
   constructor(scenarioId: string, seed: number) {
@@ -225,6 +241,7 @@ export class CombatLabVisualSession {
     preserveCombatLabTargetSurvivability(this.state, this.built.roles);
     observeCombatLabMetrics(this.state, this.metrics);
     this.captureProductionEvents();
+    this.captureProductionMoralEffects();
   }
 
   private captureProductionEvents(): void {
@@ -232,6 +249,7 @@ export class CombatLabVisualSession {
     for (let index = this.observedShots; index < runtime.committedShots.length; index += 1) {
       const shot = runtime.committedShots[index]!;
       const shooter = findUnit(this.state, shot.shooterId);
+      this.rememberShot(shot.shotId, shot.shooterId);
       const probability = shot.predictedHitProbability === undefined
         ? ''
         : `; расчётная вероятность ${Math.round(clamp01(shot.predictedHitProbability) * 100)}%`;
@@ -240,13 +258,14 @@ export class CombatLabVisualSession {
     for (let index = this.observedImpacts; index < runtime.impacts.length; index += 1) {
       const impact = runtime.impacts[index]!;
       const shooter = findUnit(this.state, impact.shooterId);
+      this.markShotResolved(impact.shotId);
       if (!impact.hitUnitId) {
         const destination = impact.hitType === 'terrain'
           ? 'местность'
           : impact.hitType === 'object'
             ? `объект ${impact.hitObjectId ?? 'без идентификатора'}`
-            : impact.hitType;
-        this.log(`Стрелок: ${unitName(shooter, impact.shooterId)} — пуля ${impact.shotId} попала в ${destination}.`);
+            : 'небоевую геометрию';
+        this.log(`Стрелок: ${unitName(shooter, impact.shooterId)} — промах ${impact.shotId}; пуля попала в ${destination}.`);
         continue;
       }
 
@@ -268,13 +287,72 @@ export class CombatLabVisualSession {
         : 'зарегистрированное попадание без нового слота ранения';
       this.log(`Жертва: ${unitName(victim, victim.id)} — ${woundDescription}; кровь ${bloodRemainingPercent}%, потеря ${Math.round(clamp01(blood.bloodLoss) * 100)}%, темп ${bleedingPercentPerSecond}%/с; состояние ${effectiveConditionLabel(victim)}.`);
     }
+    for (let index = this.observedTerminations; index < runtime.terminations.length; index += 1) {
+      const termination = runtime.terminations[index]!;
+      if (this.resolvedShotIds.has(termination.shotId)) continue;
+      const shooterId = this.shooterIdByShotId.get(termination.shotId) ?? null;
+      const shooter = shooterId ? findUnit(this.state, shooterId) : null;
+      this.markShotResolved(termination.shotId);
+      this.log(`Стрелок: ${shooterId ? unitName(shooter, shooterId) : 'не определён'} — промах ${termination.shotId}; ${terminationReasonLabel(termination.reason)}.`);
+    }
     this.observedShots = runtime.committedShots.length;
     this.observedImpacts = runtime.impacts.length;
+    this.observedTerminations = runtime.terminations.length;
+  }
+
+  private captureProductionMoralEffects(): void {
+    for (const unit of this.state.units) {
+      const current = moralStateSnapshot(unit);
+      const previous = this.observedMoralStateByUnitId.get(unit.id) ?? current;
+      const suppression = unit.infantryCombatRuntime.suppression;
+      if (
+        current.suppressionUpdateCount > previous.suppressionUpdateCount
+        && suppression.lastAppliedImpulse > 0
+      ) {
+        const distance = suppression.recentImpactDistanceMetres === null
+          ? ''
+          : `; ближайшая пуля ${formatMetres(suppression.recentImpactDistanceMetres)} м`;
+        this.log(
+          `Моральное воздействие: ${unitName(unit, unit.id)} — ${suppressionEventLabel(suppression.lastEventKind)}${distance}; `
+          + `подавление ${formatPercentTransition(previous.suppressionLevel * 100, current.suppressionLevel * 100)}; `
+          + `стресс ${formatPercentTransition(previous.stress, current.stress)}; `
+          + `боевой дух ${formatPercentTransition(previous.morale, current.morale)}.`,
+        );
+      }
+      this.observedMoralStateByUnitId.set(unit.id, current);
+    }
   }
 
   private resetCounters(): void {
-    this.observedShots = this.state.infantryCombatProjectiles.committedShots.length;
-    this.observedImpacts = this.state.infantryCombatProjectiles.impacts.length;
+    const runtime = this.state.infantryCombatProjectiles;
+    this.observedShots = runtime.committedShots.length;
+    this.observedImpacts = runtime.impacts.length;
+    this.observedTerminations = runtime.terminations.length;
+    this.shooterIdByShotId.clear();
+    for (const shot of runtime.committedShots.slice(-MAX_OBSERVED_SHOT_IDS)) {
+      this.rememberShot(shot.shotId, shot.shooterId);
+    }
+    this.resolvedShotIds.clear();
+    for (const impact of runtime.impacts.slice(-MAX_OBSERVED_SHOT_IDS)) this.markShotResolved(impact.shotId);
+    this.observedMoralStateByUnitId.clear();
+    for (const unit of this.state.units) this.observedMoralStateByUnitId.set(unit.id, moralStateSnapshot(unit));
+  }
+
+  private rememberShot(shotId: string, shooterId: string): void {
+    if (!this.shooterIdByShotId.has(shotId) && this.shooterIdByShotId.size >= MAX_OBSERVED_SHOT_IDS) {
+      const oldest = this.shooterIdByShotId.keys().next().value as string | undefined;
+      if (oldest !== undefined) this.shooterIdByShotId.delete(oldest);
+    }
+    this.shooterIdByShotId.set(shotId, shooterId);
+  }
+
+  private markShotResolved(shotId: string): void {
+    if (this.resolvedShotIds.has(shotId)) return;
+    if (this.resolvedShotIds.size >= MAX_OBSERVED_SHOT_IDS) {
+      const oldest = this.resolvedShotIds.values().next().value as string | undefined;
+      if (oldest !== undefined) this.resolvedShotIds.delete(oldest);
+    }
+    this.resolvedShotIds.add(shotId);
   }
 
   private log(message: string): void {
@@ -296,6 +374,30 @@ function findUnit(state: SimulationState, unitId: string): UnitModel | null {
 
 function unitName(unit: UnitModel | null, fallbackId: string): string {
   return unit ? `${unit.labels.ru} [${unit.id}]` : fallbackId;
+}
+
+function moralStateSnapshot(unit: UnitModel): CombatLabObservedMoralStateV1 {
+  return {
+    suppressionUpdateCount: unit.infantryCombatRuntime.suppression.updateCount,
+    suppressionLevel: clamp01(unit.infantryCombatRuntime.suppression.suppressionLevel),
+    stress: clampPercentValue(unit.behaviorRuntime.stress),
+    morale: clampPercentValue(unit.soldier.condition.morale),
+  };
+}
+
+function suppressionEventLabel(kind: SuppressionEventKind | null): string {
+  if (kind === 'direct_hit') return 'прямое попадание';
+  if (kind === 'near_impact') return 'попадание рядом';
+  if (kind === 'near_miss') return 'близкий пролёт пули';
+  return 'огневое воздействие';
+}
+
+function terminationReasonLabel(reason: 'impact' | 'body_penetration_limit' | 'lifetime' | 'out_of_bounds' | 'reconciled_orphan'): string {
+  if (reason === 'out_of_bounds') return 'пуля покинула границы карты';
+  if (reason === 'lifetime') return 'пуля исчерпала допустимое время полёта';
+  if (reason === 'reconciled_orphan') return 'пуля завершена при сверке состояния';
+  if (reason === 'body_penetration_limit') return 'пуля исчерпала предел пробитий';
+  return 'полёт завершён столкновением';
 }
 
 function hitZoneLabel(zone: 'head' | 'torso' | 'arms' | 'legs' | null): string {
@@ -336,6 +438,33 @@ function effectiveConditionLabel(unit: UnitModel): string {
   }
   if (blood === 'weakened' || wounds.length > 0) return 'ранен, сохраняет боеспособность';
   return 'боеспособен';
+}
+
+function formatPercentTransition(before: number, after: number): string {
+  const normalizedBefore = roundTenth(clampPercentValue(before));
+  const normalizedAfter = roundTenth(clampPercentValue(after));
+  const delta = roundTenth(normalizedAfter - normalizedBefore);
+  const change = Math.abs(delta) < 0.05
+    ? 'без изменения'
+    : `${delta > 0 ? '+' : ''}${formatNumberRu(delta)} п.п.`;
+  return `${formatNumberRu(normalizedBefore)}→${formatNumberRu(normalizedAfter)}% (${change})`;
+}
+
+function formatMetres(value: number): string {
+  return formatNumberRu(Math.max(0, value));
+}
+
+function formatNumberRu(value: number): string {
+  const rounded = roundTenth(Number.isFinite(value) ? value : 0);
+  return (Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)).replace('.', ',');
+}
+
+function roundTenth(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function clampPercentValue(value: number): number {
+  return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
 }
 
 function clamp01(value: number): number {
