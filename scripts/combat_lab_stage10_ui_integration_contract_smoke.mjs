@@ -32,5 +32,9 @@ assert.match(css, /\.combat-lab-subtab-list/);
 assert.match(css, /overflow-x:\s*hidden/);
 assert.match(layoutEnhancements, /runToolbar\?\.classList\.add\('combat-lab-run-toolbar'\)/,
   'Stage 10 toolbar host must publish the stable combat-lab-run-toolbar DOM contract.');
+assert.match(layoutEnhancements, /advancedControls\?\.classList\.add\('combat-lab-advanced'\)/,
+  'Stage 10 advanced controls must publish the stable combat-lab-advanced DOM contract.');
+assert.match(layoutEnhancements, /metricsPanel\?\.classList\.add\('combat-lab-metrics-panel'\)/,
+  'Stage 10 metrics panel must publish the stable combat-lab-metrics-panel DOM contract.');
 
 console.log('Combat Lab Stage 10 UI integration contract passed.');

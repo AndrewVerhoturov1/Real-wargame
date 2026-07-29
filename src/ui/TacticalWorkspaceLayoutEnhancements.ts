@@ -73,10 +73,14 @@ function refineCombatLab(root: HTMLElement): void {
   if (root.dataset.refinedCombatLabLayout === 'true') return;
   const runToolbar = root.querySelector<HTMLElement>('.combat-lab-stage10-toolbar-host');
   const runControls = root.querySelector<HTMLElement>('.combat-lab-run-controls');
+  const advancedControls = root.querySelector<HTMLElement>('.combat-lab-manual-controls');
+  const metricsPanel = root.querySelector<HTMLElement>('[data-combat-lab-tab-panel="metrics"]');
   const brandSubtitle = root.querySelector<HTMLElement>('.combat-lab-dock-brand span');
   if (!runToolbar && !runControls) return;
 
   runToolbar?.classList.add('combat-lab-run-toolbar');
+  advancedControls?.classList.add('combat-lab-advanced');
+  metricsPanel?.classList.add('combat-lab-metrics-panel');
   if (runControls) {
     Array.from(runControls.children).slice(1).forEach((element) => element.remove());
     runControls.classList.add('scenario-only');
