@@ -71,12 +71,16 @@ function refineWorkspace(shell: HTMLElement): void {
 
 function refineCombatLab(root: HTMLElement): void {
   if (root.dataset.refinedCombatLabLayout === 'true') return;
+  const runToolbar = root.querySelector<HTMLElement>('.combat-lab-stage10-toolbar-host');
   const runControls = root.querySelector<HTMLElement>('.combat-lab-run-controls');
   const brandSubtitle = root.querySelector<HTMLElement>('.combat-lab-dock-brand span');
-  if (!runControls) return;
+  if (!runToolbar && !runControls) return;
 
-  Array.from(runControls.children).slice(1).forEach((element) => element.remove());
-  runControls.classList.add('scenario-only');
+  runToolbar?.classList.add('combat-lab-run-toolbar');
+  if (runControls) {
+    Array.from(runControls.children).slice(1).forEach((element) => element.remove());
+    runControls.classList.add('scenario-only');
+  }
   if (brandSubtitle) brandSubtitle.textContent = 'Сценарии и измерения';
   installResizeHandle(root, 'left');
   root.dataset.refinedCombatLabLayout = 'true';

@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [extension, editor, main, css] = await Promise.all([
+const [extension, editor, main, css, layoutEnhancements] = await Promise.all([
   readFile('src/combat-lab/CombatLabExtension.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabScenarioEditorPanel.ts', 'utf8'),
   readFile('src/combat-lab/main.ts', 'utf8'),
   readFile('src/combat-lab/combat-lab-workspace.css', 'utf8'),
+  readFile('src/ui/TacticalWorkspaceLayoutEnhancements.ts', 'utf8'),
 ]);
 
 for (const label of ['Сцена', 'Программа', 'Текущий прогон', 'Серия прогонов']) assert.match(extension, new RegExp(label));
@@ -29,5 +30,7 @@ assert.match(main, /combat-lab:toggle-pause/);
 assert.match(main, /combat-lab:set-paused/);
 assert.match(css, /\.combat-lab-subtab-list/);
 assert.match(css, /overflow-x:\s*hidden/);
+assert.match(layoutEnhancements, /runToolbar\?\.classList\.add\('combat-lab-run-toolbar'\)/,
+  'Stage 10 toolbar host must publish the stable combat-lab-run-toolbar DOM contract.');
 
 console.log('Combat Lab Stage 10 UI integration contract passed.');
