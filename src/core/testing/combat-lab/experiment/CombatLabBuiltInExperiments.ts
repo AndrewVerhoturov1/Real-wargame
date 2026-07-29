@@ -1,4 +1,5 @@
-import { buildExportedScene, type ExportedSceneData } from '../../../../ui/SceneExport';
+import { createDefaultEnvironmentProfileRegistry } from '../../../map/EnvironmentMaterialProfile';
+import { buildSceneSnapshot, type ExportedSceneData } from '../../../simulation/SceneSnapshot';
 import type {
   CombatLabScenarioDefinitionV1,
   CombatLabScenarioId,
@@ -31,10 +32,11 @@ export function buildCombatLabBuiltInExperiment(
   const definition = getCombatLabScenarioDefinition(scenarioId);
   const normalizedSeed = normalizeSeed(seed);
   const built = buildCombatLabInitialState(scenarioId, definition.revision, normalizedSeed);
-  const sceneSnapshot: ExportedSceneData = {
-    ...buildExportedScene(built.state),
+  const sceneSnapshot = buildSceneSnapshot(built.state, {
     exportedAt: BUILT_IN_EXPORTED_AT,
-  };
+    environmentProfiles: createDefaultEnvironmentProfileRegistry().toData(),
+    staticTacticalPositionArtifact: null,
+  });
   const roles: readonly CombatLabExperimentRoleV1[] = definition.roles.map((role) => ({
     roleId: role.roleId,
     unitId: role.unitId,

@@ -8,7 +8,7 @@ const [builtIns, registry] = await Promise.all([
 assert.match(builtIns, /buildCombatLabBuiltInExperiment\(/);
 assert.match(builtIns, /listCombatLabBuiltInExperiments\(/);
 assert.match(builtIns, /buildCombatLabInitialState\(/);
-assert.match(builtIns, /buildExportedScene\(/);
+assert.match(builtIns, /buildSceneSnapshot\(/);
 assert.match(builtIns, /roleIdByUnitId/);
 assert.match(builtIns, /definition\.defaultProgram/);
 assert.match(builtIns, /anchor: 'experiment_start'/);
