@@ -11,7 +11,17 @@ const verificationCachePath = path.join(
   tmpdir(),
   `real-wargame-infantry-verification-${process.pid}.json`,
 );
-const checks = [
+const preflightChecks = [
+  ['npm', ['run', 'node-contract-ui:smoke']],
+  ['npm', ['run', 'graph-v2:smoke']],
+  ['npm', ['run', 'typecheck']],
+  ['npm', ['run', 'build']],
+  ['node', ['--check', 'scripts/infantry_combat_stage8_smoke.mjs']],
+  ['node', ['--check', 'scripts/infantry_combat_stage8_forbidden_scan.mjs']],
+  ['node', ['--check', 'scripts/infantry_combat_stage8_verify.mjs']],
+  ['git', ['diff', '--check', `${REQUIRED_BASE_SHA}...HEAD`]],
+];
+const matrixChecks = [
   ['node', ['scripts/infantry_combat_verification_cache_smoke.mjs']],
   ['npm', ['run', 'combat-catalogs:smoke']],
   ['npm', ['run', 'combat-catalog-storage:smoke']],
@@ -30,14 +40,6 @@ const checks = [
   ['npm', ['run', 'infantry-combat-stage8:forbidden-scan']],
   ['npm', ['run', 'attention-ai-nodes:smoke']],
   ['npm', ['run', 'contact-investigation:smoke']],
-  ['npm', ['run', 'node-contract-ui:smoke']],
-  ['npm', ['run', 'graph-v2:smoke']],
-  ['npm', ['run', 'typecheck']],
-  ['npm', ['run', 'build']],
-  ['node', ['--check', 'scripts/infantry_combat_stage8_smoke.mjs']],
-  ['node', ['--check', 'scripts/infantry_combat_stage8_forbidden_scan.mjs']],
-  ['node', ['--check', 'scripts/infantry_combat_stage8_verify.mjs']],
-  ['git', ['diff', '--check', `${REQUIRED_BASE_SHA}...HEAD`]],
 ];
 
 const previousCachePath = process.env.INFANTRY_COMBAT_VERIFICATION_CACHE;
@@ -46,11 +48,12 @@ process.env.INFANTRY_COMBAT_VERIFICATION_CACHE = verificationCachePath;
 
 try {
   console.log(`Node.js ${process.version}`);
-  for (const [command, args] of checks) runRequiredCheck(command, args);
+  for (const [command, args] of preflightChecks) runRequiredCheck(command, args);
   runPerformanceContractWithBaseComparison();
+  for (const [command, args] of matrixChecks) runRequiredCheck(command, args);
   verifyCleanTrackedTree();
 
-  console.log(`Stage 8 verification passed on Node.js ${process.version}: ${checks.length + 2} required non-browser checks; successful identical commands were executed once within this exact-head job, and performance-contract is accepted only when green or identical to the approved base failure.`);
+  console.log(`Stage 8 verification passed on Node.js ${process.version}: ${preflightChecks.length + matrixChecks.length + 2} required non-browser checks; successful identical commands were executed once within this exact-head job, and performance-contract is accepted only when green or identical to the approved base failure.`);
 } finally {
   rmSync(verificationCachePath, { force: true });
   if (previousCachePath === undefined) delete process.env.INFANTRY_COMBAT_VERIFICATION_CACHE;
@@ -63,6 +66,7 @@ function runRequiredCheck(command, args) {
   const output = combinedOutput(result);
   if (result.error || result.status !== 0) {
     const signature = nestedFailureSignature(output);
+    console.error(`FAILED_COMMAND=${label}`);
     fail(
       'Stage 8 verification failed',
       [
@@ -90,12 +94,14 @@ function runPerformanceContractWithBaseComparison() {
 
   const fetch = run('git', ['fetch', '--no-tags', '--depth=1', 'origin', REQUIRED_BASE_SHA], repoRoot);
   if (fetch.error || fetch.status !== 0) {
+    console.error(`FAILED_COMMAND=${label}`);
     fail('Stage 8 performance baseline comparison failed', `Не удалось получить обязательный base SHA ${REQUIRED_BASE_SHA}.\n${combinedOutput(fetch)}`);
   }
 
   rmSync(baseWorktree, { recursive: true, force: true });
   const addWorktree = run('git', ['worktree', 'add', '--detach', baseWorktree, REQUIRED_BASE_SHA], repoRoot);
   if (addWorktree.error || addWorktree.status !== 0) {
+    console.error(`FAILED_COMMAND=${label}`);
     fail('Stage 8 performance baseline comparison failed', `Не удалось создать detached worktree обязательной базы.\n${combinedOutput(addWorktree)}`);
   }
 
@@ -124,6 +130,7 @@ function runPerformanceContractWithBaseComparison() {
     return;
   }
 
+  console.error(`FAILED_COMMAND=${label}`);
   fail(
     'Stage 8 performance baseline comparison failed',
     [
@@ -146,6 +153,7 @@ function verifyCleanTrackedTree() {
   const status = run('git', ['status', '--short'], repoRoot);
   const output = combinedOutput(status);
   if (status.error || status.status !== 0 || output.trim()) {
+    console.error('FAILED_COMMAND=git status --short');
     fail('Stage 8 tracked-tree verification failed', `git status --short must be empty.\n${output}`);
   }
   console.log(workflowAnnotation('notice', 'Stage 8 verification', 'PASS git status --short: tracked tree clean'));
