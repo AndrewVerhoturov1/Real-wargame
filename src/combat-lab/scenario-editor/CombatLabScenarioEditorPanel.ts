@@ -24,6 +24,8 @@ export interface CombatLabScenarioEditorPanelOptions {
   readonly capabilities?: CombatLabScenarioEditorCapabilitiesV1;
   readonly initialMapMode?: CombatLabMapInteractionModeV1;
   readonly onMapModeChanged?: (mode: CombatLabMapInteractionModeV1) => void;
+  readonly onSelectionChanged?: (selection: CombatLabSelectedStepV1 | null) => void;
+  readonly isMutationAllowed?: () => boolean;
 }
 
 export class CombatLabScenarioEditorPanel {
@@ -93,6 +95,7 @@ export class CombatLabScenarioEditorPanel {
     this.selectedStep = { trackId, stepId };
     this.selectedActorRoleId = track.actorRoleId;
     this.options.onSelectRole(track.actorRoleId);
+    this.publishSelection();
     this.trackList.render();
     this.renderInspector();
   }
@@ -114,6 +117,7 @@ export class CombatLabScenarioEditorPanel {
     this.options.draft.replaceExperiment(experiment);
     if (recordHistory) this.history.execute(experiment);
     this.ensureSelectionExists(experiment);
+    this.publishSelection();
     this.renderAll();
   }
 
@@ -123,6 +127,7 @@ export class CombatLabScenarioEditorPanel {
     window.removeEventListener('keydown', this.handleGlobalKeyDown);
     this.trackList.destroy();
     this.inspector.destroy();
+    this.options.onSelectionChanged?.(null);
     this.root.remove();
   }
 
@@ -144,8 +149,14 @@ export class CombatLabScenarioEditorPanel {
     editGroup.append(
       button('Отменить', () => this.undo(), '', 'Ctrl+Z'),
       button('Повторить', () => this.redo(), '', 'Ctrl+Y'),
-      button('Точка на карте', () => this.options.onRequestMapPick({ kind: 'point_marker', suggestedTitleRu: 'Точка' })),
-      button('Область на карте', () => this.options.onRequestMapPick({ kind: 'circle_marker', suggestedTitleRu: 'Область', defaultRadiusMetres: 5 })),
+      button('Точка на карте', () => {
+        if (!this.ensureMutationAllowed()) return;
+        this.options.onRequestMapPick({ kind: 'point_marker', suggestedTitleRu: 'Точка' });
+      }),
+      button('Область на карте', () => {
+        if (!this.ensureMutationAllowed()) return;
+        this.options.onRequestMapPick({ kind: 'circle_marker', suggestedTitleRu: 'Область', defaultRadiusMetres: 5 });
+      }),
     );
 
     const trackGroup = document.createElement('div');
@@ -154,6 +165,7 @@ export class CombatLabScenarioEditorPanel {
     roleSelect.setAttribute('aria-label', 'Роль для новой дорожки');
     this.fillRoleSelect(roleSelect);
     const addTrack = button('Создать дорожку', () => {
+      if (!this.ensureMutationAllowed()) return;
       const roleId = roleSelect.value;
       if (!roleId) return this.showStatus('Сначала назначьте роль бойцу.', true);
       this.applyMutation(() => {
@@ -203,32 +215,38 @@ export class CombatLabScenarioEditorPanel {
   }
 
   private applyMutation(mutation: () => void): void {
+    if (!this.ensureMutationAllowed()) return;
     const before = this.options.draft.getExperiment();
     mutation();
     const next = this.options.draft.getExperiment();
     if (next === before || next.revision === before.revision) return;
     this.history.execute(next);
     this.ensureSelectionExists(next);
+    this.publishSelection();
     this.options.onExperimentChanged(next);
     this.renderAll();
     this.showStatus(`Изменение сохранено · revision ${next.revision}.`, false);
   }
 
   private undo(): void {
+    if (!this.ensureMutationAllowed()) return;
     const previous = this.history.undo();
     if (!previous) return this.showStatus('Отменять больше нечего.', false);
     this.options.draft.replaceExperiment(previous);
     this.ensureSelectionExists(previous);
+    this.publishSelection();
     this.options.onExperimentChanged(previous);
     this.renderAll();
     this.showStatus(`Отменено · revision ${previous.revision}.`, false);
   }
 
   private redo(): void {
+    if (!this.ensureMutationAllowed()) return;
     const next = this.history.redo();
     if (!next) return this.showStatus('Повторять больше нечего.', false);
     this.options.draft.replaceExperiment(next);
     this.ensureSelectionExists(next);
+    this.publishSelection();
     this.options.onExperimentChanged(next);
     this.renderAll();
     this.showStatus(`Повторено · revision ${next.revision}.`, false);
@@ -251,6 +269,7 @@ export class CombatLabScenarioEditorPanel {
   private selectInitialStep(): void {
     this.ensureSelectionExists(this.options.draft.getExperiment());
     if (this.selectedActorRoleId) this.options.onSelectRole(this.selectedActorRoleId);
+    this.publishSelection();
     this.renderAll();
   }
 
@@ -264,6 +283,16 @@ export class CombatLabScenarioEditorPanel {
 
   private renderInspector(): void {
     this.inspector.render(this.selectedStep?.trackId ?? null, this.selectedStep?.stepId ?? null);
+  }
+
+  private publishSelection(): void {
+    this.options.onSelectionChanged?.(this.getSelectedStep());
+  }
+
+  private ensureMutationAllowed(): boolean {
+    if (this.options.isMutationAllowed?.() !== false) return true;
+    this.showStatus('Сначала остановите или сбросьте текущий визуальный прогон.', true);
+    return false;
   }
 
   private readonly handleGlobalKeyDown = (event: KeyboardEvent): void => {
@@ -296,5 +325,8 @@ function button(label: string, onClick: () => void, className = '', title = ''):
 }
 
 function isTextEntry(target: EventTarget | null): boolean {
-  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable);
+  return target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement
+    || (target instanceof HTMLElement && target.isContentEditable);
 }

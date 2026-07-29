@@ -3,6 +3,8 @@ import './combat-lab.css';
 import './combat-lab-workspace.css';
 import './combat-lab-ui-polish.css';
 import './combat-lab-header-final.css';
+import './ui/combat-lab-experiment-run.css';
+import './ui/combat-lab-batch-results.css';
 import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
 import { collectGameApplicationElements, GameApplication } from '../game/GameApplication';
 import type { GamePauseController } from '../game/GameApplicationTypes';
@@ -28,7 +30,7 @@ async function startCombatLab(): Promise<void> {
       mode: 'combat-lab',
       state: session.state,
       elements: collectGameApplicationElements(),
-      pauseController: createSessionPauseController(session),
+      pauseController: createSessionPauseController(session, extensionRoot),
       installExtension: (context) => CombatLabExtension.create(extensionRoot, session, context),
     });
   } catch (error) {
@@ -46,15 +48,21 @@ window.addEventListener('beforeunload', () => {
   application = null;
 });
 
-function createSessionPauseController(session: CombatLabVisualSession): GamePauseController {
+function createSessionPauseController(
+  session: CombatLabVisualSession,
+  extensionRoot: HTMLElement,
+): GamePauseController {
+  const extensionActive = () => extensionRoot.dataset.combatLabExtension === 'active';
   return {
     isPaused: () => session.isPaused(),
     toggle: () => {
-      session.togglePaused();
+      if (extensionActive()) extensionRoot.dispatchEvent(new CustomEvent('combat-lab:toggle-pause'));
+      else session.togglePaused();
       keepProductionTickerPaused(session);
     },
     setPaused: (value) => {
-      session.setPaused(value);
+      if (extensionActive()) extensionRoot.dispatchEvent(new CustomEvent('combat-lab:set-paused', { detail: value }));
+      else session.setPaused(value);
       keepProductionTickerPaused(session);
     },
   };

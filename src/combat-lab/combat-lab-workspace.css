@@ -46,6 +46,113 @@ body.app-shell-mode-combat-lab .simulation-controls [data-action="toggle-fire-pe
   display: none !important;
 }
 
+body.app-shell-mode-combat-lab .combat-lab-subtab-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-subtab-list button {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-subtab-list button.active {
+  color: #151911;
+  border-color: #e7db9c;
+  background: #e7db9c;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-subtab-panel[hidden] {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-stage10-toolbar-host,
+body.app-shell-mode-combat-lab .combat-lab-stage10-runtime-status-host {
+  min-width: 0;
+  margin-bottom: 8px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-stage10-scene-host,
+body.app-shell-mode-combat-lab .combat-lab-stage10-program-host,
+body.app-shell-mode-combat-lab .combat-lab-stage10-batch-panel-host,
+body.app-shell-mode-combat-lab .combat-lab-stage10-batch-results-host {
+  min-width: 0;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-stage10-batch-results-host:not(:empty) {
+  margin-top: 10px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-template-panel {
+  margin-bottom: 8px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-manual-controls {
+  margin-top: 8px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-stage10-manual-host,
+body.app-shell-mode-combat-lab .combat-lab-legacy-manual-root {
+  min-width: 0;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-legacy-manual-root {
+  display: grid;
+  gap: 8px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-legacy-manual-root > .combat-lab-top,
+body.app-shell-mode-combat-lab .combat-lab-legacy-manual-root > .combat-lab-bottom,
+body.app-shell-mode-combat-lab .combat-lab-legacy-manual-root > .combat-lab-map {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-legacy-manual-root > .combat-lab-right {
+  display: grid;
+  gap: 8px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-current-metrics .combat-lab-raw-diagnostics {
+  margin-top: 8px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-current-metrics .combat-lab-diagnostics {
+  min-height: 220px;
+}
+
+body.app-shell-mode-combat-lab textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid #526052;
+  border-radius: 7px;
+  color: #edf1e7;
+  background: #1b231c;
+  font: inherit;
+  resize: vertical;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-editor-toolbar,
+body.app-shell-mode-combat-lab .combat-lab-experiment-run-toolbar,
+body.app-shell-mode-combat-lab .combat-lab-batch-panel__controls,
+body.app-shell-mode-combat-lab .combat-lab-batch-results {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-editor-toolbar-row,
+body.app-shell-mode-combat-lab .combat-lab-experiment-run-toolbar {
+  flex-wrap: wrap;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-editor-status.is-error,
+body.app-shell-mode-combat-lab .combat-lab-journal-entry.is-error {
+  color: #ffb2a8;
+}
+
 /* The production inspector keeps its own collapsed lane; the game canvas and the ordinary soldier panel stop before it. */
 body.app-shell-mode-combat-lab.workspace-simulation.sidebar-collapsed #app,
 body.app-shell-mode-combat-lab.workspace-simulation.sidebar-collapsed .simulation-unit-bar {

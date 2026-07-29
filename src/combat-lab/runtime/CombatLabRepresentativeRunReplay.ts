@@ -1,19 +1,5 @@
+import type { CombatLabRepresentativeRunV1 } from '../../core/testing/combat-lab/experiment/CombatLabBatchContracts';
 import type { CombatLabExperimentVisualController } from './CombatLabExperimentVisualController';
-
-/**
- * Structural visual-side contract. The Stage 10 batch DTO is assignable to it
- * without coupling this worker branch to the batch worker files.
- */
-export interface CombatLabRepresentativeRunV1 {
-  readonly runIndex: number;
-  readonly seed: number;
-  readonly success: boolean;
-  readonly stopReason: string;
-  readonly simulatedSeconds: number;
-  readonly metrics: Readonly<Record<string, number>>;
-  readonly eventDigest: string;
-  readonly finalStateDigest: string;
-}
 
 export function replayCombatLabRepresentativeRun(
   controller: CombatLabExperimentVisualController,

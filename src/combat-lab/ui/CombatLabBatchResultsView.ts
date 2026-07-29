@@ -15,6 +15,7 @@ export class CombatLabBatchResultsView {
   private readonly root = document.createElement('div');
   private readonly metricLabelRu: (metricId: string) => string;
   private readonly distributions: CombatLabMetricDistributionView[] = [];
+  private destroyed = false;
 
   constructor(private readonly options: CombatLabBatchResultsViewOptions) {
     this.metricLabelRu = options.metricLabelRu ?? combatLabMetricLabelRu;
@@ -23,6 +24,7 @@ export class CombatLabBatchResultsView {
   }
 
   render(result: CombatLabBatchResultV1): void {
+    if (this.destroyed) return;
     this.clearDistributions();
     const heading = element('h3', 'combat-lab-batch-results__title', 'Результаты серии');
     const summary = element('div', 'combat-lab-batch-results__summary');
@@ -74,7 +76,15 @@ export class CombatLabBatchResultsView {
     this.root.replaceChildren(heading, summary, failureSection, distributionHost, representatives);
   }
 
+  clear(): void {
+    if (this.destroyed) return;
+    this.clearDistributions();
+    this.root.replaceChildren(element('p', 'combat-lab-batch-results__empty', 'Результаты серии появятся после запуска.'));
+  }
+
   destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
     this.clearDistributions();
     this.root.remove();
   }

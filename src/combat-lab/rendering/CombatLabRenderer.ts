@@ -1,8 +1,15 @@
 import type { Container, Ticker } from 'pixi.js';
 import type { GameApplicationContext } from '../../game/GameApplicationTypes';
 import { createPixiTacticalBoardAdapter } from '../../rendering/PixiTacticalBoardAdapter';
-import type { CombatLabDiagnosticLayerId } from '../../core/testing/combat-lab';
+import type {
+  CombatLabDiagnosticLayerId,
+  CombatLabExperimentV1,
+} from '../../core/testing/combat-lab';
 import { CombatLabDiagnosticOverlayRenderer } from './CombatLabDiagnosticOverlayRenderer';
+import {
+  CombatLabScenarioAuthoringOverlayRenderer,
+  type CombatLabScenarioAuthoringOverlaySelectionV1,
+} from './CombatLabScenarioAuthoringOverlayRenderer';
 import type { CombatLabVisualSession } from '../runtime/CombatLabVisualSession';
 
 type CombatLabLayoutDiagnostics = {
@@ -27,11 +34,12 @@ type CombatLabDebugWindow = Window & {
  * Compatibility facade for the existing laboratory controls.
  *
  * The full game application owns the Pixi application, camera, map, standard
- * layers, workers and game UI. This facade owns only Combat Lab diagnostics
+ * layers, workers and game UI. This facade owns only the Combat Lab overlays
  * and the fixed-step visual-session listener attached to the existing ticker.
  */
 export class CombatLabRenderer {
   private readonly overlay: CombatLabDiagnosticOverlayRenderer;
+  private readonly authoringOverlay: CombatLabScenarioAuthoringOverlayRenderer;
   private readonly removeLabTicker: () => void;
   private readonly removeViewportStabilizer: () => void;
   private boundRevision: number;
@@ -42,7 +50,9 @@ export class CombatLabRenderer {
     private readonly session: CombatLabVisualSession,
     private readonly onFrame: () => void,
   ) {
-    this.overlay = new CombatLabDiagnosticOverlayRenderer(context.getWorldContainer(), session);
+    const world = context.getWorldContainer();
+    this.overlay = new CombatLabDiagnosticOverlayRenderer(world, session);
+    this.authoringOverlay = new CombatLabScenarioAuthoringOverlayRenderer(world);
     this.boundRevision = session.revision;
     this.keepProductionTickerPaused();
     this.removeLabTicker = context.addTickerListener(this.tick);
@@ -67,6 +77,24 @@ export class CombatLabRenderer {
     return this.overlay.isLayerEnabled(layerId);
   }
 
+  setAuthoredExperiment(experiment: CombatLabExperimentV1): void {
+    if (this.destroyed) return;
+    this.authoringOverlay.setExperiment(experiment);
+    this.context.forceRender();
+  }
+
+  setAuthoringSelection(selection: CombatLabScenarioAuthoringOverlaySelectionV1 | null): void {
+    if (this.destroyed) return;
+    this.authoringOverlay.setSelection(selection);
+    this.context.forceRender();
+  }
+
+  clearAuthoringOverlay(): void {
+    if (this.destroyed) return;
+    this.authoringOverlay.clear();
+    this.context.forceRender();
+  }
+
   clearHistory(): void {
     this.overlay.clearHistory();
   }
@@ -83,6 +111,7 @@ export class CombatLabRenderer {
     this.destroyed = true;
     this.removeViewportStabilizer();
     this.removeLabTicker();
+    this.authoringOverlay.destroy();
     this.overlay.destroy();
   }
 
@@ -158,8 +187,6 @@ function installStableViewportResize(
     previous = next;
     if (Math.abs(deltaWidth) < 0.5 && Math.abs(deltaHeight) < 0.5) return;
 
-    // Preserve the same world point under the centre through the camera-owned
-    // path so DOM overlays receive the same transform as PixiJS layers.
     viewportAdapter.preserveViewportCentre(deltaWidth, deltaHeight);
     context.forceRender();
   };
