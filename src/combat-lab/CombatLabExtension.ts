@@ -464,6 +464,9 @@ function createCombatLabDockLayout(host: HTMLElement): DockLayout {
   const tabList = choiceButtons<CombatLabDockTab>([
     ['stand', 'Стенд'], ['metrics', 'Метрики'], ['log', 'Журнал'],
   ], tabButtons, 'combat-lab-tab-list');
+  for (const [tab, button] of tabButtons) {
+    button.setAttribute('data-combat-lab-tab', tab);
+  }
   const tabPanelHost = node('div', 'combat-lab-tab-panels');
   for (const tab of ['stand', 'metrics', 'log'] as const) {
     const panel = node('section', `combat-lab-tab-panel combat-lab-${tab}-panel`);
