@@ -208,7 +208,7 @@ export class CombatLabExtension implements GameApplicationExtension {
     for (const definition of listCombatLabScenarioDefinitions()) {
       this.layout.templateSelect.append(option(definition.scenarioId, definition.titleRu));
     }
-    this.layout.templateSelect.value = initialExperiment.baseScenarioId;
+    this.layout.templateSelect.value = initialExperiment.baseScenarioId ?? '';
     this.listen(this.layout.templateLoadButton, 'click', this.handleTemplateLoad);
     this.listen(this.layout.toggle, 'click', this.handleToggle);
     for (const [tab, button] of this.layout.tabButtons) this.listen(button, 'click', () => this.activateTab(tab));
@@ -298,7 +298,7 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.batchResults.clear();
     this.scenePanel.refresh();
     this.batchPanel.refresh();
-    this.layout.templateSelect.value = current.baseScenarioId;
+    this.layout.templateSelect.value = current.baseScenarioId ?? '';
     this.renderer.setAuthoredExperiment(current);
     this.renderValidation();
     this.visualController.reset(current.defaults.seed);

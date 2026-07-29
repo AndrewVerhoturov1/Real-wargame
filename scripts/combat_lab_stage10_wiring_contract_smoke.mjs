@@ -29,11 +29,22 @@ assert.equal((extension.match(/CombatLabMapAuthoringController\.create\(/g) ?? [
 assert.doesNotMatch(extension, /toolbar\.children\[/, 'Stage 10 wiring must use named hosts instead of positional toolbar children.');
 assert.match(extension, /legacyLayout\.top\.replaceChildren\(\)/, 'Legacy visual/headless/program controls must not remain mounted.');
 assert.match(extension, /getExperiment:\s*\(\)\s*=>\s*this\.draft\.getExperiment\(\)/);
-assert.match(extension, /validateCombatLabExperiment\(this\.draft\.getExperiment\(\)\)/);
+assert.match(extension, /const current = this\.draft\.getExperiment\(\)/);
+assert.match(extension, /validateCombatLabExperiment\(current\)/);
 assert.match(extension, /this\.batchClient\.cancel\(\)/, 'Experiment changes must invalidate an active batch.');
 assert.match(extension, /this\.batchResults\.clear\(\)/, 'Experiment changes must clear stale batch presentation.');
 assert.match(editor, /isMutationAllowed\?:\s*\(\)\s*=>\s*boolean/);
 assert.match(packageJson, /"combat-lab-scenario-system:verify"/);
+
+for (const [binding, assignmentPattern] of [
+  ['initialExperiment', /this\.layout\.templateSelect\.value\s*=\s*(initialExperiment\.baseScenarioId[^;]*);/],
+  ['current', /this\.layout\.templateSelect\.value\s*=\s*(current\.baseScenarioId[^;]*);/],
+]) {
+  const match = extension.match(assignmentPattern);
+  assert.ok(match, `Missing template select assignment for ${binding}.`);
+  const value = Function(binding, `return (${match[1]});`)({ baseScenarioId: null });
+  assert.equal(value, '', `baseScenarioId: null must map to an empty template value for ${binding}.`);
+}
 
 console.log('Combat Lab Stage 10 composition-root wiring contract passed.');
 
