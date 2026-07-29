@@ -25,7 +25,7 @@ export class CombatLabExperimentRunToolbar {
   private destroyed = false;
 
   private constructor(private readonly options: CombatLabExperimentRunToolbarOptions) {
-    this.root.className = 'combat-lab-experiment-run-toolbar';
+    this.root.className = 'combat-lab-experiment-run-toolbar combat-lab-run-toolbar';
     this.speedSelect.className = 'combat-lab-experiment-speed';
     this.speedSelect.setAttribute('aria-label', 'Скорость визуального прогона');
     for (const speed of options.controller.getAvailableSpeeds()) {
