@@ -1,0 +1,47 @@
+.combat-lab-map-context-menu {
+  position: fixed;
+  z-index: 140;
+  width: min(250px, calc(100vw - 8px));
+  max-height: min(430px, calc(100vh - 8px));
+  padding: 5px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid #566356;
+  border-radius: 8px;
+  color: #eef2e8;
+  background: rgba(13, 18, 14, 0.98);
+  box-shadow: 8px 12px 28px rgba(0, 0, 0, 0.45);
+  font: 11px/1.25 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.combat-lab-map-context-menu[hidden] { display: none; }
+
+.combat-lab-map-context-menu-item {
+  width: 100%;
+  min-height: 32px;
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 5px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.combat-lab-map-context-menu-item:hover:not(:disabled),
+.combat-lab-map-context-menu-item:focus-visible {
+  outline: none;
+  background: #303b30;
+}
+
+.combat-lab-map-context-menu-item:disabled {
+  color: #798579;
+  cursor: not-allowed;
+}
+
+.combat-lab-map-context-menu-item small {
+  color: #9da79c;
+  font-size: 9px;
+}
