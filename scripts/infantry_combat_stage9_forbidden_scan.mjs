@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const repoRoot = process.cwd();
 const requiredBase = 'f93cdbdf15497498e99dd4f63a2bfd20e5414ea9';
+const diffHead = process.env.INFANTRY_COMBAT_STAGE9_DIFF_HEAD_SHA?.trim() || 'HEAD';
 const protectedPrefixes = [
   'src/core/ai/',
   'src/ai-node-editor/',
@@ -83,6 +84,8 @@ run().catch((error) => {
 });
 
 async function run() {
+  ensureCommit(requiredBase);
+  ensureCommit(diffHead);
   const violations = [];
   for (const relative of productionFiles) {
     const content = await safeRead(relative, violations);
@@ -115,7 +118,7 @@ async function run() {
   const deploymentTypes = await readFile(path.join(repoRoot, 'src/core/infantry-combat/runtime/WeaponDeploymentTypes.ts'), 'utf8');
   if (!/MAX_WEAPON_DEPLOYMENT_RESULTS\s*=\s*1\b/.test(deploymentTypes)) violations.push('WeaponDeploymentTypes.ts: deployment result limit must be 1');
 
-  const changed = execFileSync('git', ['diff', '--name-only', `${requiredBase}...HEAD`], {
+  const changed = execFileSync('git', ['diff', '--name-only', `${requiredBase}...${diffHead}`], {
     cwd: repoRoot,
     encoding: 'utf8',
   }).trim().split(/\r?\n/).filter(Boolean);
@@ -131,7 +134,7 @@ async function run() {
     process.exitCode = 1;
     return;
   }
-  console.log(`Stage 9 forbidden scan passed across ${productionFiles.length} production files and ${changed.length} changed paths.`);
+  console.log(`Stage 9 forbidden scan passed across ${productionFiles.length} production files and ${changed.length} changed paths through ${diffHead}.`);
 }
 
 async function safeRead(relative, violations) {
@@ -140,5 +143,20 @@ async function safeRead(relative, violations) {
   } catch {
     violations.push(`${relative}: required file missing`);
     return null;
+  }
+}
+
+function ensureCommit(ref) {
+  try {
+    execFileSync('git', ['cat-file', '-e', `${ref}^{commit}`], {
+      cwd: repoRoot,
+      stdio: 'ignore',
+    });
+  } catch {
+    execFileSync('git', ['fetch', '--no-tags', '--depth=1', 'origin', ref], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
   }
 }
