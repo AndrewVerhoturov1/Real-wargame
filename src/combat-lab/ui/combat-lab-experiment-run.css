@@ -1,0 +1,77 @@
+.combat-lab-experiment-run-toolbar {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: end;
+  overflow-x: hidden;
+}
+
+.combat-lab-experiment-run-toolbar > button {
+  flex: 1 1 88px;
+  min-width: 0;
+}
+
+.combat-lab-experiment-speed-field {
+  flex: 0 1 92px;
+  min-width: 76px;
+  display: grid;
+  gap: 3px;
+}
+
+.combat-lab-experiment-speed-field > span {
+  color: #b4beb1;
+  font-size: 9px;
+}
+
+.combat-lab-experiment-speed {
+  width: 100%;
+  min-width: 0;
+}
+
+.combat-lab-experiment-status {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 8px 9px;
+  overflow-x: hidden;
+  border: 1px solid #354035;
+  border-radius: 8px;
+  background: #171e18;
+}
+
+.combat-lab-experiment-status-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(92px, 0.7fr) minmax(0, 1.3fr);
+  gap: 8px;
+  align-items: baseline;
+  font-size: 10px;
+}
+
+.combat-lab-experiment-status-row > span {
+  color: #9fab9e;
+}
+
+.combat-lab-experiment-status-row > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #eef2e8;
+  font-weight: 700;
+}
+
+.combat-lab-experiment-status[data-status='failed'] {
+  border-color: #8d5149;
+}
+
+.combat-lab-experiment-status[data-status='completed'] {
+  border-color: #6e875b;
+}
+
+@media (max-width: 520px) {
+  .combat-lab-experiment-run-toolbar > button,
+  .combat-lab-experiment-speed-field {
+    flex-basis: calc(50% - 3px);
+  }
+}

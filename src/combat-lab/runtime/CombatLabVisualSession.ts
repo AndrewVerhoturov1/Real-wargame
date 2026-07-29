@@ -1,4 +1,9 @@
 import {
+  cancelActiveFirstAidAction,
+  cancelAmmoTransfer,
+  cancelReloadWeapon,
+  cancelSingleFireTask,
+  cancelWeaponDeploymentAction,
   getEffectiveCombatCapabilities,
   type SuppressionEventKind,
   type WoundSeverity,
@@ -24,12 +29,24 @@ import {
   type CombatLabProgramRuntimeV1,
   type CombatLabScriptCommandV1,
 } from '../../core/testing/combat-lab';
-import { createCombatLabCheckpoint, restoreCombatLabCheckpoint, type CombatLabCheckpointV1 } from './CombatLabCheckpoint';
+import type { ExportedSceneData } from '../../ui/SceneExport';
+import {
+  createCombatLabCheckpoint,
+  restoreCombatLabCheckpoint,
+  restoreExportedScene,
+  type CombatLabCheckpointV1,
+} from './CombatLabCheckpoint';
 
-export const COMBAT_LAB_VISUAL_SPEEDS = [0.25, 0.5, 1, 2, 4, 10] as const;
+export const COMBAT_LAB_VISUAL_SPEEDS = [0.1, 0.25, 0.5, 1, 2, 4, 10] as const;
 const MAX_ACCUMULATED_SECONDS = 0.5;
 const MAX_JOURNAL_ENTRIES = 256;
 const MAX_OBSERVED_SHOT_IDS = 4096;
+
+export interface CombatLabVisualStepHooks {
+  beforeSimulationStep(): void;
+  afterSimulationStep(): void;
+  shouldAdvanceSimulationStep(): boolean;
+}
 
 interface CombatLabVisualCheckpointBookkeepingV1 {
   readonly metrics: CombatLabMetricCollectorV1;
@@ -72,6 +89,7 @@ export class CombatLabVisualSession {
   private speed = 1;
   private interactive = false;
   private programEnabled = false;
+  private experimentRuntimeActive = false;
   private sequence = 0;
   private accumulatorSeconds = 0;
   private checkpoint: CombatLabCheckpointV1 | null = null;
@@ -84,6 +102,8 @@ export class CombatLabVisualSession {
   private readonly shooterIdByShotId = new Map<string, string>();
   private readonly resolvedShotIds = new Set<string>();
   private readonly observedMoralStateByUnitId = new Map<string, CombatLabObservedMoralStateV1>();
+  private stepHookOwner: object | null = null;
+  private stepHooks: CombatLabVisualStepHooks | null = null;
   private stateRevision = 0;
 
   constructor(scenarioId: string, seed: number) {
@@ -106,27 +126,40 @@ export class CombatLabVisualSession {
     replaceCombatLabStateInPlace(stableState, nextBuilt.state);
     this.built = { ...nextBuilt, state: stableState };
     this.stateRevision += 1;
-    this.metrics = createCombatLabMetricCollector(this.state);
-    this.program.appliedStepIds.clear();
-    this.program.nextStepIndex = 0;
-    this.program.lastCommandResult = null;
-    this.paused = true;
-    this.speed = 1;
-    this.interactive = false;
-    this.programEnabled = false;
-    this.sequence = 0;
-    this.accumulatorSeconds = 0;
-    this.checkpoint = null;
-    this.checkpointBookkeeping = null;
-    this.lastCommandResult = null;
-    this.journal.length = 0;
-    this.resetCounters();
+    this.experimentRuntimeActive = false;
+    this.resetRunBookkeeping(true);
     this.log(`Новый чистый visual run: ${scenarioId}@${definition.revision}, seed ${seed}.`);
+  }
+
+  resetExperimentScene(sceneSnapshot: ExportedSceneData, seed: number): void {
+    const stableState = this.built.state;
+    restoreExportedScene(stableState, sceneSnapshot);
+    this.built = { ...this.built, state: stableState, seed: normalizeSeed(seed) };
+    this.stateRevision += 1;
+    this.experimentRuntimeActive = true;
+    this.resetRunBookkeeping(false);
+    this.log(`Сцена эксперимента восстановлена, seed ${this.seed}.`);
+  }
+
+  setStepHooks(owner: object, hooks: CombatLabVisualStepHooks): void {
+    if (this.stepHookOwner && this.stepHookOwner !== owner) {
+      throw new Error('Combat Lab visual step hooks already have an owner.');
+    }
+    this.stepHookOwner = owner;
+    this.stepHooks = hooks;
+  }
+
+  clearStepHooks(owner: object): void {
+    if (this.stepHookOwner !== owner) return;
+    this.stepHookOwner = null;
+    this.stepHooks = null;
   }
 
   setPaused(value: boolean): void { this.paused = value; }
   togglePaused(): void { this.paused = !this.paused; }
   isPaused(): boolean { return this.paused; }
+
+  getSpeed(): number { return this.speed; }
 
   setSpeed(value: number): void {
     if (!COMBAT_LAB_VISUAL_SPEEDS.includes(value as (typeof COMBAT_LAB_VISUAL_SPEEDS)[number])) {
@@ -140,15 +173,66 @@ export class CombatLabVisualSession {
     this.accumulatorSeconds += Math.min(MAX_ACCUMULATED_SECONDS, Math.max(0, realDeltaSeconds * this.speed));
     let changed = false;
     while (this.accumulatorSeconds + 1e-9 >= COMBAT_LAB_FIXED_STEP_SECONDS) {
-      this.advanceOneStep();
+      const advanced = this.advanceOneStep();
+      if (!advanced) {
+        this.accumulatorSeconds = 0;
+        break;
+      }
       this.accumulatorSeconds -= COMBAT_LAB_FIXED_STEP_SECONDS;
       changed = true;
     }
     return changed;
   }
 
-  stepOnce(): void { this.advanceOneStep(); }
+  stepOnce(): boolean { return this.advanceOneStep(); }
   enableRecommendedProgram(value: boolean): void { this.programEnabled = value; }
+
+  appendRunJournal(message: string): void {
+    this.log(message);
+  }
+
+  cancelActionsOwnedBy(ownerTokens: ReadonlySet<string>): number {
+    if (ownerTokens.size === 0) return 0;
+    const endedSeconds = this.state.simulationTimeSeconds;
+    const cancelledTransfers = new Set<string>();
+    let cancelled = 0;
+    for (const unit of this.state.units) {
+      const task = unit.infantryCombatRuntime.activeFireTask;
+      if (task && ownerTokens.has(task.ownerToken)) {
+        const result = cancelSingleFireTask(unit, {
+          ownerToken: task.ownerToken,
+          endedSeconds,
+          resultCode: 'combat_lab_experiment_stopped',
+          resultRu: 'Огневая задача эксперимента остановлена.',
+        });
+        if (result.status === 'cancelled') cancelled += 1;
+      }
+      const reload = unit.infantryCombatRuntime.ammoInventory.activeReload;
+      if (reload && ownerTokens.has(reload.ownerToken)) {
+        if (cancelReloadWeapon(this.state, unit, reload.ownerToken, endedSeconds).status === 'cancelled') cancelled += 1;
+      }
+      const deployment = unit.infantryCombatRuntime.primaryWeapon?.deployment.activeAction;
+      if (deployment && ownerTokens.has(deployment.ownerToken)) {
+        if (cancelWeaponDeploymentAction(this.state, unit, deployment.ownerToken, endedSeconds).status === 'cancelled') cancelled += 1;
+      }
+      const transfer = unit.infantryCombatRuntime.ammoInventory.activeTransfer;
+      if (transfer && ownerTokens.has(transfer.ownerToken) && !cancelledTransfers.has(transfer.actionId)) {
+        cancelledTransfers.add(transfer.actionId);
+        if (cancelAmmoTransfer(this.state, transfer.actionId, endedSeconds).status === 'cancelled') cancelled += 1;
+      }
+      const firstAid = unit.infantryCombatRuntime.medical.activeFirstAidAction;
+      if (firstAid && ownerTokens.has(firstAid.ownerToken)) {
+        if (cancelActiveFirstAidAction(
+          unit,
+          endedSeconds,
+          'combat_lab_experiment_stopped',
+          'Первая помощь эксперимента остановлена.',
+        )) cancelled += 1;
+      }
+    }
+    if (cancelled > 0) this.log(`Остановлено действий эксперимента: ${cancelled}.`);
+    return cancelled;
+  }
 
   executeInteractive(command: CombatLabScriptCommandV1): CombatLabCommandResultV1 {
     this.markInteractive();
@@ -212,7 +296,7 @@ export class CombatLabVisualSession {
   }
 
   getSnapshot(): CombatLabVisualSnapshotV1 {
-    return {
+    return Object.freeze({
       scenarioId: this.definition.scenarioId,
       scenarioRevision: this.definition.revision,
       seed: this.seed,
@@ -222,26 +306,49 @@ export class CombatLabVisualSession {
       interactive: this.interactive,
       programEnabled: this.programEnabled,
       lastCommandResult: this.lastCommandResult,
-      metrics: finalizeCombatLabMetrics(this.state, this.metrics),
+      metrics: Object.freeze(finalizeCombatLabMetrics(this.state, this.metrics)),
       eventDigest: digestCombatLabEvents(this.state),
       finalStateDigest: digestCombatLabState(this.state),
       checkpointAvailable: this.checkpoint !== null,
-      eventJournal: [...this.journal],
-    };
+      eventJournal: Object.freeze([...this.journal]),
+    });
   }
 
-  private advanceOneStep(): void {
+  private resetRunBookkeeping(resetSpeed: boolean): void {
+    this.metrics = createCombatLabMetricCollector(this.state);
+    this.program.appliedStepIds.clear();
+    this.program.nextStepIndex = 0;
+    this.program.lastCommandResult = null;
+    this.paused = true;
+    if (resetSpeed) this.speed = 1;
+    this.interactive = false;
+    this.programEnabled = false;
+    this.sequence = 0;
+    this.accumulatorSeconds = 0;
+    this.checkpoint = null;
+    this.checkpointBookkeeping = null;
+    this.lastCommandResult = null;
+    this.journal.length = 0;
+    this.resetCounters();
+  }
+
+  private advanceOneStep(): boolean {
     if (this.programEnabled) {
       for (const result of applyDueCombatLabProgramSteps(this.state, this.definition, this.program)) {
         this.lastCommandResult = result;
         this.log(`${result.accepted ? 'Сценарий' : 'Отказ сценария'}: ${result.reasonRu}`);
       }
     }
+    const hooks = this.stepHooks;
+    hooks?.beforeSimulationStep();
+    if (hooks && !hooks.shouldAdvanceSimulationStep()) return false;
     tickSimulation(this.state, COMBAT_LAB_FIXED_STEP_SECONDS);
-    preserveCombatLabTargetSurvivability(this.state, this.built.roles);
+    hooks?.afterSimulationStep();
+    if (!this.experimentRuntimeActive) preserveCombatLabTargetSurvivability(this.state, this.built.roles);
     observeCombatLabMetrics(this.state, this.metrics);
     this.captureProductionEvents();
     this.captureProductionMoralEffects();
+    return true;
   }
 
   private captureProductionEvents(): void {
@@ -469,4 +576,10 @@ function clampPercentValue(value: number): number {
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+}
+
+function normalizeSeed(seed: number): number {
+  if (!Number.isFinite(seed)) return 1;
+  const normalized = Math.trunc(seed) >>> 0;
+  return normalized === 0 ? 1 : normalized;
 }
