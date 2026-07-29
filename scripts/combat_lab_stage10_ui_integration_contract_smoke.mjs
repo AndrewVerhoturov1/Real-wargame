@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [extension, editor, main, css, layoutEnhancements] = await Promise.all([
+const [extension, editor, main, css, layoutEnhancements, visualSession] = await Promise.all([
   readFile('src/combat-lab/CombatLabExtension.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabScenarioEditorPanel.ts', 'utf8'),
   readFile('src/combat-lab/main.ts', 'utf8'),
   readFile('src/combat-lab/combat-lab-workspace.css', 'utf8'),
   readFile('src/ui/TacticalWorkspaceLayoutEnhancements.ts', 'utf8'),
+  readFile('src/combat-lab/runtime/CombatLabVisualSession.ts', 'utf8'),
 ]);
 
 for (const label of ['Сцена', 'Программа', 'Текущий прогон', 'Серия прогонов']) assert.match(extension, new RegExp(label));
@@ -36,5 +37,9 @@ assert.match(layoutEnhancements, /advancedControls\?\.classList\.add\('combat-la
   'Stage 10 advanced controls must publish the stable combat-lab-advanced DOM contract.');
 assert.match(layoutEnhancements, /metricsPanel\?\.classList\.add\('combat-lab-metrics-panel'\)/,
   'Stage 10 metrics panel must publish the stable combat-lab-metrics-panel DOM contract.');
+assert.match(visualSession, /COMBAT_LAB_VISUAL_SPEEDS\s*=\s*\[0\.25, 0\.5, 1, 2, 4, 10\]/,
+  'Combat Lab visual speeds must match the shared header controls exactly.');
+assert.doesNotMatch(visualSession, /COMBAT_LAB_VISUAL_SPEEDS\s*=\s*\[[^\]]*0\.1/,
+  'The removed 0.1 speed must not return outside the shared header contract.');
 
 console.log('Combat Lab Stage 10 UI integration contract passed.');
