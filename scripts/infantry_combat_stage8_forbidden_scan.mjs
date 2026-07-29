@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const repoRoot = process.cwd();
 const requiredBase = 'f7eea38163be07c70d83314b5b6f3a1ae1cb5855';
+const diffHead = process.env.INFANTRY_COMBAT_STAGE8_DIFF_HEAD_SHA?.trim() || 'HEAD';
 const protectedPrefixes = [
   'src/core/ai/',
   'src/ai-node-editor/',
@@ -52,6 +53,8 @@ run().catch((error) => {
 });
 
 async function run() {
+  ensureCommit(requiredBase);
+  ensureCommit(diffHead);
   const violations = [];
   for (const relative of productionFiles) {
     const content = await readFile(path.join(repoRoot, relative), 'utf8');
@@ -70,7 +73,7 @@ async function run() {
     if (/\bnew\s+WeakMap\b/.test(content)) violations.push(`${relative}: WeakMap used by automatic/suppression source of truth`);
   }
 
-  const changed = execFileSync('git', ['diff', '--name-only', `${requiredBase}...HEAD`], {
+  const changed = execFileSync('git', ['diff', '--name-only', `${requiredBase}...${diffHead}`], {
     cwd: repoRoot,
     encoding: 'utf8',
   }).trim().split(/\r?\n/).filter(Boolean);
@@ -85,5 +88,20 @@ async function run() {
     process.exitCode = 1;
     return;
   }
-  console.log(`Stage 8 forbidden scan passed across ${productionFiles.length} production files and ${changed.length} changed paths.`);
+  console.log(`Stage 8 forbidden scan passed across ${productionFiles.length} production files and ${changed.length} changed paths through ${diffHead}.`);
+}
+
+function ensureCommit(ref) {
+  try {
+    execFileSync('git', ['cat-file', '-e', `${ref}^{commit}`], {
+      cwd: repoRoot,
+      stdio: 'ignore',
+    });
+  } catch {
+    execFileSync('git', ['fetch', '--no-tags', '--depth=1', 'origin', ref], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  }
 }
