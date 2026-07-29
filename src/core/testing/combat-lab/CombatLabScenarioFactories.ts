@@ -13,8 +13,8 @@ import type { CombatLabBuiltScenarioV1, CombatLabScenarioDefinitionV1 } from './
 const MAP_WIDTH_METRES = 230;
 const MAP_HEIGHT_METRES = 90;
 const METRES_PER_CELL = 1;
-const RIFLE_DISTANCE_SHOOTER_X = 10;
-const RIFLE_DISTANCE_SHOOTER_Y = 40;
+const DISTANCE_STAND_SHOOTER_X = 10;
+const DISTANCE_STAND_SHOOTER_Y = 40;
 
 type LoadoutId =
   | 'loadout_rifleman'
@@ -97,15 +97,15 @@ function fixturesForFactory(factoryId: string): readonly UnitFixture[] {
           'rifle-distance-shooter',
           'Винтовочник',
           'blue',
-          RIFLE_DISTANCE_SHOOTER_X,
-          RIFLE_DISTANCE_SHOOTER_Y,
+          DISTANCE_STAND_SHOOTER_X,
+          DISTANCE_STAND_SHOOTER_Y,
           0,
           'loadout_rifleman',
         ),
-        rifleDistanceTarget('rifle-target-25', 'Мишень 25 м', 25, -26),
-        rifleDistanceTarget('rifle-target-50', 'Мишень 50 м', 50, 22),
-        rifleDistanceTarget('rifle-target-100', 'Мишень 100 м', 100, -15),
-        rifleDistanceTarget('rifle-target-200', 'Мишень 200 м', 200, 10),
+        firingLaneTarget('rifle-target-25', 'Мишень 25 м', 25, -26),
+        firingLaneTarget('rifle-target-50', 'Мишень 50 м', 50, 22),
+        firingLaneTarget('rifle-target-100', 'Мишень 100 м', 100, -15),
+        firingLaneTarget('rifle-target-200', 'Мишень 200 м', 200, 10),
       ];
     case 'rifle-moving-v1':
       return [
@@ -114,17 +114,33 @@ function fixturesForFactory(factoryId: string): readonly UnitFixture[] {
       ];
     case 'ppsh-recoil-v1':
       return [
-        fixture('ppsh-shooter', 'Стрелок с ППШ', 'blue', 10, 40, 0, 'loadout_submachine_gunner'),
-        fixture('ppsh-target-15', 'Мишень 15 м', 'red', 25, 40, 180),
-        fixture('ppsh-target-30', 'Мишень 30 м', 'red', 40, 40, 180),
-        fixture('ppsh-target-60', 'Мишень 60 м', 'red', 70, 40, 180),
+        fixture(
+          'ppsh-shooter',
+          'Стрелок с ППШ',
+          'blue',
+          DISTANCE_STAND_SHOOTER_X,
+          DISTANCE_STAND_SHOOTER_Y,
+          0,
+          'loadout_submachine_gunner',
+        ),
+        firingLaneTarget('ppsh-target-15', 'Мишень 15 м', 15, -24),
+        firingLaneTarget('ppsh-target-30', 'Мишень 30 м', 30, 0),
+        firingLaneTarget('ppsh-target-60', 'Мишень 60 м', 60, 24),
       ];
     case 'dp27-deployment-v1':
       return [
-        fixture('dp-portable-gunner', 'Пулемётчик ДП-27', 'blue', 10, 40, 0, 'loadout_machine_gunner'),
-        fixture('dp-portable-target-50', 'Мишень 50 м', 'red', 60, 40, 180),
-        fixture('dp-portable-target-100', 'Мишень 100 м', 'red', 110, 40, 180),
-        fixture('dp-portable-target-150', 'Мишень 150 м', 'red', 160, 40, 180),
+        fixture(
+          'dp-portable-gunner',
+          'Пулемётчик ДП-27',
+          'blue',
+          DISTANCE_STAND_SHOOTER_X,
+          DISTANCE_STAND_SHOOTER_Y,
+          0,
+          'loadout_machine_gunner',
+        ),
+        firingLaneTarget('dp-portable-target-50', 'Мишень 50 м', 50, -12),
+        firingLaneTarget('dp-portable-target-100', 'Мишень 100 м', 100, 0),
+        firingLaneTarget('dp-portable-target-150', 'Мишень 150 м', 150, 12),
         fixture('dp-portable-outside-sector', 'Мишень вне сектора', 'red', 90, 68, 180),
       ];
     case 'dp27-assistant-v1':
@@ -160,7 +176,7 @@ function fixturesForFactory(factoryId: string): readonly UnitFixture[] {
   }
 }
 
-function rifleDistanceTarget(
+function firingLaneTarget(
   id: string,
   titleRu: string,
   distanceMetres: number,
@@ -171,8 +187,8 @@ function rifleDistanceTarget(
     id,
     titleRu,
     'red',
-    RIFLE_DISTANCE_SHOOTER_X + Math.cos(bearingRadians) * distanceMetres,
-    RIFLE_DISTANCE_SHOOTER_Y + Math.sin(bearingRadians) * distanceMetres,
+    DISTANCE_STAND_SHOOTER_X + Math.cos(bearingRadians) * distanceMetres,
+    DISTANCE_STAND_SHOOTER_Y + Math.sin(bearingRadians) * distanceMetres,
     normalizeDegrees(bearingDegrees + 180),
   );
 }
