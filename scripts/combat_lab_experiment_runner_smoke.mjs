@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const runner = await readFile('src/core/testing/combat-lab/CombatLabExperimentRunner.ts', 'utf8');
+const runner = await readFile('src/core/testing/combat-lab/experiment/CombatLabExperimentRunner.ts', 'utf8');
 assert.match(runner, /export function runCombatLabExperiment/);
 assert.match(runner, /restoreSimulationStateFromSceneSnapshot\(state, experiment\.sceneSnapshot\)/);
 assert.match(runner, /CombatLabScenarioExecutor\.create\(experiment, state\)/);

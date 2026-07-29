@@ -1,4 +1,4 @@
-import type { CombatLabBatchConfigV1, CombatLabExperimentV1 } from './experiment/CombatLabExperimentContracts';
+import type { CombatLabBatchConfigV1, CombatLabExperimentV1 } from './CombatLabExperimentContracts';
 
 export const COMBAT_LAB_BATCH_SCHEMA_VERSION = 1 as const;
 export const COMBAT_LAB_BATCH_WORKER_PROTOCOL_VERSION = 1 as const;

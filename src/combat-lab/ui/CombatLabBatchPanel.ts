@@ -6,7 +6,7 @@ import type {
   CombatLabBatchIdentityV1,
   CombatLabBatchRequestV1,
   CombatLabBatchResultV1,
-} from '../../core/testing/combat-lab/CombatLabBatchContracts';
+} from '../../core/testing/combat-lab/experiment/CombatLabBatchContracts';
 import type { CombatLabExperimentV1 } from '../../core/testing/combat-lab/experiment/CombatLabExperimentContracts';
 import { digestCombatLabExperiment } from '../../core/testing/combat-lab/experiment/CombatLabExperimentDigest';
 import type { CombatLabExperimentIssueV1 } from '../../core/testing/combat-lab/experiment/CombatLabExperimentValidation';

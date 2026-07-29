@@ -1,18 +1,18 @@
-import { tickSimulation } from '../../simulation/SimulationTick';
-import { createInitialState, type SimulationState } from '../../simulation/SimulationState';
-import { restoreSimulationStateFromSceneSnapshot } from '../../simulation/SceneSnapshot';
-import { COMBAT_LAB_FIXED_STEP_SECONDS } from './CombatLabContracts';
-import { digestCombatLabEvents, digestCombatLabState, digestStableValue } from './CombatLabDigest';
+import { tickSimulation } from '../../../simulation/SimulationTick';
+import { createInitialState, type SimulationState } from '../../../simulation/SimulationState';
+import { restoreSimulationStateFromSceneSnapshot } from '../../../simulation/SceneSnapshot';
+import { COMBAT_LAB_FIXED_STEP_SECONDS } from '../CombatLabContracts';
+import { digestCombatLabEvents, digestCombatLabState, digestStableValue } from '../CombatLabDigest';
 import {
   createCombatLabMetricCollector,
   finalizeCombatLabMetrics,
   observeCombatLabMetrics,
-} from './CombatLabMetrics';
+} from '../CombatLabMetrics';
 import type { CombatLabExperimentRunRequestV1, CombatLabExperimentRunResultV1 } from './CombatLabBatchContracts';
-import type { CombatLabExperimentV1 } from './experiment/CombatLabExperimentContracts';
-import { digestCombatLabExperiment } from './experiment/CombatLabExperimentDigest';
-import { validateCombatLabExperiment } from './experiment/CombatLabExperimentValidation';
-import { CombatLabScenarioExecutor } from './experiment/CombatLabScenarioExecutor';
+import type { CombatLabExperimentV1 } from './CombatLabExperimentContracts';
+import { digestCombatLabExperiment } from './CombatLabExperimentDigest';
+import { validateCombatLabExperiment } from './CombatLabExperimentValidation';
+import { CombatLabScenarioExecutor } from './CombatLabScenarioExecutor';
 
 const MAX_UINT32 = 0xffff_ffff;
 const EPSILON_SECONDS = 1e-9;

@@ -1,7 +1,7 @@
 import type {
   CombatLabBatchResultV1,
   CombatLabRepresentativeRunV1,
-} from '../../core/testing/combat-lab/CombatLabBatchContracts';
+} from '../../core/testing/combat-lab/experiment/CombatLabBatchContracts';
 import { combatLabMetricLabelRu } from './CombatLabMetricLabels';
 import { CombatLabMetricDistributionView } from './CombatLabMetricDistributionView';
 

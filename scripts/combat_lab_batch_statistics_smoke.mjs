@@ -1,18 +1,17 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
 const temp = path.resolve('.tmp-combat-lab-batch-statistics');
 await rm(temp, { recursive: true, force: true });
 await mkdir(temp, { recursive: true });
 try {
-  await transpile('src/core/testing/combat-lab/CombatLabBatchContracts.ts', 'CombatLabBatchContracts.mjs');
-  await transpile('src/core/testing/combat-lab/CombatLabBatchStatistics.ts', 'CombatLabBatchStatistics.mjs');
-  await transpile('src/core/testing/combat-lab/CombatLabRepresentativeRuns.ts', 'CombatLabRepresentativeRuns.mjs');
-  const statistics = await import(pathToFileURL(path.join(temp, 'CombatLabBatchStatistics.mjs')));
-  const representatives = await import(pathToFileURL(path.join(temp, 'CombatLabRepresentativeRuns.mjs')));
+  await transpile('src/core/testing/combat-lab/experiment/CombatLabBatchContracts.ts', 'CombatLabBatchContracts.mjs');
+  await transpile('src/core/testing/combat-lab/experiment/CombatLabBatchStatistics.ts', 'CombatLabBatchStatistics.mjs');
+  await transpile('src/core/testing/combat-lab/experiment/CombatLabRepresentativeRuns.ts', 'CombatLabRepresentativeRuns.mjs');
+  const statistics = await import(pathToFileUrl(path.join(temp, 'CombatLabBatchStatistics.mjs')));
+  const representatives = await import(pathToFileUrl(path.join(temp, 'CombatLabRepresentativeRuns.mjs')));
 
   assert.deepEqual(statistics.summarizeCombatLabDistribution([1, 2, 3]), {
     count: 3, minimum: 1, maximum: 3, mean: 2, median: 2, p05: 1.1, p95: 2.9,
@@ -56,3 +55,4 @@ async function transpile(sourcePath, outputName) {
   const code = output.outputText.replaceAll("'./CombatLabBatchContracts'", "'./CombatLabBatchContracts.mjs'");
   await writeFile(path.join(temp, outputName), code);
 }
+function pathToFileUrl(file) { return new URL(`file://${file.replaceAll('\\\\', '/')}`).href; }

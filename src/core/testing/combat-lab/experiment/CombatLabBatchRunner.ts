@@ -1,4 +1,4 @@
-import { COMBAT_LAB_METRIC_IDS } from './CombatLabContracts';
+import { COMBAT_LAB_METRIC_IDS } from '../CombatLabContracts';
 import {
   COMBAT_LAB_BATCH_MAX_CHUNK_SIZE,
   CombatLabBatchCancelledError,
@@ -19,8 +19,8 @@ import {
   updateCombatLabRepresentativeCandidates,
   type CombatLabRepresentativeCandidatesV1,
 } from './CombatLabRepresentativeRuns';
-import { digestCombatLabExperiment } from './experiment/CombatLabExperimentDigest';
-import { COMBAT_LAB_EXPERIMENT_LIMITS_V1 } from './experiment/CombatLabExperimentContracts';
+import { digestCombatLabExperiment } from './CombatLabExperimentDigest';
+import { COMBAT_LAB_EXPERIMENT_LIMITS_V1 } from './CombatLabExperimentContracts';
 
 const MAX_UINT32 = 0xffff_ffff;
 const METRIC_ID_SET = new Set<string>(COMBAT_LAB_METRIC_IDS);
@@ -219,8 +219,7 @@ export function combatLabSeedForRunIndex(request: CombatLabBatchRequestV1, runIn
   const strategy = request.config.seedStrategy;
   if (strategy.kind === 'fixed') return strategy.seed;
   if (strategy.kind === 'explicit') return strategy.seeds[runIndex]!;
-  const normalized = (strategy.firstSeed + runIndex) >>> 0;
-  return normalized === 0 ? 1 : normalized;
+  return ((strategy.firstSeed - 1 + runIndex) % MAX_UINT32) + 1;
 }
 
 export function validateCombatLabBatchRequest(request: CombatLabBatchRequestV1): void {

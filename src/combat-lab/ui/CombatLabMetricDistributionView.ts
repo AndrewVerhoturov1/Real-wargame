@@ -1,4 +1,4 @@
-import type { CombatLabDistributionSummaryV1 } from '../../core/testing/combat-lab/CombatLabBatchContracts';
+import type { CombatLabDistributionSummaryV1 } from '../../core/testing/combat-lab/experiment/CombatLabBatchContracts';
 
 const SVG_WIDTH = 320;
 const SVG_HEIGHT = 72;

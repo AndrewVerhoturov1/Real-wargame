@@ -6,11 +6,11 @@ import {
   type CombatLabBatchWorkerInboundMessageV1,
   type CombatLabBatchWorkerOutboundMessageV1,
   type CombatLabBatchWorkerStartMessageV1,
-} from '../../core/testing/combat-lab/CombatLabBatchContracts';
+} from '../../core/testing/combat-lab/experiment/CombatLabBatchContracts';
 import {
   combineCombatLabBatchPartials,
   runCombatLabBatchPartition,
-} from '../../core/testing/combat-lab/CombatLabBatchRunner';
+} from '../../core/testing/combat-lab/experiment/CombatLabBatchRunner';
 import { digestCombatLabExperiment } from '../../core/testing/combat-lab/experiment/CombatLabExperimentDigest';
 
 interface WorkerScopeV1 {

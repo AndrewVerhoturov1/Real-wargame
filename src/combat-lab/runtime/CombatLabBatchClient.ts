@@ -8,11 +8,11 @@ import {
   type CombatLabBatchResultV1,
   type CombatLabBatchWorkerInboundMessageV1,
   type CombatLabBatchWorkerOutboundMessageV1,
-} from '../../core/testing/combat-lab/CombatLabBatchContracts';
+} from '../../core/testing/combat-lab/experiment/CombatLabBatchContracts';
 import {
   mergeCombatLabBatchPartials,
   validateCombatLabBatchRequest,
-} from '../../core/testing/combat-lab/CombatLabBatchRunner';
+} from '../../core/testing/combat-lab/experiment/CombatLabBatchRunner';
 import { digestCombatLabExperiment } from '../../core/testing/combat-lab/experiment/CombatLabExperimentDigest';
 
 const PROGRESS_INTERVAL_MS = 100;

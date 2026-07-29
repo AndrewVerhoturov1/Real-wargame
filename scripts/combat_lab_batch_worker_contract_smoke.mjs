@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const [contracts, worker, client] = await Promise.all([
-  readFile('src/core/testing/combat-lab/CombatLabBatchContracts.ts', 'utf8'),
+  readFile('src/core/testing/combat-lab/experiment/CombatLabBatchContracts.ts', 'utf8'),
   readFile('src/combat-lab/workers/combat-lab-batch.worker.ts', 'utf8'),
   readFile('src/combat-lab/runtime/CombatLabBatchClient.ts', 'utf8'),
 ]);
