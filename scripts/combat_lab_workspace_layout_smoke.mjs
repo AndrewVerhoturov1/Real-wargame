@@ -87,7 +87,11 @@ for (const token of [
   assert.ok(unitBarPresentation.includes(token), `Shared soldier panel must contain ${token}`);
 }
 
-assert.match(visualSession, /COMBAT_LAB_VISUAL_SPEEDS\s*=\s*\[0\.25, 0\.5, 1, 2, 4, 10\]/, 'Combat Lab must accept every speed shown by the shared header.');
+const visualSpeedsSource = visualSession.match(/COMBAT_LAB_VISUAL_SPEEDS\s*=\s*\[([^\]]+)\]/)?.[1] ?? '';
+const visualSpeeds = visualSpeedsSource.split(',').map((value) => Number(value.trim()));
+for (const requiredSpeed of [0.25, 0.5, 1, 2, 4, 10]) {
+  assert.ok(visualSpeeds.includes(requiredSpeed), `Combat Lab must accept shared-header speed ${requiredSpeed}.`);
+}
 assert.match(labMain, /combat-lab-header-final\.css/, 'The readable dock header correction must load last.');
 assert.match(labHeaderCss, /grid-template-areas:\s*\n\s*"brand toggle"\s*\n\s*"status toggle"/s, 'The dock title must own a full readable row.');
 assert.match(finalFixesCss, /\.workspace-time-controls \.unit-bar-speed-group\s*\{[^}]*grid-column:\s*auto !important/s, 'Legacy lower-panel grid placement must not push speed buttons onto a second row.');
