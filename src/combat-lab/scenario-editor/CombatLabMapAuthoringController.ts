@@ -265,7 +265,7 @@ export class CombatLabMapAuthoringController {
       id: 'wait-contact',
       labelRu: 'Ждать обнаружения цели',
       onSelect: () => this.commitTargetAction(actorRole.roleId, target, (draft, targetRole) => {
-        const base = createCombatLabScenarioStep(draft.getExperiment(), actorRole.roleId, 'wait');
+        const base = createCombatLabScenarioStep(draft.getExperiment(), actorRole.role.id, 'wait');
         appendStep(draft, actorRole.roleId, {
           ...base,
           titleRu: `Ждать обнаружения ${targetRole.titleRu}`,
@@ -384,7 +384,7 @@ export class CombatLabMapAuthoringController {
   }
 
   private commitTargetAction(
-    actorRoleId: string,
+    _actorRoleId: string,
     target: UnitModel,
     action: (draft: CombatLabExperimentDraft, targetRole: CombatLabExperimentRoleV1) => void,
   ): void {
