@@ -3,8 +3,10 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 const REQUIRED_BASE_SHA = 'f93cdbdf15497498e99dd4f63a2bfd20e5414ea9';
+const STAGE9_IMPLEMENTATION_HEAD_SHA = 'f7842189b15f4d564ac8eb5ca226d0b20ca91251';
 const STAGE8_IMPLEMENTATION_HEAD_SHA = REQUIRED_BASE_SHA;
 const STAGE7_IMPLEMENTATION_HEAD_SHA = '08e1bc5264bbf0497c1a48278d9b3cc077ff54f0';
+const STAGE9_SCOPE_ENV = { INFANTRY_COMBAT_STAGE9_DIFF_HEAD_SHA: STAGE9_IMPLEMENTATION_HEAD_SHA };
 const STAGE8_SCOPE_ENV = { INFANTRY_COMBAT_STAGE8_DIFF_HEAD_SHA: STAGE8_IMPLEMENTATION_HEAD_SHA };
 const repoRoot = process.cwd();
 const stage8VerifierPath = path.join(repoRoot, 'scripts', 'infantry_combat_stage8_verify.mjs');
@@ -47,7 +49,7 @@ const checks = [
   ],
   ['npm', ['run', 'infantry-combat-stage8:forbidden-scan'], STAGE8_SCOPE_ENV],
   ['npm', ['run', 'infantry-combat-stage9:smoke']],
-  ['npm', ['run', 'infantry-combat-stage9:forbidden-scan']],
+  ['npm', ['run', 'infantry-combat-stage9:forbidden-scan'], STAGE9_SCOPE_ENV],
   ['node', ['scripts/combat_lab_prone_survivability_ui_regression_smoke.mjs']],
   ['node', ['--check', 'scripts/infantry_combat_stage9_smoke.mjs']],
   ['node', ['--check', 'scripts/infantry_combat_stage9_forbidden_scan.mjs']],
@@ -83,6 +85,7 @@ function ensureVerificationHistory() {
 
   for (const [label, sha] of [
     ['required Stage 9 base and approved Stage 8 head', REQUIRED_BASE_SHA],
+    ['approved Stage 9 implementation head', STAGE9_IMPLEMENTATION_HEAD_SHA],
     ['approved Stage 7 implementation head', STAGE7_IMPLEMENTATION_HEAD_SHA],
   ]) {
     const commit = run('git', ['cat-file', '-e', `${sha}^{commit}`], repoRoot);
@@ -96,7 +99,7 @@ function ensureVerificationHistory() {
   console.log(workflowAnnotation(
     'notice',
     'Stage 9 verification',
-    `PASS full git history, required base ${REQUIRED_BASE_SHA}, Stage 8 scope head ${STAGE8_IMPLEMENTATION_HEAD_SHA} and Stage 7 head ${STAGE7_IMPLEMENTATION_HEAD_SHA} available`,
+    `PASS full git history, required base ${REQUIRED_BASE_SHA}, Stage 9 scope head ${STAGE9_IMPLEMENTATION_HEAD_SHA}, Stage 8 scope head ${STAGE8_IMPLEMENTATION_HEAD_SHA} and Stage 7 head ${STAGE7_IMPLEMENTATION_HEAD_SHA} available`,
   ));
 }
 
