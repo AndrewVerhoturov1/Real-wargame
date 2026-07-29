@@ -190,25 +190,33 @@ export class CombatLabScenarioAuthoringOverlayRenderer {
 }
 
 function referencedMarkerId(step: CombatLabScenarioStepV1): string | null {
-  if (step.action.kind === 'move') return step.action.markerId;
-  if (step.action.kind === 'fire' && step.action.target.kind === 'marker') return step.action.target.markerId;
+  const action = step.action;
+  if (action.kind === 'move') return action.markerId;
+  if (action.kind === 'fire') {
+    const target = action.target;
+    if (target.kind === 'marker') return target.markerId;
+  }
   return null;
 }
 
 function actionTargetPoint(experiment: CombatLabExperimentV1, step: CombatLabScenarioStepV1): { x: number; y: number } | null {
   const action = step.action;
   if (action.kind === 'move') {
-    const marker = experiment.markers.find((candidate) => candidate.markerId === action.markerId);
+    const markerId = action.markerId;
+    const marker = experiment.markers.find((candidate) => candidate.markerId === markerId);
     return marker ? metresToWorld(experiment, marker.xMetres, marker.yMetres) : null;
   }
   if (action.kind === 'fire') {
     if (action.target.kind === 'marker') {
-      const marker = experiment.markers.find((candidate) => candidate.markerId === action.target.markerId);
+      const markerId = action.target.markerId;
+      const marker = experiment.markers.find((candidate) => candidate.markerId === markerId);
       return marker ? metresToWorld(experiment, marker.xMetres, marker.yMetres) : null;
     }
     return roleScenePoint(experiment, action.target.roleId);
   }
-  if (action.kind === 'transfer' || action.kind === 'first_aid') return roleScenePoint(experiment, action.targetRoleId);
+  if (action.kind === 'transfer' || action.kind === 'first_aid') {
+    return roleScenePoint(experiment, action.targetRoleId);
+  }
   return null;
 }
 
