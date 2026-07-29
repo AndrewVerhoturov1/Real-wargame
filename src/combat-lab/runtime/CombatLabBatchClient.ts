@@ -215,10 +215,9 @@ export function defaultCombatLabWorkerCount(hardwareConcurrency = globalThis.nav
   return Math.min(4, Math.max(1, Math.trunc(hardwareConcurrency as number) - 1));
 }
 
-function createDefaultWorker(workerId: number): Worker {
+function createDefaultWorker(_workerId: number): Worker {
   return new Worker(new URL('../workers/combat-lab-batch.worker.ts', import.meta.url), {
     type: 'module',
-    name: `combat-lab-batch-${workerId}`,
   });
 }
 
