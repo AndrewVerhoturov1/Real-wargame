@@ -1,124 +1,44 @@
-import { buildAiRuntimeSceneSnapshot, serializeMoveOrder } from '../core/ai/runtime/AiRuntimeSnapshot';
-import { serializePhysicalActionCoordinatorState } from '../core/actions/PhysicalActionCoordinatorSerialization';
-import { serializeUnitPhysicalAction } from '../core/actions/PostureTransition';
 import { saveMovementProfileRegistry } from '../ai-node-editor/MovementProfileBrowserStorage';
-import { getCombatRuntime } from '../core/combat/CombatDamage';
-import { getWeaponRuntime } from '../core/combat/WeaponModel';
-import { serializeMovementRuntime } from '../core/movement/MovementRuntime';
 import {
-  normalizeReferenceProjectileRuntimeState,
-  reconcileInfantryCombatRuntimeAfterLoad,
-  serializeInfantryCombatUnitRuntime,
-  serializeReferenceProjectileRuntimeState,
-  type ProjectileRuntimeSnapshotV2,
-} from '../core/infantry-combat/runtime';
-import { createMovementProfileRegistry, serializeMovementProfileRegistry, type MovementProfileRegistryData } from '../core/movement/MovementProfiles';
-import {
-  EnvironmentProfileRegistry,
-  type EnvironmentProfileRegistryData,
-} from '../core/map/EnvironmentMaterialProfile';
-import {
-  resolveObjectCoverProperties,
-  type TacticalMapData,
-} from '../core/map/MapModel';
-import {
-  resolvePressureZoneSettings,
-  type PressureZoneData,
-} from '../core/pressure/PressureZone';
-import { replaceSceneAtRuntimeResolution } from '../core/simulation/ResolutionAwareScene';
+  buildSceneSnapshot,
+  restoreSimulationStateFromSceneSnapshot,
+  type ExportedSceneData,
+} from '../core/simulation/SceneSnapshot';
 import type { SimulationState } from '../core/simulation/SimulationState';
-import { getTacticalPositionSearchService } from '../core/tactical/TacticalPositionSearchService';
-import {
-  buildStaticTacticalPositionArtifactForExport,
-  getStaticTacticalPositionService,
-  hydrateStaticTacticalPositionArtifact,
-} from '../core/tactical/static/StaticTacticalPositionService';
-import type { StaticTacticalPositionArtifact } from '../core/tactical/static/StaticTacticalPositionArtifact';
-import { serializeTacticalPositionSettings } from '../core/tactical/TacticalPositionSettings';
-import { refreshAiTestLabSceneSnapshot } from '../core/testing/AiTestLabRuntime';
+import { buildStaticTacticalPositionArtifactForExport } from '../core/tactical/static/StaticTacticalPositionService';
 import { getEnvironmentProfileRegistry, saveEnvironmentProfileRegistry } from './EnvironmentProfileStorage';
-import type { UnitData, UnitModel } from '../core/units/UnitModel';
 
-export interface ExportedSceneData {
-  version: string;
-  exportedAt: string;
-  noteRu: string;
-  simulationTimeSeconds: number;
-  infantryCombatRuntime: ProjectileRuntimeSnapshotV2;
-  map: {
-    width: number;
-    height: number;
-    cellSize: number;
-    metersPerCell: number;
-    defaultTerrain: string;
-    defaultHeight: number;
-    environmentProfileId: string;
-    heightMap: number[][];
-    forestMap: number[][];
-    surfaceMaterialMap: string[][];
-    vegetationMaterialMap: string[][];
-    objects: Array<Record<string, unknown>>;
-  };
-  environmentProfiles: EnvironmentProfileRegistryData;
-  movementProfiles: MovementProfileRegistryData;
-  units: Array<Record<string, unknown>>;
-  pressureZones: Array<Record<string, unknown>>;
-  staticTacticalPositionArtifact?: StaticTacticalPositionArtifact;
-}
+export type { ExportedSceneData } from '../core/simulation/SceneSnapshot';
+export {
+  normalizeSceneSnapshot as normalizeImportedScene,
+  restoreSceneSnapshotCombatState as restoreImportedInfantryCombatState,
+} from '../core/simulation/SceneSnapshot';
 
 export async function loadSceneJsonFromFile(state: SimulationState, file: File): Promise<void> {
   const text = await file.text();
   let parsed: unknown;
-
   try {
     parsed = JSON.parse(text) as unknown;
   } catch {
     throw new Error('Файл не похож на правильный JSON.');
   }
 
-  const scene = normalizeImportedScene(parsed);
-  const environmentRegistry = scene.environmentProfiles === undefined
-    ? getEnvironmentProfileRegistry()
-    : EnvironmentProfileRegistry.fromUnknown(scene.environmentProfiles);
-  const requestedEnvironmentProfileId = scene.map.environmentProfileId?.trim();
-  if (requestedEnvironmentProfileId && environmentRegistry.hasProfile(requestedEnvironmentProfileId)) {
-    environmentRegistry.setActiveProfile(requestedEnvironmentProfileId);
-  }
-  saveEnvironmentProfileRegistry(environmentRegistry);
-  const tacticalPositionSearchService = getTacticalPositionSearchService(state);
-  for (const unit of state.units) tacticalPositionSearchService?.clearUnit(unit.id);
-  replaceSceneAtRuntimeResolution(state, scene.map, scene.units, scene.pressureZones);
-  restoreImportedInfantryCombatState(state, scene);
-  state.movementProfiles = createMovementProfileRegistry(scene.movementProfiles);
-  saveMovementProfileRegistry(state.movementProfiles);
-  if (environmentRegistry.hasProfile(state.map.environmentProfileId)) {
-    environmentRegistry.setActiveProfile(state.map.environmentProfileId);
-    saveEnvironmentProfileRegistry(environmentRegistry);
-  } else {
-    state.map.environmentProfileId = environmentRegistry.activeProfileId;
-  }
-  const persistentBasis = hydrateStaticTacticalPositionArtifact(state, scene.staticTacticalPositionArtifact);
-  if (!persistentBasis.ok) getStaticTacticalPositionService(state).request();
-  state.editor.selectedObjectId = null;
-  state.editor.selectedZoneId = null;
-  state.editor.drag = null;
-  state.editor.tool = 'select';
-  state.editor.nextObjectIndex = nextIndex(scene.map.objects ?? [], 'editor_object_');
-  state.editor.nextUnitIndex = nextIndex(scene.units, 'editor_unit_');
-  state.editor.nextZoneIndex = nextIndex(scene.pressureZones, 'editor_zone_');
-  refreshAiTestLabSceneSnapshot(state);
-  const restoredRuntimeCount = state.units.filter((unit) => unit.behaviorRuntime.lastEvent === 'ai_runtime_scene_restored').length;
-  const resetRuntimeCount = state.units.filter((unit) => unit.behaviorRuntime.lastEvent === 'ai_runtime_scene_reset').length;
-  const runtimeMessage = restoredRuntimeCount > 0
-    ? ` Runtime восстановлен у бойцов: ${restoredRuntimeCount}.`
-    : resetRuntimeCount > 0
-      ? ` Runtime сброшен у бойцов: ${resetRuntimeCount}.`
+  const restored = restoreSimulationStateFromSceneSnapshot(state, parsed, {
+    fallbackEnvironmentProfiles: getEnvironmentProfileRegistry().toData(),
+  });
+  saveEnvironmentProfileRegistry(restored.environmentProfileRegistry);
+  saveMovementProfileRegistry(restored.movementProfileRegistry);
+
+  const runtimeMessage = restored.restoredRuntimeCount > 0
+    ? ` Runtime восстановлен у бойцов: ${restored.restoredRuntimeCount}.`
+    : restored.resetRuntimeCount > 0
+      ? ` Runtime сброшен у бойцов: ${restored.resetRuntimeCount}.`
       : ' Старый формат сцены загружен без активного действия ИИ.';
-  const basisMessage = persistentBasis.ok
-    ? ` Статическая тактическая основа загружена из предрасчёта (${formatBytes(persistentBasis.decodedBytes)}, ${persistentBasis.decodeMs} мс).`
-    : scene.staticTacticalPositionArtifact === undefined
+  const basisMessage = restored.persistentBasis.ok
+    ? ` Статическая тактическая основа загружена из предрасчёта (${formatBytes(restored.persistentBasis.decodedBytes)}, ${restored.persistentBasis.decodeMs} мс).`
+    : restored.scene.staticTacticalPositionArtifact === undefined
       ? ' Предрасчёт статической тактической основы отсутствует; запущено штатное построение.'
-      : ` Предрасчёт статической тактической основы отклонён (${persistentBasis.reason}); запущено штатное построение.`;
+      : ` Предрасчёт статической тактической основы отклонён (${restored.persistentBasis.reason}); запущено штатное построение.`;
   state.editor.lastMessage = `JSON сцены загружен в сетку ${state.map.metersPerCell} м: карта ${state.map.width}×${state.map.height}, юнитов ${state.units.length}, зон ${state.pressureZones.length}.${runtimeMessage}${basisMessage}`;
 }
 
@@ -128,245 +48,23 @@ export function downloadCurrentSceneJson(state: SimulationState): void {
   const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-
   link.href = url;
   link.download = `real-wargame-scene-${buildTimestampForFileName()}.json`;
   link.click();
   URL.revokeObjectURL(url);
+
   const basisMessage = scene.staticTacticalPositionArtifact
     ? ` Предрасчёт статической тактической основы приложен (${formatBytes(scene.staticTacticalPositionArtifact.payload.byteLength)} без base64).`
     : ' Готового актуального предрасчёта нет; сцена сохранена без него.';
   state.editor.lastMessage = `JSON испытательной сцены скачан: ${state.map.metersPerCell} м/клетка.${basisMessage}`;
 }
 
-export function normalizeImportedScene(value: unknown): {
-  map: TacticalMapData;
-  units: UnitData[];
-  pressureZones: PressureZoneData[];
-  environmentProfiles: unknown;
-  movementProfiles: unknown;
-  staticTacticalPositionArtifact: unknown;
-  simulationTimeSeconds: number;
-  infantryCombatRuntime: unknown;
-} {
-  const scene = requireRecord(value, 'Файл должен содержать объект сцены.');
-  const map = requireRecord(scene.map, 'В JSON сцены нет блока map.');
-
-  return {
-    map: map as unknown as TacticalMapData,
-    units: readArray(scene.units) as unknown as UnitData[],
-    pressureZones: readArray(scene.pressureZones) as unknown as PressureZoneData[],
-    environmentProfiles: scene.environmentProfiles,
-    movementProfiles: scene.movementProfiles,
-    staticTacticalPositionArtifact: scene.staticTacticalPositionArtifact,
-    simulationTimeSeconds: finiteNonNegative(scene.simulationTimeSeconds),
-    infantryCombatRuntime: scene.infantryCombatRuntime,
-  };
-}
-
-export function restoreImportedInfantryCombatState(
-  state: SimulationState,
-  scene: { readonly simulationTimeSeconds: number; readonly infantryCombatRuntime: unknown },
-): void {
-  state.simulationTimeSeconds = canonicalSeconds(scene.simulationTimeSeconds);
-  state.infantryCombatProjectiles = normalizeReferenceProjectileRuntimeState(scene.infantryCombatRuntime);
-  reconcileInfantryCombatRuntimeAfterLoad(state);
-}
-
 export function buildExportedScene(state: SimulationState): ExportedSceneData {
-  const staticTacticalPositionArtifact = buildStaticTacticalPositionArtifactForExport(state);
-  return {
-    version: 'scene-export-v10-physical-posture-action-2m-grid',
+  return buildSceneSnapshot(state, {
     exportedAt: new Date().toISOString(),
-    simulationTimeSeconds: canonicalSeconds(state.simulationTimeSeconds),
-    infantryCombatRuntime: serializeReferenceProjectileRuntimeState(state.infantryCombatProjectiles),
-    noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, профилями физического движения, environment materials, выносливостью, фактическим способом движения, слоем «Обзор и память», навигационными профилями, настройками тактических позиций, необязательным предрасчётом статической тактической основы и активным runtime. Новые поля добавляются совместимо в envelope v10; старые сцены без них получают безопасные значения по умолчанию, а сцены 10 м преобразуются в текущую сетку при загрузке.',
-    map: {
-      width: state.map.width,
-      height: state.map.height,
-      cellSize: state.map.cellSize,
-      metersPerCell: state.map.metersPerCell,
-      defaultTerrain: state.map.defaultTerrain,
-      defaultHeight: state.map.defaultHeight,
-      environmentProfileId: state.map.environmentProfileId,
-      heightMap: buildHeightMap(state),
-      forestMap: buildForestMap(state),
-      surfaceMaterialMap: buildMaterialMap(state, 'surfaceMaterialId'),
-      vegetationMaterialMap: buildMaterialMap(state, 'vegetationMaterialId'),
-      objects: state.map.objects.map((object) => {
-        const cover = resolveObjectCoverProperties(object);
-        return {
-          id: object.id,
-          kind: object.kind,
-          x: roundThree(object.x),
-          y: roundThree(object.y),
-          widthCells: roundThree(object.widthCells),
-          heightCells: roundThree(object.heightCells),
-          losHeightMeters: roundOne(object.losHeightMeters ?? 1),
-          coverProtection: roundOne(cover.coverProtection),
-          coverReliability: roundOne(cover.coverReliability),
-          concealment: roundOne(cover.concealment),
-          penetrable: cover.penetrable,
-          coverPosture: cover.coverPosture,
-          rotationDegrees: roundOne(radiansToDegrees(object.rotationRadians)),
-          label: object.labels?.en,
-          labelRu: object.labels?.ru,
-        };
-      }),
-    },
     environmentProfiles: getEnvironmentProfileRegistry().toData(),
-    movementProfiles: serializeMovementProfileRegistry(state.movementProfiles),
-    units: state.units.map(exportUnit),
-    pressureZones: state.pressureZones.map((zone) => {
-      const settings = resolvePressureZoneSettings(zone);
-      return {
-        id: zone.id,
-        label: zone.labels.en,
-        labelRu: zone.labels.ru,
-        type: zone.type,
-        shape: zone.shape,
-        mode: settings.mode,
-        x: roundThree(zone.x),
-        y: roundThree(zone.y),
-        radiusCells: roundThree(zone.radiusCells),
-        widthCells: roundThree(zone.widthCells),
-        heightCells: roundThree(zone.heightCells),
-        rotationDegrees: roundOne(zone.rotationDegrees ?? 0),
-        strength: roundOne(zone.strength),
-        suppression: roundOne(settings.suppression),
-        stressPerSecond: roundOne(zone.stressPerSecond),
-        directionDegrees: roundOne(settings.directionDegrees),
-        arcDegrees: roundOne(settings.arcDegrees),
-        rangeCells: roundThree(settings.rangeCells),
-        minRangeCells: roundThree(settings.minRangeCells),
-        falloffPercent: roundOne(settings.falloffPercent),
-        enabled: settings.enabled,
-        sourceVisible: settings.sourceVisible,
-        sourceKnown: settings.sourceKnown,
-        sourceTargetType: zone.sourceTargetType,
-        knowledgeConfidence: roundOne(zone.knowledgeConfidence ?? 100),
-        uncertaintyCells: roundThree(zone.uncertaintyCells ?? 0.15),
-        knowledgeSource: zone.knowledgeSource,
-        reason: zone.reasons.en,
-        reasonRu: zone.reasons.ru,
-      };
-    }),
-    ...(staticTacticalPositionArtifact ? { staticTacticalPositionArtifact } : {}),
-  };
-}
-
-function buildHeightMap(state: SimulationState): number[][] {
-  const rows: number[][] = [];
-  for (let y = 0; y < state.map.height; y += 1) {
-    const row: number[] = [];
-    for (let x = 0; x < state.map.width; x += 1) {
-      row.push(state.map.cells[y * state.map.width + x]?.height ?? state.map.defaultHeight);
-    }
-    rows.push(row);
-  }
-  return rows;
-}
-
-function buildForestMap(state: SimulationState): number[][] {
-  const rows: number[][] = [];
-  for (let y = 0; y < state.map.height; y += 1) {
-    const row: number[] = [];
-    for (let x = 0; x < state.map.width; x += 1) {
-      row.push(state.map.cells[y * state.map.width + x]?.forest ?? 0);
-    }
-    rows.push(row);
-  }
-  return rows;
-}
-
-function buildMaterialMap(state: SimulationState, field: 'surfaceMaterialId' | 'vegetationMaterialId'): string[][] {
-  const rows: string[][] = [];
-  for (let y = 0; y < state.map.height; y += 1) {
-    const row: string[] = [];
-    for (let x = 0; x < state.map.width; x += 1) row.push(state.map.cells[y * state.map.width + x]?.[field] ?? (field === 'surfaceMaterialId' ? 'field' : 'none'));
-    rows.push(row);
-  }
-  return rows;
-}
-
-function exportUnit(unit: UnitModel): Record<string, unknown> {
-  return {
-    id: unit.id,
-    label: unit.labels.en,
-    labelRu: unit.labels.ru,
-    type: unit.type,
-    side: unit.side,
-    aiControl: unit.aiControl,
-    x: roundThree(unit.position.x - 0.5),
-    y: roundThree(unit.position.y - 0.5),
-    speedCellsPerSecond: roundThree(unit.speedCellsPerSecond),
-    heldItem: unit.heldItem,
-    facingDegrees: roundOne(radiansToDegrees(unit.facingRadians)),
-    viewAngleDegrees: roundOne(unit.attentionSettings.profiles.observe.directAngleDegrees),
-    viewRangeCells: roundThree(unit.viewRangeCells),
-    behaviorProfile: unit.behaviorProfile,
-    behavior: { ...unit.behaviorSettings },
-    soldier: {
-      traits: { ...unit.soldier.traits },
-      condition: { ...unit.soldier.condition },
-    },
-    attentionProfileId: unit.playerAttentionProfileId ?? undefined,
-    attention: {
-      defaultMode: unit.attentionSettings.defaultMode,
-      profiles: Object.fromEntries(
-        Object.entries(unit.attentionSettings.profiles).map(([mode, profile]) => [mode, { ...profile }]),
-      ),
-      vision: { ...unit.attentionSettings.vision },
-      nearAwarenessRangeMeters: unit.attentionSettings.nearAwarenessRangeMeters,
-      nearMinimumVisibilityQuality: unit.attentionSettings.nearMinimumVisibilityQuality,
-    },
-    tacticalPositionSettings: serializeTacticalPositionSettings(unit),
-    initialState: { ...unit.initialState },
-    tacticalKnowledge: JSON.parse(JSON.stringify(unit.tacticalKnowledge)),
-    perceptionKnowledge: JSON.parse(JSON.stringify(unit.perceptionKnowledge)),
-    navigationProfileId: unit.unitRoleNavigationProfileId ?? undefined,
-    navigationMovementMode: unit.navigationMovementMode ?? undefined,
-    movementProfileId: unit.unitRoleMovementProfileId ?? undefined,
-    playerCommand: unit.playerCommand ? JSON.parse(JSON.stringify(unit.playerCommand)) : undefined,
-    runtime: {
-      stress: roundOne(unit.behaviorRuntime.stress),
-      suppression: roundOne(unit.behaviorRuntime.suppression),
-      ammo: Math.round(unit.behaviorRuntime.ammo),
-      weaponReady: unit.behaviorRuntime.weaponReady,
-      posture: unit.behaviorRuntime.posture,
-      weapon: { ...getWeaponRuntime(unit) },
-      combat: JSON.parse(JSON.stringify(getCombatRuntime(unit))),
-      movement: serializeMovementRuntime(unit.movementRuntime),
-      physicalActionCoordinator: serializePhysicalActionCoordinatorState(unit.behaviorRuntime.physicalActionCoordinator),
-      physicalAction: serializeUnitPhysicalAction(unit.behaviorRuntime.physicalAction),
-      infantryCombat: serializeInfantryCombatUnitRuntime(unit.infantryCombatRuntime),
-      moveOrder: unit.order ? serializeMoveOrder(unit.order) : undefined,
-      aiRuntime: buildAiRuntimeSceneSnapshot(
-        unit.behaviorRuntime.aiRuntimeSession,
-        unit.order,
-        unit.behaviorRuntime.aiRouteStatusState,
-      ),
-    },
-  };
-}
-
-function nextIndex(items: Array<{ id?: string }>, prefix: string): number {
-  let maxIndex = 0;
-  for (const item of items) {
-    if (!item.id?.startsWith(prefix)) continue;
-    const suffix = Number.parseInt(item.id.slice(prefix.length), 10);
-    if (Number.isFinite(suffix)) maxIndex = Math.max(maxIndex, suffix);
-  }
-  return maxIndex + 1;
-}
-
-function requireRecord(value: unknown, message: string): Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(message);
-  return value as Record<string, unknown>;
-}
-
-function readArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
+    staticTacticalPositionArtifact: buildStaticTacticalPositionArtifactForExport(state),
+  });
 }
 
 function buildTimestampForFileName(): string {
@@ -376,26 +74,6 @@ function buildTimestampForFileName(): string {
     .replaceAll('.', '-')
     .replace('T', '_')
     .replace('Z', '');
-}
-
-function radiansToDegrees(radians: number): number {
-  return (radians * 180) / Math.PI;
-}
-
-function finiteNonNegative(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0;
-}
-
-function canonicalSeconds(value: number): number {
-  return Math.round(Math.max(0, value) * 1_000_000_000_000) / 1_000_000_000_000;
-}
-
-function roundOne(value: number): number {
-  return Math.round(value * 10) / 10;
-}
-
-function roundThree(value: number): number {
-  return Math.round(value * 1000) / 1000;
 }
 
 function formatBytes(bytes: number): string {

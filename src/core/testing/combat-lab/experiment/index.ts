@@ -5,3 +5,4 @@ export * from './CombatLabExperimentDigest';
 export * from './CombatLabScenarioConditions';
 export * from './CombatLabScenarioCompletion';
 export * from './CombatLabScenarioExecutor';
+export * from './CombatLabBuiltInExperiments';

@@ -1,4 +1,4 @@
-import type { ExportedSceneData } from '../../../../ui/SceneExport';
+import type { ExportedSceneData } from '../../../simulation/SceneSnapshot';
 import type {
   CombatLabAccuracyOverridesV1,
   CombatLabMetricId,
