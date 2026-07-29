@@ -13,7 +13,7 @@
 ```text
 repository: AndrewVerhoturov1/Real-wargame
 orchestrator branch: feature/20260729-combat-lab-scenario-system
-required orchestrator start SHA: b6ba83097de4c56a5d45723e2b9fd0ed7f2a44fd
+required coordination ancestor: b6ba83097de4c56a5d45723e2b9fd0ed7f2a44fd
 required preview ancestor: 6a21502da66b2b7dbd9054db7f57e6864b1c4fb5
 worker branch: worker/20260729-combat-lab-stage10-core
 ```
@@ -23,12 +23,15 @@ worker branch: worker/20260729-combat-lab-stage10-core
 Перед изменениями:
 
 1. проверить фактический удалённый HEAD `feature/20260729-combat-lab-scenario-system`;
-2. он должен быть ровно `b6ba83097de4c56a5d45723e2b9fd0ed7f2a44fd`;
-3. проверить, что `6a21502da66b2b7dbd9054db7f57e6864b1c4fb5` является его предком;
-4. создать изолированный worktree или локальную ветку `worker/20260729-combat-lab-stage10-core`;
-5. не изменять orchestration branch напрямую.
+2. проверить, что `b6ba83097de4c56a5d45723e2b9fd0ed7f2a44fd` является его предком;
+3. проверить, что `6a21502da66b2b7dbd9054db7f57e6864b1c4fb5` является предком coordination ancestor;
+4. сравнить actual HEAD с `b6ba83097de4c56a5d45723e2b9fd0ed7f2a44fd`;
+5. до contract gate разрешены только добавленные Stage 10 prompt/docs-файлы; product-код `src/**`, tests `scripts/**`, `package.json` и workflows не должны отличаться;
+6. записать actual HEAD как `coordination_start_sha`;
+7. создать изолированный worktree или локальную ветку `worker/20260729-combat-lab-stage10-core` от actual HEAD;
+8. не изменять orchestration branch напрямую.
 
-Если HEAD уже изменился, не угадывать причину и не начинать реализацию. Вернуть `BLOCKED` с фактическим SHA и сравнением.
+Если после coordination ancestor уже изменён product-код или добавлены несовместимые experiment contracts, не начинать реализацию. Вернуть `BLOCKED` с фактическим SHA и сравнением.
 
 ## Обязательное чтение
 
@@ -218,6 +221,7 @@ git commit -m "feat(combat-lab): define Stage 10 experiment contracts"
 ```text
 CONTRACT GATE READY
 worker_branch:
+coordination_start_sha:
 contract_commit:
 checks:
 public_exports:
@@ -464,7 +468,8 @@ feat(combat-lab): expose built-in experiment templates
 
 Вернуть `BLOCKED`, если:
 
-- обязательный SHA не совпал;
+- обязательные ancestors не совпали;
+- после coordination ancestor уже изменён product-код;
 - для completion требуется прямая мутация gameplay state;
 - нужен второй simulation pipeline;
 - требуется менять `.github/workflows/`;
@@ -486,7 +491,8 @@ status: READY FOR INTEGRATION | BLOCKED | FAIL
 executor: 1
 worker_branch: worker/20260729-combat-lab-stage10-core
 orchestrator_branch: feature/20260729-combat-lab-scenario-system
-required_start_sha: b6ba83097de4c56a5d45723e2b9fd0ed7f2a44fd
+required_coordination_ancestor: b6ba83097de4c56a5d45723e2b9fd0ed7f2a44fd
+coordination_start_sha:
 contract_commit:
 implementation_commits:
 current_commit:
