@@ -3,7 +3,7 @@ import type { DefinitionRef, LoadoutTemplateV1 } from '../../core/infantry-comba
 import type { UnitSideInput, UnitType } from '../../core/units/UnitModel';
 import {
   createCombatLabParticipant,
-  restoreCombatLabParticipantInitialContext,
+  readCombatLabParticipantInitialDraft,
   updateCombatLabParticipantInitialState,
   type CombatLabExperimentV1,
   type CombatLabInitialHealthV1,
@@ -24,6 +24,10 @@ interface PublishedLoadoutOption {
   readonly titleRu: string;
   readonly capacityRounds: number;
   readonly ammoIds: readonly string[];
+}
+
+export function combatLabParticipantAllowsUnarmedSelection(roleId: string | null): boolean {
+  return roleId === null;
 }
 
 export class CombatLabParticipantDialog {
@@ -66,12 +70,12 @@ export class CombatLabParticipantDialog {
   private constructor(private readonly options: CombatLabParticipantDialogOptions) {
     this.root.className = 'combat-lab-participant-dialog';
     this.status.className = 'combat-lab-editor-status';
-    this.loadout.append(option('', 'Без комплекта'));
+    const creating = combatLabParticipantAllowsUnarmedSelection(options.roleId);
+    if (creating) this.loadout.append(option('', 'Без комплекта'));
     for (const item of this.loadouts) this.loadout.append(option(refKey(item.ref), item.titleRu));
     this.loadout.addEventListener('change', () => this.renderLoadoutFields());
     this.healthMode.addEventListener('change', () => this.renderHealthFields());
 
-    const creating = options.roleId === null;
     this.root.append(
       title(creating ? 'Создать бойца' : 'Изменить бойца'),
       section('Основное',
@@ -135,24 +139,30 @@ export class CombatLabParticipantDialog {
     }
 
     try {
-      const { unit } = restoreCombatLabParticipantInitialContext(experiment, role.roleId);
+      const initial = readCombatLabParticipantInitialDraft(experiment, role.roleId);
       this.name.value = role.titleRu;
       this.roleId.value = role.roleId;
       this.unitId.value = role.unitId;
-      this.side.value = unit.side;
-      this.unitType.value = unit.type;
-      this.x.value = trimNumber(unit.position.x - 0.5);
-      this.y.value = trimNumber(unit.position.y - 0.5);
-      this.facing.value = trimNumber((unit.facingRadians * 180) / Math.PI);
-      this.posture.value = unit.behaviorRuntime.posture;
-      const loadoutRef = unit.infantryCombatRuntime.ammoInventory.loadoutRef;
-      this.loadout.value = loadoutRef ? refKey(loadoutRef) : '';
-      this.renderLoadoutFields(unit.infantryCombatRuntime.ammoInventory.reserves);
-      this.loadedRounds.value = String(unit.infantryCombatRuntime.primaryWeapon?.roundsInWeapon ?? 0);
-      this.firstAid.value = String(unit.infantryCombatRuntime.medical.firstAidCharges);
+      this.side.value = initial.side;
+      this.unitType.value = initial.unitType;
+      this.x.value = trimNumber(initial.x);
+      this.y.value = trimNumber(initial.y);
+      this.facing.value = trimNumber(initial.facingDegrees);
+      this.posture.value = initial.posture;
+      if (initial.loadoutRef) {
+        this.loadout.value = refKey(initial.loadoutRef);
+      } else {
+        const currentUnarmed = option('', 'Без комплекта (текущее состояние)');
+        currentUnarmed.disabled = true;
+        this.loadout.prepend(currentUnarmed);
+        this.loadout.value = '';
+      }
+      this.renderLoadoutFields(initial.reserves);
+      this.loadedRounds.value = String(initial.loadedRounds);
+      this.firstAid.value = String(initial.firstAidCharges);
       this.healthMode.value = 'preserve_current';
-      this.bloodLoss.value = trimNumber(unit.infantryCombatRuntime.physiology.blood.bloodLoss);
-      this.renderHealthFields(unit.infantryCombatRuntime.wounds.slots.map((slot) => ({ zone: slot.zone, severity: slot.severity, hitCount: slot.hitCount })));
+      this.bloodLoss.value = trimNumber(initial.bloodLoss);
+      this.renderHealthFields(initial.wounds);
     } catch (error) {
       this.fail(error, 'Не удалось прочитать начальное состояние бойца.');
     }

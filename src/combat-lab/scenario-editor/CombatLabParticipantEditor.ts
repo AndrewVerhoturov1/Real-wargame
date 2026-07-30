@@ -2,10 +2,11 @@ import type { CombatLabAccuracyOverridesV1 } from '../../core/testing/combat-lab
 import {
   collectCombatLabParticipantProgramReferences,
   duplicateCombatLabParticipant,
+  readCombatLabParticipantInitialSummaries,
   removeCombatLabParticipant,
-  restoreCombatLabParticipantInitialContext,
   type CombatLabExperimentRoleV1,
   type CombatLabExperimentV1,
+  type CombatLabParticipantInitialSummaryV1,
 } from '../../core/testing/combat-lab/experiment';
 import type { CombatLabExperimentDraft } from './CombatLabExperimentDraft';
 import { CombatLabParticipantDialog } from './CombatLabParticipantDialog';
@@ -14,6 +15,7 @@ import './combat-lab-participant-editor.css';
 
 export interface CombatLabParticipantEditorOptions {
   readonly host: HTMLElement;
+  readonly parametersHost?: HTMLElement;
   readonly draft: CombatLabExperimentDraft;
   readonly getSelectedUnitId?: () => string | null;
   readonly onExperimentChanged: (experiment: CombatLabExperimentV1) => void;
@@ -23,7 +25,6 @@ export interface CombatLabParticipantEditorOptions {
 export class CombatLabParticipantEditor {
   readonly root = document.createElement('section');
   private readonly listHost = document.createElement('div');
-  private readonly parametersHost = document.createElement('div');
   private readonly message = document.createElement('div');
   private parametersPanel: CombatLabParticipantParametersPanel | null = null;
   private selectedRoleId: string | null = null;
@@ -48,9 +49,10 @@ export class CombatLabParticipantEditor {
     const header = document.createElement('header');
     header.className = 'combat-lab-participant-editor__header';
     header.append(text('h3', 'combat-lab-section-title', 'Бойцы сцены'), actions(create, duplicate));
-    this.listHost.replaceChildren(...experiment.roles.map((role) => this.card(experiment, role)));
+    const summaries = new Map(readCombatLabParticipantInitialSummaries(experiment).map((summary) => [summary.roleId, summary]));
+    this.listHost.replaceChildren(...experiment.roles.map((role) => this.card(role, summaries.get(role.roleId) ?? null)));
     if (experiment.roles.length === 0) this.listHost.append(text('div', 'combat-lab-editor-empty', 'В начальной сцене ещё нет участников эксперимента.'));
-    this.root.replaceChildren(header, this.message, this.listHost, this.parametersHost);
+    this.root.replaceChildren(header, this.message, this.listHost);
     this.renderParameters();
   }
 
@@ -67,25 +69,21 @@ export class CombatLabParticipantEditor {
     this.root.remove();
   }
 
-  private card(experiment: CombatLabExperimentV1, role: CombatLabExperimentRoleV1): HTMLElement {
+  private card(role: CombatLabExperimentRoleV1, summary: CombatLabParticipantInitialSummaryV1 | null): HTMLElement {
     const card = document.createElement('article');
     card.className = 'combat-lab-participant-card';
     card.classList.toggle('is-selected', role.roleId === this.selectedRoleId);
     card.dataset.roleId = role.roleId;
-    try {
-      const { unit } = restoreCombatLabParticipantInitialContext(experiment, role.roleId);
-      const weapon = unit.infantryCombatRuntime.primaryWeapon;
-      const reserveRounds = unit.infantryCombatRuntime.ammoInventory.reserves.reduce((sum, item) => sum + item.rounds, 0);
-      const health = healthSummary(unit.infantryCombatRuntime.wounds.slots, unit.infantryCombatRuntime.physiology.blood.state);
+    if (summary) {
       card.append(
         text('strong', 'combat-lab-participant-card__name', role.titleRu),
         text('code', 'combat-lab-participant-card__id', role.roleId),
         facts(
-          ['Сторона', unit.side === 'red' ? 'Красные' : 'Синие'],
-          ['Оружие', weapon?.resolved.weapon.nameRu ?? 'Без оружия'],
-          ['Поза', postureLabel(unit.behaviorRuntime.posture)],
-          ['Здоровье', health],
-          ['Боеприпасы', weapon ? `${weapon.roundsInWeapon} в оружии, ${reserveRounds} в запасе` : 'Нет'],
+          ['Сторона', summary.side === 'red' ? 'Красные' : 'Синие'],
+          ['Оружие', summary.weaponNameRu ?? 'Без оружия'],
+          ['Поза', postureLabel(summary.posture)],
+          ['Здоровье', summary.healthRu],
+          ['Боеприпасы', summary.weaponNameRu ? `${summary.loadedRounds} в оружии, ${summary.reserveRounds} в запасе` : 'Нет'],
         ),
         actions(
           button('Изменить', () => this.openDialog(role.roleId)),
@@ -93,8 +91,11 @@ export class CombatLabParticipantEditor {
           button('Удалить', () => this.remove(role.roleId), 'danger'),
         ),
       );
-    } catch (error) {
-      card.append(text('strong', 'combat-lab-participant-card__name', role.titleRu), text('div', 'combat-lab-editor-status is-error', error instanceof Error ? error.message : 'Начальное состояние бойца повреждено.'));
+    } else {
+      card.append(
+        text('strong', 'combat-lab-participant-card__name', role.titleRu),
+        text('div', 'combat-lab-editor-status is-error', 'Начальное состояние бойца повреждено.'),
+      );
     }
     card.addEventListener('click', (event) => {
       if ((event.target as HTMLElement).closest('button')) return;
@@ -113,10 +114,15 @@ export class CombatLabParticipantEditor {
   private renderParameters(): void {
     this.parametersPanel?.destroy();
     this.parametersPanel = null;
-    this.parametersHost.replaceChildren();
-    if (!this.selectedRoleId) return;
+    const host = this.options.parametersHost;
+    if (!host) return;
+    host.replaceChildren();
+    if (!this.selectedRoleId) {
+      host.append(text('div', 'combat-lab-editor-empty', 'Выберите бойца во вкладке «Сцена».'));
+      return;
+    }
     this.parametersPanel = new CombatLabParticipantParametersPanel({
-      host: this.parametersHost,
+      host,
       draft: this.options.draft,
       roleId: this.selectedRoleId,
       onExperimentChanged: (experiment) => {
@@ -186,5 +192,4 @@ function actions(...children: HTMLElement[]): HTMLElement { const root = documen
 function button(label: string, onClick: () => void, className = ''): HTMLButtonElement { const result = document.createElement('button'); result.type = 'button'; result.textContent = label; result.className = className; result.addEventListener('click', onClick); return result; }
 function text<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, value: string): HTMLElementTagNameMap[K] { const result = document.createElement(tag); result.className = className; result.textContent = value; return result; }
 function postureLabel(posture: string): string { return posture === 'prone' ? 'Лёжа' : posture === 'crouched' ? 'Пригнувшись' : 'Стоя'; }
-function healthSummary(slots: readonly { severity: string }[], bloodState: string): string { if (bloodState === 'dead') return 'Погиб'; if (bloodState === 'unconscious') return 'Без сознания'; if (slots.some((slot) => slot.severity === 'critical')) return 'Критическое ранение'; if (slots.some((slot) => slot.severity === 'severe')) return 'Тяжёлое ранение'; if (slots.some((slot) => slot.severity === 'light')) return 'Лёгкое ранение'; return bloodState === 'stable' ? 'Здоров' : `Потеря крови: ${bloodState}`; }
 function message(error: unknown, fallback: string): string { return error instanceof Error && error.message ? error.message : fallback; }

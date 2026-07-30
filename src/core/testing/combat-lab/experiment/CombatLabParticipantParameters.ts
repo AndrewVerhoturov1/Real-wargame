@@ -54,13 +54,14 @@ export function resolveCombatLabParticipantAccuracy(
   experiment: CombatLabExperimentV1,
   actorRoleId: string,
   step: Pick<CombatLabScenarioStepV1, 'stepId' | 'accuracyOverrides'>,
+  runSeed = experiment.defaults.seed,
 ): CombatLabResolvedParticipantAccuracyV1 {
   const participant = experiment.roles.find((role) => role.roleId === actorRoleId) ?? null;
-  const selected = step.accuracyOverrides
+  const selected = step.accuracyOverrides !== null
     ? { source: 'step' as const, value: step.accuracyOverrides }
-    : participant?.parameters?.accuracy
+    : participant?.parameters.accuracy !== null && participant?.parameters.accuracy !== undefined
       ? { source: 'participant' as const, value: participant.parameters.accuracy }
-      : experiment.defaults.accuracyOverrides
+      : experiment.defaults.accuracyOverrides !== null
         ? { source: 'experiment' as const, value: experiment.defaults.accuracyOverrides }
         : null;
   if (!selected) return Object.freeze({ source: 'production', accuracyOverrides: null });
@@ -68,13 +69,36 @@ export function resolveCombatLabParticipantAccuracy(
     source: selected.source,
     accuracyOverrides: Object.freeze({
       ...structuredClone(selected.value),
-      randomSeed: deriveCombatLabParticipantStepSeed(
-        experiment.defaults.seed,
-        actorRoleId,
-        step.stepId,
-      ),
+      randomSeed: deriveCombatLabParticipantStepSeed(runSeed, actorRoleId, step.stepId),
     }),
   });
+}
+
+/**
+ * Produces the single immutable experiment snapshot used by both visual and
+ * headless execution. Array order never contributes to any step seed.
+ */
+export function prepareCombatLabExperimentForRun(
+  experiment: CombatLabExperimentV1,
+  runSeed: number,
+): CombatLabExperimentV1 {
+  const seed = normalizeSeed(runSeed);
+  const seeded: CombatLabExperimentV1 = {
+    ...experiment,
+    defaults: Object.freeze({ ...experiment.defaults, seed }),
+  };
+  const roles = Object.freeze([...seeded.roles].sort((left, right) => compareText(left.roleId, right.roleId)));
+  const tracks = Object.freeze([...seeded.tracks]
+    .sort((left, right) => compareText(left.trackId, right.trackId))
+    .map((track) => Object.freeze({
+      ...track,
+      steps: Object.freeze(track.steps.map((step) => {
+        if (step.action.kind !== 'fire') return step;
+        const resolved = resolveCombatLabParticipantAccuracy(seeded, step.action.actorRoleId, step, seed);
+        return Object.freeze({ ...step, accuracyOverrides: resolved.accuracyOverrides });
+      })),
+    })));
+  return Object.freeze({ ...seeded, roles, tracks });
 }
 
 export function deriveCombatLabParticipantStepSeed(
@@ -87,6 +111,8 @@ export function deriveCombatLabParticipantStepSeed(
   value = mix(value, stableTextHash(stepId));
   return value === 0 ? 1 : value;
 }
+
+function compareText(left: string, right: string): number { return left < right ? -1 : left > right ? 1 : 0; }
 
 function stableTextHash(value: string): number {
   let hash = 0x811c_9dc5;

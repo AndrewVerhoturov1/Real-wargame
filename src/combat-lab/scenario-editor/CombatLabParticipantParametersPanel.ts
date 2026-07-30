@@ -1,7 +1,8 @@
+import type { SimulationState } from '../../core/simulation/SimulationState';
 import type { CombatLabAccuracyOverridesV1 } from '../../core/testing/combat-lab';
 import type { CombatLabExperimentV1 } from '../../core/testing/combat-lab/experiment';
 import {
-  restoreCombatLabParticipantInitialContext,
+  readCombatLabParticipantInitialDraft,
   updateCombatLabParticipantParameters,
 } from '../../core/testing/combat-lab/experiment';
 import { CombatLabAccuracyControls } from '../ui/CombatLabAccuracyControls';
@@ -54,9 +55,10 @@ export class CombatLabParticipantParametersPanel {
       const experiment = this.options.draft.getExperiment();
       const role = experiment.roles.find((candidate) => candidate.roleId === this.options.roleId);
       if (!role) throw new Error(`Участник «${this.options.roleId}» не найден.`);
-      const context = restoreCombatLabParticipantInitialContext(experiment, role.roleId);
-      const saved = role.parameters?.accuracy ?? null;
-      this.controls.loadForUnit(context.state, context.unit, saved);
+      const initial = readCombatLabParticipantInitialDraft(experiment, role.roleId);
+      const saved = role.parameters.accuracy;
+      const aimState = { map: { metersPerCell: initial.runtimeMetersPerCell } } as unknown as Pick<SimulationState, 'map'>;
+      this.controls.loadForUnit(aimState, initial.unit, saved);
       this.source.textContent = this.stepAccuracyOverride
         ? `Источник выполнения: значение отдельного шага «${this.stepAccuracyOverride.stepId}». Ниже редактируется значение бойца.`
         : saved

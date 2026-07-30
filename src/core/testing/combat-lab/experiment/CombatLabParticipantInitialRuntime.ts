@@ -1,20 +1,51 @@
 import type { DefinitionRef } from '../../../infantry-combat/catalogs/CombatCatalogTypes';
-import { createDefaultCombatCatalogRegistry } from '../../../infantry-combat/catalogs/CombatCatalogRegistry';
+import { CombatCatalogRegistry, createDefaultCombatCatalogRegistry } from '../../../infantry-combat/catalogs/CombatCatalogRegistry';
 import {
   aggregateWoundCandidate,
   createUnitPhysiologyRuntime,
   createUnitWoundRuntime,
   deriveBloodState,
   equipPrimaryWeaponFromLoadout,
+  normalizeUnitPhysiologyRuntime,
+  normalizeUnitSuppressionRuntime,
+  normalizeUnitWoundRuntime,
+  serializeUnitPhysiologyRuntime,
+  serializeUnitSuppressionRuntime,
+  serializeUnitWoundRuntime,
   totalWoundBleedingRatePerSecond,
 } from '../../../infantry-combat/runtime';
-import type { UnitModel } from '../../../units/UnitModel';
+import { applyInitialStateToRuntime, type UnitModel } from '../../../units/UnitModel';
 import type { CombatLabParticipantScenePatchV1, CombatLabInitialHealthV1, CombatLabInitialWoundV1 } from './CombatLabParticipantSceneTypes';
 import { CombatLabParticipantSceneError } from './CombatLabParticipantSceneTypes';
 import { assertFiniteRange, assertIntegerRange, increment } from './CombatLabParticipantSceneSupport';
 
-export function applyPublishedLoadout(unit: UnitModel, ref: DefinitionRef): void {
-  const registry = createDefaultCombatCatalogRegistry();
+export interface CombatLabParticipantStableRuntimeV1 {
+  readonly loadoutRef: DefinitionRef | null;
+  readonly loadedRounds: number;
+  readonly reserveRoundsByAmmoDefinitionId: Readonly<Record<string, number>>;
+  readonly firstAidCharges: number;
+  readonly wounds: ReturnType<typeof serializeUnitWoundRuntime>;
+  readonly physiology: ReturnType<typeof serializeUnitPhysiologyRuntime>;
+  readonly suppression: ReturnType<typeof serializeUnitSuppressionRuntime>;
+}
+
+export function applyPublishedLoadout(
+  unit: UnitModel,
+  ref: DefinitionRef,
+  registry: CombatCatalogRegistry = createDefaultCombatCatalogRegistry(),
+): void {
+  applyLoadout(unit, ref, registry, true);
+}
+
+export function applyExistingLoadout(
+  unit: UnitModel,
+  ref: DefinitionRef,
+  registry: CombatCatalogRegistry = createDefaultCombatCatalogRegistry(),
+): void {
+  applyLoadout(unit, ref, registry, false);
+}
+
+function applyLoadout(unit: UnitModel, ref: DefinitionRef, registry: CombatCatalogRegistry, requirePublished: boolean): void {
   let loadout; let weapon; let ammo;
   try {
     loadout = registry.resolveLoadout(ref);
@@ -23,11 +54,53 @@ export function applyPublishedLoadout(unit: UnitModel, ref: DefinitionRef): void
   } catch {
     throw new CombatLabParticipantSceneError('combat_lab_participant_loadout_missing', 'Точная ревизия комплекта вооружения не найдена.');
   }
-  if (loadout.status !== 'published' || weapon.status !== 'published' || ammo.status !== 'published') {
+  if (loadout.status === 'draft' || weapon.status === 'draft' || ammo.status === 'draft') {
+    throw new CombatLabParticipantSceneError('combat_lab_participant_loadout_not_published', 'Draft-ревизии комплекта, оружия или патрона запрещены.');
+  }
+  if (requirePublished && (loadout.status !== 'published' || weapon.status !== 'published' || ammo.status !== 'published')) {
     throw new CombatLabParticipantSceneError('combat_lab_participant_loadout_not_published', 'Для начальной сцены разрешены только опубликованные комплект, оружие и патрон.');
   }
   const result = equipPrimaryWeaponFromLoadout(unit, registry, ref);
   if (!result.ok) throw new CombatLabParticipantSceneError(result.reasonCode, result.reasonRu);
+}
+
+export function captureCombatLabParticipantStableRuntime(unit: UnitModel): CombatLabParticipantStableRuntimeV1 {
+  const runtime = unit.infantryCombatRuntime;
+  return Object.freeze({
+    loadoutRef: runtime.ammoInventory.loadoutRef ? Object.freeze({ ...runtime.ammoInventory.loadoutRef }) : null,
+    loadedRounds: runtime.primaryWeapon?.roundsInWeapon ?? 0,
+    reserveRoundsByAmmoDefinitionId: Object.freeze(Object.fromEntries(runtime.ammoInventory.reserves.map((entry) => [entry.ammoDefinitionId, entry.rounds]))),
+    firstAidCharges: runtime.medical.firstAidCharges,
+    wounds: serializeUnitWoundRuntime(runtime.wounds),
+    physiology: serializeUnitPhysiologyRuntime(runtime.physiology),
+    suppression: serializeUnitSuppressionRuntime(runtime.suppression),
+  });
+}
+
+/** Uses the production initial-state reset to remove every transient action. */
+export function resetCombatLabParticipantForInitialEdit(unit: UnitModel): void {
+  applyInitialStateToRuntime(unit, false);
+  unit.playerCommand = null;
+  unit.plan = null;
+  unit.order = null;
+}
+
+export function restoreCombatLabParticipantStableRuntime(
+  unit: UnitModel,
+  stable: CombatLabParticipantStableRuntimeV1,
+  registry: CombatCatalogRegistry = createDefaultCombatCatalogRegistry(),
+): void {
+  if (stable.loadoutRef) {
+    applyExistingLoadout(unit, stable.loadoutRef, registry);
+    applyAmmoAndAid(unit, {
+      loadedRounds: stable.loadedRounds,
+      reserveRoundsByAmmoDefinitionId: stable.reserveRoundsByAmmoDefinitionId,
+      firstAidCharges: stable.firstAidCharges,
+    });
+  }
+  unit.infantryCombatRuntime.wounds = normalizeUnitWoundRuntime(stable.wounds);
+  unit.infantryCombatRuntime.physiology = normalizeUnitPhysiologyRuntime(stable.physiology);
+  unit.infantryCombatRuntime.suppression = normalizeUnitSuppressionRuntime(stable.suppression);
 }
 
 export function applyAmmoAndAid(unit: UnitModel, patch: CombatLabParticipantScenePatchV1): void {
@@ -103,7 +176,6 @@ export function applyPosture(unit: UnitModel, posture: 'standing' | 'crouched' |
   unit.initialState.posture = posture;
   unit.behaviorRuntime.previousPosture = posture;
   unit.behaviorRuntime.posture = posture;
-  unit.behaviorRuntime.physicalAction = null;
 }
 
 function normalizeWounds(wounds: readonly CombatLabInitialWoundV1[]): readonly CombatLabInitialWoundV1[] {

@@ -162,7 +162,10 @@ function validateParticipantParameters(
   path: string,
   issues: CombatLabExperimentIssueV1[],
 ): void {
-  if (role.parameters === undefined) return;
+  if (role.parameters === undefined) {
+    issues.push(error('combat_lab_participant_parameters_missing', 'Обязательное поле parameters отсутствует.', `${path}.parameters`));
+    return;
+  }
   const parameters = asRecord(role.parameters);
   if (!parameters || parameters.schemaVersion !== 1) {
     issues.push(error('combat_lab_participant_parameters_invalid', 'Параметры бойца должны иметь schemaVersion: 1.', `${path}.parameters`));
