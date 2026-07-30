@@ -114,10 +114,15 @@ export function getCurrentPerformancePhaseContext(): PerformancePhaseContext | n
   return activeContext ? { ...activeContext } : null;
 }
 
-export function resetPerformancePhaseRuntimeDiagnosticsForTests(): void {
+/** Starts a new bounded observation epoch for the browser performance report. */
+export function resetPerformancePhaseRuntimeDiagnostics(): void {
   accumulators.clear();
   contextualEvents.length = 0;
   activeContext = null;
+}
+
+export function resetPerformancePhaseRuntimeDiagnosticsForTests(): void {
+  resetPerformancePhaseRuntimeDiagnostics();
 }
 
 function recordPhaseDuration(name: string, duration: number): void {
