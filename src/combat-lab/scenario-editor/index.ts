@@ -1,3 +1,6 @@
+export * from './CombatLabActionCatalog';
+export * from './CombatLabActionDialog';
+export * from './CombatLabActionSummary';
 export * from './CombatLabEditorFactories';
 export * from './CombatLabEditorHistory';
 export * from './CombatLabExperimentDraft';
