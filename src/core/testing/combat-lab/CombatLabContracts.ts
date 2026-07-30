@@ -111,42 +111,25 @@ export type CombatLabScriptCommandV1 =
       /** Session-local test override snapshot. Production player/AI commands never set this. */
       readonly accuracyOverrides?: CombatLabAccuracyOverridesV1 | null;
     }
-  | {
-      readonly kind: 'cancel_fire';
-      readonly unitId: string;
-    }
-  | {
-      readonly kind: 'posture';
-      readonly unitId: string;
-      readonly targetPosture: UnitPosture;
-    }
+  | { readonly kind: 'cancel_fire'; readonly unitId: string }
+  | { readonly kind: 'posture'; readonly unitId: string; readonly targetPosture: UnitPosture }
   | {
       readonly kind: 'move';
       readonly unitId: string;
       readonly targetGrid: { readonly x: number; readonly y: number };
+      readonly tacticalOrderPresetId?: 'move' | 'recon' | 'assault';
+      readonly finalFacingRadians?: number | null;
     }
+  | { readonly kind: 'face'; readonly unitId: string; readonly targetGrid: { readonly x: number; readonly y: number } }
   | {
-      readonly kind: 'reload';
+      readonly kind: 'cancel_action';
       readonly unitId: string;
-      readonly helperUnitId: string | null;
+      readonly target: 'movement' | 'fire' | 'reload' | 'deployment' | 'transfer' | 'first_aid';
     }
-  | {
-      readonly kind: 'deploy' | 'undeploy';
-      readonly unitId: string;
-      readonly helperUnitId: string | null;
-    }
-  | {
-      readonly kind: 'transfer';
-      readonly sourceUnitId: string;
-      readonly targetUnitId: string;
-      readonly requestedRounds: number;
-    }
-  | {
-      readonly kind: 'first_aid';
-      readonly actorUnitId: string;
-      readonly targetUnitId: string;
-      readonly zone: HitZone | null;
-    };
+  | { readonly kind: 'reload'; readonly unitId: string; readonly helperUnitId: string | null }
+  | { readonly kind: 'deploy' | 'undeploy'; readonly unitId: string; readonly helperUnitId: string | null }
+  | { readonly kind: 'transfer'; readonly sourceUnitId: string; readonly targetUnitId: string; readonly requestedRounds: number }
+  | { readonly kind: 'first_aid'; readonly actorUnitId: string; readonly targetUnitId: string; readonly zone: HitZone | null };
 
 export interface CombatLabScriptStepV1 {
   readonly stepId: string;
