@@ -86,7 +86,9 @@ assert.match(effects, /class BoundedIdWindow/);
 assert.doesNotMatch(effects, /pruneProcessedHistory/);
 assert.doesNotMatch(effects, /history\.map\(/);
 
-// Performance regression: report owners and frame samples must use one epoch.
+// Performance regression: report owners and frame samples must use one epoch
+// that covers the mandatory 90-second reference measurement at 90 FPS.
+assert.match(monitor, /const MAX_SAMPLES = 9000/);
 assert.match(monitor, /private measurementStartedAt = this\.startedAt/);
 assert.match(monitor, /recordSimulationUpdate\(durationMs: number\): void \{\s*this\.beginFrame\(\)/);
 assert.match(monitor, /private resetMeasurementWindow\(/);
@@ -96,6 +98,7 @@ assert.match(monitor, /resetPerformancePhaseRuntimeDiagnostics\(\)/);
 assert.match(monitor, /clearPerformancePhaseMeasures\(\)/);
 assert.match(monitor, /tMs: roundOne\(now - this\.measurementStartedAt\)/);
 assert.match(monitor, /measurementWindowSeconds/);
+assert.match(monitor, /diagnosticsScope: 'runtime-cumulative/);
 assert.match(monitor, /entry\.startTime < this\.measurementStartedAt/);
 assert.match(phases, /export function resetPerformancePhaseRuntimeDiagnostics\(\)/);
 assert.match(phases, /resetPerformancePhaseRuntimeDiagnosticsForTests\(\): void \{\s*resetPerformancePhaseRuntimeDiagnostics\(\)/);
