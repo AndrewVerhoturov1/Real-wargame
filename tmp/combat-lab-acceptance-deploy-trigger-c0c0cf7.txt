@@ -1,0 +1,2 @@
+Deploy exact product source:
+feature/20260730-combat-lab-user-acceptance-fixes @ c0c0cf78ab521981289573a320c6aa879fefd362
