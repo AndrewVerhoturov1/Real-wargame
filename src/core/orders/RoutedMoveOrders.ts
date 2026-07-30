@@ -7,6 +7,7 @@ import {
   movementGaitForPosture,
   movementProfileIdForPosture,
 } from '../movement/PostureMovementProfile';
+import { cancelMovementWeaponPreparation } from '../movement/MovementRuntime';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../navigation/NavigationRuntime';
 import { clearAttentionOverride, setAttentionMode, setSearchSector } from '../perception/AttentionController';
 import { degreesToRadians } from '../perception/AttentionModel';
@@ -54,6 +55,36 @@ export function issueRoutedMoveOrderToSelectedUnits(
     ),
     finalFacingRadians,
   );
+}
+
+/** Cancels the canonical player tactical order and its physical movement state. */
+export function cancelTacticalOrderForUnit(unit: UnitModel): boolean {
+  const hadOrder = Boolean(unit.playerCommand || unit.order || unit.plan || unit.movementRuntime.isMoving);
+  if (!hadOrder) return false;
+  cancelReplaceablePostureTransitionForNewPlayerCommand(unit);
+  cancelMovementWeaponPreparation(
+    unit,
+    undefined,
+    'player_tactical_order_cancelled',
+    'Подготовка оружия отменена вместе с приказом движения.',
+  );
+  if (unit.playerCommand) {
+    unit.playerCommand = updatePlayerCommandStatus(
+      unit.playerCommand,
+      'cancelled',
+      'Player tactical order cancelled.',
+      'Тактический приказ отменён.',
+    );
+  }
+  unit.order = null;
+  unit.plan = null;
+  unit.movementRuntime.isMoving = false;
+  unit.movementRuntime.velocityCellsPerSecond = { x: 0, y: 0 };
+  unit.behaviorRuntime.state = 'idle';
+  unit.behaviorRuntime.currentAction = 'waiting';
+  unit.behaviorRuntime.lastEvent = 'player_tactical_order_cancelled';
+  unit.behaviorRuntime.reason = 'Тактический приказ движения отменён.';
+  return true;
 }
 
 function issueTacticalOrderIntentToSelectedUnits(
