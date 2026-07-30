@@ -8,10 +8,11 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: combat-lab-performance-exact-deploy-c87b5dec3f821c84a536fdad9d133123108b654b
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -235,3 +236,30 @@ jobs:
             echo "- Preview URL: ${DEPLOYMENT_URL:-not created}"
             echo "- Vercel status: ${DEPLOYMENT_STATUS:-not available}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report result on temporary PR
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_STATUS: ${{ job.status }}
+          VERIFIED_SHA: ${{ steps.source.outputs.sha }}
+          GATE_STATUS: ${{ steps.gate.outputs.status }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
+          DEPLOYMENT_URL: ${{ steps.publish.outputs.url }}
+          DEPLOYMENT_STATUS: ${{ steps.deployment.outputs.status }}
+        run: |
+          report="$RUNNER_TEMP/deployment-pr-comment.md"
+          {
+            echo 'Exact Combat Lab performance deployment result:'
+            echo
+            echo "- job: ${RUN_STATUS:-unknown}"
+            echo "- product ref: $PRODUCT_BRANCH"
+            echo "- verified SHA: ${VERIFIED_SHA:-not verified}"
+            echo "- Preview gate exit: ${GATE_STATUS:-not run}"
+            echo "- deployment ID: ${DEPLOYMENT_ID:-not created}"
+            echo "- Preview URL: ${DEPLOYMENT_URL:-not created}"
+            echo "- Vercel status: ${DEPLOYMENT_STATUS:-not available}"
+          } > "$report"
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$report"
