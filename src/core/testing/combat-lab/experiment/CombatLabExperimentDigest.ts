@@ -37,34 +37,32 @@ function semanticExperimentValue(experiment: CombatLabExperimentV1): unknown {
             yMetres: marker.yMetres,
             zMetres: marker.zMetres,
           }),
-    tracks: [...experiment.tracks]
-      .sort((left, right) => compareText(left.trackId, right.trackId))
-      .map((track) => ({
-        trackId: track.trackId,
-        actorRoleId: track.actorRoleId,
-        enabled: track.enabled,
-        steps: track.steps.map((step) => ({
-          stepId: step.stepId,
-          enabled: step.enabled,
-          breakpointBefore: step.breakpointBefore,
-          startCondition: semanticCondition(step.startCondition),
-          action: step.action,
-          completion: step.completion.kind === 'condition'
-            ? { kind: 'condition', condition: semanticCondition(step.completion.condition) }
-            : step.completion,
-          repeat: step.repeat.kind === 'until_condition'
-            ? {
-                kind: step.repeat.kind,
-                condition: semanticCondition(step.repeat.condition),
-                maximumAttempts: step.repeat.maximumAttempts,
-                retryDelaySeconds: step.repeat.retryDelaySeconds,
-              }
-            : step.repeat,
-          timeoutSeconds: step.timeoutSeconds,
-          failurePolicy: step.failurePolicy,
-          accuracyOverrides: step.accuracyOverrides,
-        })),
+    tracks: experiment.tracks.map((track) => ({
+      trackId: track.trackId,
+      actorRoleId: track.actorRoleId,
+      enabled: track.enabled,
+      steps: track.steps.map((step) => ({
+        stepId: step.stepId,
+        enabled: step.enabled,
+        breakpointBefore: step.breakpointBefore,
+        startCondition: semanticCondition(step.startCondition),
+        action: step.action,
+        completion: step.completion.kind === 'condition'
+          ? { kind: 'condition', condition: semanticCondition(step.completion.condition) }
+          : step.completion,
+        repeat: step.repeat.kind === 'until_condition'
+          ? {
+              kind: step.repeat.kind,
+              condition: semanticCondition(step.repeat.condition),
+              maximumAttempts: step.repeat.maximumAttempts,
+              retryDelaySeconds: step.repeat.retryDelaySeconds,
+            }
+          : step.repeat,
+        timeoutSeconds: step.timeoutSeconds,
+        failurePolicy: step.failurePolicy,
+        accuracyOverrides: step.accuracyOverrides,
       })),
+    })),
     defaults: experiment.defaults,
     successCondition: semanticCondition(experiment.successCondition),
     stopCondition: experiment.stopCondition.kind === 'condition'
