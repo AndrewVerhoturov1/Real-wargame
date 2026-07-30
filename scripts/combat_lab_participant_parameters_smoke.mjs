@@ -44,19 +44,45 @@ const headless = runHeadlessPath(source, seed);
 assert.deepEqual(visual.commands, headless.commands, 'Визуальный и невизуальный пути должны выдавать одинаковые команды.');
 assert.deepEqual(visual.results, headless.results, 'Визуальный и невизуальный пути должны получать одинаковые результаты команд.');
 assert.equal(visual.digest, headless.digest, 'Digest команд и результатов должен совпадать.');
+assert.equal(visual.commands[0]?.shooterUnitId, 'unit-bravo', 'Подготовка запуска обязана сохранять авторский порядок дорожек.');
 
-const reordered = structuredClone(source);
-reordered.roles.reverse();
-reordered.tracks.reverse();
-const reorderedVisual = runVisualPath(reordered, seed);
-const reorderedHeadless = runHeadlessPath(reordered, seed);
-assert.deepEqual(visual.commands, reorderedVisual.commands);
-assert.deepEqual(headless.commands, reorderedHeadless.commands);
-assert.equal(visual.digest, reorderedVisual.digest);
-assert.equal(headless.digest, reorderedHeadless.digest);
-assert.equal(headless.result.eventDigest, reorderedHeadless.result.eventDigest);
-assert.equal(headless.result.finalStateDigest, reorderedHeadless.result.finalStateDigest);
-assert.equal(digest.digestCombatLabExperiment(source), digest.digestCombatLabExperiment(reordered));
+const roleReordered = structuredClone(source);
+roleReordered.roles.reverse();
+const trackReordered = structuredClone(source);
+trackReordered.tracks.reverse();
+
+const preparedSource = parameters.prepareCombatLabExperimentForRun(source, seed);
+const preparedRoleReordered = parameters.prepareCombatLabExperimentForRun(roleReordered, seed);
+const preparedTrackReordered = parameters.prepareCombatLabExperimentForRun(trackReordered, seed);
+assert.deepEqual(
+  preparedSource.roles.map((role) => role.roleId),
+  source.roles.map((role) => role.roleId),
+  'Подготовка запуска не должна переставлять роли.',
+);
+assert.deepEqual(
+  preparedSource.tracks.map((track) => track.trackId),
+  source.tracks.map((track) => track.trackId),
+  'Подготовка запуска не должна переставлять дорожки.',
+);
+assert.deepEqual(
+  preparedTrackReordered.tracks.map((track) => track.trackId),
+  trackReordered.tracks.map((track) => track.trackId),
+  'Переставленный автором порядок дорожек должен сохраняться.',
+);
+assert.deepEqual(seedByStep(preparedSource), seedByStep(preparedRoleReordered), 'Seed шага не должен зависеть от порядка ролей.');
+assert.deepEqual(seedByStep(preparedSource), seedByStep(preparedTrackReordered), 'Seed шага не должен зависеть от порядка дорожек.');
+
+const reorderedVisual = runVisualPath(trackReordered, seed);
+const reorderedHeadless = runHeadlessPath(trackReordered, seed);
+assert.deepEqual(reorderedVisual.commands, reorderedHeadless.commands, 'Visual/headless parity должна сохраняться после авторской перестановки дорожек.');
+assert.deepEqual(reorderedVisual.results, reorderedHeadless.results);
+assert.equal(reorderedVisual.digest, reorderedHeadless.digest);
+assert.equal(reorderedVisual.commands[0]?.shooterUnitId, 'unit-alpha', 'Исполнение обязано учитывать изменённый автором порядок дорожек.');
+assert.notEqual(
+  digest.digestCombatLabExperiment(source),
+  digest.digestCombatLabExperiment(trackReordered),
+  'Порядок дорожек влияет на исполнение и обязан входить в digest эксперимента.',
+);
 
 const runnerSource = readFileSync('src/core/testing/combat-lab/experiment/CombatLabExperimentRunner.ts', 'utf8');
 const visualSource = readFileSync('src/combat-lab/runtime/CombatLabExperimentVisualController.ts', 'utf8');
@@ -68,3 +94,11 @@ assert.doesNotMatch(`${runnerSource}\n${visualSource}`, /CombatLabParticipantSce
 assert.equal(existsSync('src/core/testing/combat-lab/experiment/CombatLabParticipantScenarioExecutor.ts'), false);
 
 console.log('combat_lab_participant_parameters_smoke: PASS');
+
+function seedByStep(experiment) {
+  return Object.fromEntries(experiment.tracks
+    .flatMap((track) => track.steps)
+    .filter((candidate) => candidate.action.kind === 'fire')
+    .map((candidate) => [candidate.stepId, candidate.accuracyOverrides?.randomSeed ?? null])
+    .sort(([left], [right]) => left.localeCompare(right)));
+}
