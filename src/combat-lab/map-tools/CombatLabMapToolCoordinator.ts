@@ -147,18 +147,19 @@ export class CombatLabMapToolCoordinator {
 
   destroy(): void {
     if (this.destroyed) return;
-    if (this.transaction) {
-      const transaction = this.transaction;
-      this.transaction = null;
-      transaction.cancel();
-    }
-    this.destroyed = true;
-    this.eventTarget?.removeEventListener('keydown', this.handleKeyDown, true);
-    this.listeners.clear();
-    this.contributors.clear();
-    if (this.options.statusHost) {
-      this.options.statusHost.textContent = '';
-      if (this.options.statusHost.dataset) delete this.options.statusHost.dataset.combatLabMapToolMode;
+    const transaction = this.transaction;
+    this.transaction = null;
+    try {
+      transaction?.cancel();
+    } finally {
+      this.destroyed = true;
+      this.eventTarget?.removeEventListener('keydown', this.handleKeyDown, true);
+      this.listeners.clear();
+      this.contributors.clear();
+      if (this.options.statusHost) {
+        this.options.statusHost.textContent = '';
+        if (this.options.statusHost.dataset) delete this.options.statusHost.dataset.combatLabMapToolMode;
+      }
     }
   }
 
