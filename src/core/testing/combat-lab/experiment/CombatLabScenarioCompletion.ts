@@ -109,7 +109,7 @@ function cancellationCompletion(
       : target === 'reload'
         ? unit.infantryCombatRuntime.ammoInventory.activeReload !== null
         : target === 'deployment'
-          ? unit.infantryCombatRuntime.primaryWeapon?.deployment.activeAction !== null
+          ? Boolean(unit.infantryCombatRuntime.primaryWeapon?.deployment.activeAction)
           : target === 'transfer'
             ? unit.infantryCombatRuntime.ammoInventory.activeTransfer !== null
             : unit.infantryCombatRuntime.medical.activeFirstAidAction !== null;
