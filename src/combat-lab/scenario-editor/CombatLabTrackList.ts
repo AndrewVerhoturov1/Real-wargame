@@ -1,14 +1,13 @@
 import type {
   CombatLabExperimentV1,
-  CombatLabFireModeV1,
   CombatLabScenarioRuntimeSnapshotV1,
-  CombatLabScenarioStepV1,
 } from '../../core/testing/combat-lab/experiment';
-import type { CombatLabExperimentDraft } from './CombatLabExperimentDraft';
 import {
-  createCombatLabScenarioStep,
-  type CombatLabEditorActionKind,
-} from './CombatLabEditorFactories';
+  listCombatLabActionDescriptors,
+  type CombatLabActionDescriptorV1,
+} from './CombatLabActionCatalog';
+import type { CombatLabExperimentDraft } from './CombatLabExperimentDraft';
+import { createCombatLabScenarioStepFromCatalog } from './CombatLabEditorFactories';
 import type {
   CombatLabScenarioEditorCapabilitiesV1,
   CombatLabSelectedStepV1,
@@ -22,6 +21,7 @@ export interface CombatLabTrackListOptions {
   readonly getRuntimeSnapshot: () => CombatLabScenarioRuntimeSnapshotV1 | null;
   readonly getSelectedStep: () => CombatLabSelectedStepV1 | null;
   readonly onSelectStep: (trackId: string, stepId: string) => void;
+  readonly onEditStep: (trackId: string, stepId: string, returnFocusTo: HTMLElement) => void;
   readonly onDraftMutation: (mutation: () => void) => void;
   readonly onError: (messageRu: string) => void;
 }
@@ -67,15 +67,13 @@ export class CombatLabTrackList {
       const role = experiment.roles.find((candidate) => candidate.roleId === track.actorRoleId);
       heading.append(
         text('strong', '', track.titleRu),
-        text('span', '', `${role?.titleRu ?? track.actorRoleId} · ${track.trackId}`),
+        text('span', '', role?.titleRu ?? 'Исполнитель не назначен'),
       );
       section.append(heading);
 
       const steps = document.createElement('div');
       steps.className = 'combat-lab-track-steps';
-      if (track.steps.length === 0) {
-        steps.append(text('div', 'combat-lab-track-empty', 'Дорожка пуста. Добавьте первое действие.'));
-      }
+      if (track.steps.length === 0) steps.append(text('div', 'combat-lab-track-empty', 'Дорожка пуста. Добавьте первое действие.'));
       track.steps.forEach((step, index) => {
         const runtimeStep = runtimeByStep.get(`${track.trackId}\u0000${step.stepId}`) ?? null;
         const card = new CombatLabStepCard({
@@ -86,6 +84,7 @@ export class CombatLabTrackList {
           runtime: runtimeStep,
           selected: selected?.trackId === track.trackId && selected.stepId === step.stepId,
           onSelect: () => this.options.onSelectStep(track.trackId, step.stepId),
+          onEdit: (returnFocusTo) => this.options.onEditStep(track.trackId, step.stepId, returnFocusTo),
           onDuplicate: () => this.mutate(() => {
             const duplicateId = this.options.draft.duplicateStep(track.trackId, step.stepId);
             this.options.onSelectStep(track.trackId, duplicateId);
@@ -102,9 +101,7 @@ export class CombatLabTrackList {
       fragments.push(section);
     }
 
-    if (fragments.length === 0) {
-      fragments.push(text('div', 'combat-lab-editor-empty', 'Назначьте роли и создайте дорожку исполнителя.'));
-    }
+    if (fragments.length === 0) fragments.push(text('div', 'combat-lab-editor-empty', 'Назначьте бойцов и создайте дорожку исполнителя.'));
     this.root.replaceChildren(...fragments);
   }
 
@@ -119,59 +116,30 @@ export class CombatLabTrackList {
     this.root.remove();
   }
 
-  private createAddActionDetails(
-    experiment: CombatLabExperimentV1,
-    trackId: string,
-    actorRoleId: string,
-  ): HTMLElement {
+  private createAddActionDetails(experiment: CombatLabExperimentV1, trackId: string, actorRoleId: string): HTMLElement {
     const details = document.createElement('details');
     details.className = 'combat-lab-track-add';
     details.append(text('summary', '', 'Добавить действие'));
     const grid = document.createElement('div');
     grid.className = 'combat-lab-action-palette';
 
-    const descriptors: Array<{
-      label: string;
-      kind: CombatLabEditorActionKind;
-      fireMode?: CombatLabFireModeV1;
-      requiresMarker?: boolean;
-      requiresOtherRole?: boolean;
-    }> = [
-      { label: 'Одиночный', kind: 'fire', fireMode: 'single', requiresOtherRole: true },
-      { label: 'Короткая очередь', kind: 'fire', fireMode: 'short_burst', requiresOtherRole: true },
-      { label: 'Длинная очередь', kind: 'fire', fireMode: 'long_burst', requiresOtherRole: true },
-      { label: 'Подавление', kind: 'fire', fireMode: 'suppress', requiresMarker: true },
-      { label: 'Прекратить огонь', kind: 'stop_fire' },
-      { label: 'Двигаться', kind: 'move', requiresMarker: true },
-      { label: 'Лечь', kind: 'posture' },
-      { label: 'Ждать', kind: 'wait' },
-      { label: 'Перезарядить', kind: 'reload' },
-      { label: 'Установить оружие', kind: 'deploy' },
-      { label: 'Снять оружие', kind: 'undeploy' },
-      { label: 'Передать патроны', kind: 'transfer', requiresOtherRole: true },
-      { label: 'Первая помощь', kind: 'first_aid', requiresOtherRole: true },
-    ];
-
-    for (const descriptor of descriptors) {
-      const availability = this.resolveAvailability(experiment, actorRoleId, descriptor.kind, descriptor.fireMode);
+    for (const descriptor of listCombatLabActionDescriptors()) {
+      const availability = this.resolveAvailability(experiment, actorRoleId, descriptor);
       const markerMissing = descriptor.requiresMarker && experiment.markers.length === 0;
       const roleMissing = descriptor.requiresOtherRole && !experiment.roles.some((role) => role.roleId !== actorRoleId);
-      const reason = markerMissing
-        ? 'Сначала создайте метку.'
-        : roleMissing ? 'Нужна вторая роль.' : availability.reasonRu;
+      const reason = markerMissing ? 'Сначала создайте метку на карте.' : roleMissing ? 'Нужен второй боец.' : availability.reasonRu;
       const enabled = availability.enabled && !markerMissing && !roleMissing;
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = descriptor.label;
+      button.textContent = descriptor.labelRu;
+      button.dataset.actionCatalogId = descriptor.id;
       button.disabled = !enabled;
       if (reason) button.title = reason;
       button.addEventListener('click', () => {
         this.mutate(() => {
-          const step = createCombatLabScenarioStep(experiment, actorRoleId, descriptor.kind, {
-            fireMode: descriptor.fireMode,
-            markerId: descriptor.kind === 'fire' && descriptor.fireMode !== 'suppress'
-              ? null
-              : experiment.markers[0]?.markerId ?? null,
+          const step = createCombatLabScenarioStepFromCatalog(experiment, actorRoleId, descriptor.id, {
+            markerId: descriptor.requiresMarker ? experiment.markers[0]?.markerId ?? null : null,
+            targetRoleId: experiment.roles.find((role) => role.roleId !== actorRoleId)?.roleId ?? null,
           });
           this.options.draft.addStep(trackId, step);
           this.options.onSelectStep(trackId, step.stepId);
@@ -187,10 +155,9 @@ export class CombatLabTrackList {
   private resolveAvailability(
     experiment: CombatLabExperimentV1,
     actorRoleId: string,
-    actionKind: CombatLabEditorActionKind,
-    fireMode?: CombatLabFireModeV1,
+    descriptor: CombatLabActionDescriptorV1,
   ): { enabled: boolean; reasonRu: string | null } {
-    return this.options.capabilities?.resolveActionAvailability?.(experiment, actorRoleId, actionKind, fireMode)
+    return this.options.capabilities?.resolveActionAvailability?.(experiment, actorRoleId, descriptor.actionKind, descriptor.fireMode)
       ?? { enabled: true, reasonRu: null };
   }
 
@@ -223,11 +190,8 @@ export class CombatLabTrackList {
   };
 
   private mutate(mutation: () => void): void {
-    try {
-      this.options.onDraftMutation(mutation);
-    } catch (error) {
-      this.options.onError(error instanceof Error ? error.message : 'Не удалось изменить дорожку.');
-    }
+    try { this.options.onDraftMutation(mutation); }
+    catch (error) { this.options.onError(error instanceof Error ? error.message : 'Не удалось изменить дорожку.'); }
   }
 
   private clearCards(): void {
