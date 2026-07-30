@@ -2,13 +2,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 
-const [controller, session, runState, effects, main, editor] = await Promise.all([
+const [controller, session, runState, effects, main, editor, monitor, phases] = await Promise.all([
   readFile('src/combat-lab/runtime/CombatLabExperimentVisualController.ts', 'utf8'),
   readFile('src/combat-lab/runtime/CombatLabVisualSession.ts', 'utf8'),
   readFile('src/combat-lab/runtime/CombatLabExperimentRunState.ts', 'utf8'),
   readFile('src/rendering/PixiCombatEffectsRenderer.ts', 'utf8'),
   readFile('src/combat-lab/main.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabScenarioEditorPanel.ts', 'utf8'),
+  readFile('src/core/debug/PerformanceMonitor.ts', 'utf8'),
+  readFile('src/core/debug/PerformancePhases.ts', 'utf8'),
 ]);
 
 for (const [source, name] of [
@@ -18,6 +20,8 @@ for (const [source, name] of [
   [effects, 'combat effects renderer'],
   [main, 'Combat Lab main'],
   [editor, 'scenario editor'],
+  [monitor, 'performance monitor'],
+  [phases, 'performance phases'],
 ]) {
   const result = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
@@ -79,5 +83,19 @@ assert.match(effects, /function recentStart/);
 assert.match(effects, /class BoundedIdWindow/);
 assert.doesNotMatch(effects, /pruneProcessedHistory/);
 assert.doesNotMatch(effects, /history\.map\(/);
+
+// Performance regression: report owners and frame samples must use one epoch.
+assert.match(monitor, /private measurementStartedAt = this\.startedAt/);
+assert.match(monitor, /recordSimulationUpdate\(durationMs: number\): void \{\s*this\.beginFrame\(\)/);
+assert.match(monitor, /private resetMeasurementWindow\(/);
+assert.match(monitor, /this\.longTasks\.length = 0/);
+assert.match(monitor, /this\.longAnimationFrames\.length = 0/);
+assert.match(monitor, /resetPerformancePhaseRuntimeDiagnostics\(\)/);
+assert.match(monitor, /clearPerformancePhaseMeasures\(\)/);
+assert.match(monitor, /tMs: roundOne\(now - this\.measurementStartedAt\)/);
+assert.match(monitor, /measurementWindowSeconds/);
+assert.match(monitor, /entry\.startTime < this\.measurementStartedAt/);
+assert.match(phases, /export function resetPerformancePhaseRuntimeDiagnostics\(\)/);
+assert.match(phases, /resetPerformancePhaseRuntimeDiagnosticsForTests\(\): void \{\s*resetPerformancePhaseRuntimeDiagnostics\(\)/);
 
 console.log('Combat Lab experiment visual controller and performance regression smoke passed.');
