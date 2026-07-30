@@ -37,6 +37,7 @@ export class CombatLabScenarioEditorPanel {
   private readonly trackList: CombatLabTrackList;
   private readonly inspector: CombatLabStepInspector;
   private runtimeSnapshot: CombatLabScenarioRuntimeSnapshotV1 | null = null;
+  private runtimePresentationKey = '';
   private selectedStep: CombatLabSelectedStepV1 | null = null;
   private selectedActorRoleId: string | null = null;
   private mapMode: CombatLabMapInteractionModeV1;
@@ -84,8 +85,10 @@ export class CombatLabScenarioEditorPanel {
 
   setRuntimeSnapshot(snapshot: CombatLabScenarioRuntimeSnapshotV1 | null): void {
     this.runtimeSnapshot = snapshot;
+    const nextKey = buildRuntimePresentationKey(snapshot);
+    if (nextKey === this.runtimePresentationKey) return;
+    this.runtimePresentationKey = nextKey;
     this.trackList.render();
-    this.renderInspector();
   }
 
   selectStep(trackId: string, stepId: string): void {
@@ -312,6 +315,17 @@ export class CombatLabScenarioEditorPanel {
     this.status.textContent = messageRu;
     this.status.classList.toggle('is-error', error);
   }
+}
+
+function buildRuntimePresentationKey(snapshot: CombatLabScenarioRuntimeSnapshotV1 | null): string {
+  if (!snapshot) return 'none';
+  return snapshot.steps.map((step) => [
+    step.trackId,
+    step.stepId,
+    step.state,
+    step.reasonCode ?? '',
+    step.reasonRu ?? '',
+  ].join('\u0000')).join('\u0001');
 }
 
 function button(label: string, onClick: () => void, className = '', title = ''): HTMLButtonElement {

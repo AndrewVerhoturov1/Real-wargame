@@ -2,14 +2,31 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 
-const [controller, session, runState] = await Promise.all([
+const [controller, session, runState, effects, main, editor, monitor, phases] = await Promise.all([
   readFile('src/combat-lab/runtime/CombatLabExperimentVisualController.ts', 'utf8'),
   readFile('src/combat-lab/runtime/CombatLabVisualSession.ts', 'utf8'),
   readFile('src/combat-lab/runtime/CombatLabExperimentRunState.ts', 'utf8'),
+  readFile('src/rendering/PixiCombatEffectsRenderer.ts', 'utf8'),
+  readFile('src/combat-lab/main.ts', 'utf8'),
+  readFile('src/combat-lab/scenario-editor/CombatLabScenarioEditorPanel.ts', 'utf8'),
+  readFile('src/core/debug/PerformanceMonitor.ts', 'utf8'),
+  readFile('src/core/debug/PerformancePhases.ts', 'utf8'),
 ]);
 
-for (const [source, name] of [[controller, 'controller'], [session, 'session'], [runState, 'run state']]) {
-  const result = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 }, reportDiagnostics: true });
+for (const [source, name] of [
+  [controller, 'controller'],
+  [session, 'session'],
+  [runState, 'run state'],
+  [effects, 'combat effects renderer'],
+  [main, 'Combat Lab main'],
+  [editor, 'scenario editor'],
+  [monitor, 'performance monitor'],
+  [phases, 'performance phases'],
+]) {
+  const result = ts.transpileModule(source, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
+    reportDiagnostics: true,
+  });
   assert.equal(result.diagnostics?.length ?? 0, 0, `${name} contains TypeScript syntax diagnostics`);
 }
 
@@ -27,7 +44,63 @@ assert.match(session, /const stableState = this\.built\.state[\s\S]*restoreExpor
 assert.match(session, /this\.experimentRuntimeActive = true/);
 assert.match(session, /if \(!this\.experimentRuntimeActive\) preserveCombatLabTargetSurvivability/);
 assert.match(runState, /Object\.freeze\(\{[\s\S]*journal:/);
-assert.doesNotMatch(controller + session, /new\s+Ticker|addTickerListener|setInterval|requestAnimationFrame/);
+assert.doesNotMatch(controller + session, /new\s+Ticker|addTickerListener|setInterval/);
 assert.doesNotMatch(controller, /executeCombatLabCommand|tickSimulation/);
 
-console.log('Combat Lab experiment visual controller smoke passed.');
+// Performance regression: fixed steps update gameplay immediately while the
+// expensive editor/status publication is capped at ten updates per second.
+assert.match(controller, /RUNTIME_PUBLICATION_INTERVAL_MS = 100/);
+assert.match(controller, /private pendingCoreSnapshot:/);
+assert.match(controller, /private publicationTimer = 0/);
+assert.match(controller, /private schedulePublication\(/);
+assert.match(controller, /private publishImmediate\(/);
+assert.match(controller, /flushPendingPublication\(\): void/);
+assert.match(controller, /window\.setTimeout/);
+assert.match(controller, /window\.clearTimeout/);
+assert.match(controller, /this\.schedulePublication\(next\)/);
+assert.match(controller, /this\.publishImmediate\(next\)/);
+
+// Performance regression: the automatic Pixi ticker is the only Combat Lab
+// frame owner. UI callers cannot trigger duplicate renderFrame passes.
+assert.match(main, /createCombatLabRenderContext/);
+assert.match(main, /forceRender:\s*\(\)\s*=>\s*\{\}/);
+assert.doesNotMatch(main, /context\.board\.renderNow\(\)/);
+
+// Performance regression: unchanged step presentation must not destroy and
+// recreate the complete scenario editor DOM tree.
+assert.match(editor, /private runtimePresentationKey = ''/);
+assert.match(editor, /const nextKey = buildRuntimePresentationKey\(snapshot\)/);
+assert.match(editor, /if \(nextKey === this\.runtimePresentationKey\) return/);
+assert.match(editor, /function buildRuntimePresentationKey/);
+
+// Performance regression: the effects renderer may inspect only a bounded
+// recent tail when production event ledgers change and must do O(1) work when
+// their identities and tails remain unchanged.
+assert.match(effects, /MAX_RECENT_SOURCE_ENTRIES = 256/);
+assert.match(effects, /MAX_PROCESSED_IDS = 512/);
+assert.match(effects, /sourceChanged\(projectiles\.committedShots\.length/);
+assert.match(effects, /sourceChanged\(projectiles\.impacts\.length/);
+assert.match(effects, /sourceChanged\(history\.length/);
+assert.match(effects, /function recentStart/);
+assert.match(effects, /class BoundedIdWindow/);
+assert.doesNotMatch(effects, /pruneProcessedHistory/);
+assert.doesNotMatch(effects, /history\.map\(/);
+
+// Performance regression: report owners and frame samples must use one epoch
+// that covers the mandatory 90-second reference measurement at 90 FPS.
+assert.match(monitor, /const MAX_SAMPLES = 9000/);
+assert.match(monitor, /private measurementStartedAt = this\.startedAt/);
+assert.match(monitor, /recordSimulationUpdate\(durationMs: number\): void \{\s*this\.beginFrame\(\)/);
+assert.match(monitor, /private resetMeasurementWindow\(/);
+assert.match(monitor, /this\.longTasks\.length = 0/);
+assert.match(monitor, /this\.longAnimationFrames\.length = 0/);
+assert.match(monitor, /resetPerformancePhaseRuntimeDiagnostics\(\)/);
+assert.match(monitor, /clearPerformancePhaseMeasures\(\)/);
+assert.match(monitor, /tMs: roundOne\(now - this\.measurementStartedAt\)/);
+assert.match(monitor, /measurementWindowSeconds/);
+assert.match(monitor, /diagnosticsScope: 'runtime-cumulative/);
+assert.match(monitor, /entry\.startTime < this\.measurementStartedAt/);
+assert.match(phases, /export function resetPerformancePhaseRuntimeDiagnostics\(\)/);
+assert.match(phases, /resetPerformancePhaseRuntimeDiagnosticsForTests\(\): void \{\s*resetPerformancePhaseRuntimeDiagnostics\(\)/);
+
+console.log('Combat Lab experiment visual controller and performance regression smoke passed.');

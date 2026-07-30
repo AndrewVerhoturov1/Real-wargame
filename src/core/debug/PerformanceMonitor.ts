@@ -20,6 +20,7 @@ import { getRealWargameBuildIdentity, PERFORMANCE_CONTRACT_VERSION } from './Bui
 import {
   getPerformancePhaseContextualEvents,
   getPerformancePhaseRuntimeDiagnostics,
+  resetPerformancePhaseRuntimeDiagnostics,
   type PerformancePhaseContext,
   type PerformancePhaseRuntimeDiagnostic,
 } from './PerformancePhases';
@@ -189,13 +190,14 @@ type PerformanceScenarioWindow = Window & {
   __realWargamePerformanceScenario?: string | null;
 };
 
-const MAX_SAMPLES = 3600;
+const MAX_SAMPLES = 9000;
 const MAX_LONG_TASKS = 200;
 const MAX_LONG_ANIMATION_FRAMES = 200;
 const PHASE_MEASURE_PREFIX = 'real-wargame.phase.';
 
 export class PerformanceMonitor {
   private readonly startedAt = performance.now();
+  private measurementStartedAt = this.startedAt;
   private readonly samples: Array<PerformanceFrameSample | undefined> = new Array(MAX_SAMPLES);
   private readonly longTasks: BrowserLongTaskDiagnostic[] = [];
   private readonly longAnimationFrames: LongAnimationFrameDiagnostic[] = [];
@@ -218,7 +220,18 @@ export class PerformanceMonitor {
     this.longAnimationFrameObserver = null;
   }
 
+  /**
+   * Starts a new coherent observation epoch before the first frame that would
+   * otherwise overwrite the bounded frame buffer. Browser tasks, LoAF entries,
+   * phase aggregates and frame samples therefore always describe one window.
+   */
+  beginFrame(): void {
+    if (this.storedCount < MAX_SAMPLES) return;
+    this.resetMeasurementWindow(performance.now());
+  }
+
   recordSimulationUpdate(durationMs: number): void {
+    this.beginFrame();
     this.pendingSimulationUpdateMs = Math.max(0, durationMs);
   }
 
@@ -232,7 +245,7 @@ export class PerformanceMonitor {
     const simulationUpdateMs = this.pendingSimulationUpdateMs;
     this.pendingSimulationUpdateMs = 0;
     this.samples[this.writeIndex] = {
-      tMs: roundOne(now - this.startedAt),
+      tMs: roundOne(now - this.measurementStartedAt),
       frameMs: frameMs === null ? null : roundTwo(frameMs),
       simulationUpdateMs: roundTwo(simulationUpdateMs),
       applicationUpdateMs: roundTwo(simulationUpdateMs + sceneUpdateMs),
@@ -256,6 +269,7 @@ export class PerformanceMonitor {
   }
 
   buildReport(state: SimulationState, zoom: number, renderer: Record<string, unknown>): PerformanceReport {
+    const reportBuiltAt = performance.now();
     const samples = this.getSamples();
     const frameValues = samples
       .map((sample) => sample.frameMs)
@@ -266,6 +280,7 @@ export class PerformanceMonitor {
     const sampledDurationMs = samples.length > 1
       ? samples[samples.length - 1].tMs - samples[0].tMs
       : 0;
+    const measurementWindowMs = Math.max(0, reportBuiltAt - this.measurementStartedAt);
     const effectiveFps = sampledDurationMs > 0
       ? (samples.length - 1) * 1000 / sampledDurationMs
       : null;
@@ -276,9 +291,10 @@ export class PerformanceMonitor {
     const exportedAt = new Date().toISOString();
     const performancePhaseMeasures = performance.getEntriesByType('measure')
       .filter((entry) => entry.name.startsWith(PHASE_MEASURE_PREFIX))
+      .filter((entry) => entry.startTime >= this.measurementStartedAt && entry.startTime <= reportBuiltAt)
       .map((entry) => ({
         name: entry.name,
-        startMs: roundOne(entry.startTime - this.startedAt),
+        startMs: roundOne(entry.startTime - this.measurementStartedAt),
         durationMs: roundTwo(entry.duration),
       }));
     const performancePhaseAggregates = buildPerformancePhaseAggregates(
@@ -287,12 +303,14 @@ export class PerformanceMonitor {
       this.longTasks,
       this.longAnimationFrames,
     );
-    const contextualPerformancePhaseEvents = getPerformancePhaseContextualEvents().map((event) => ({
-      name: event.name,
-      startMs: roundOne(event.startTimeMs - this.startedAt),
-      durationMs: roundTwo(event.durationMs),
-      context: event.context ? { ...event.context } : null,
-    }));
+    const contextualPerformancePhaseEvents = getPerformancePhaseContextualEvents()
+      .filter((event) => event.startTimeMs >= this.measurementStartedAt && event.startTimeMs <= reportBuiltAt)
+      .map((event) => ({
+        name: event.name,
+        startMs: roundOne(event.startTimeMs - this.measurementStartedAt),
+        durationMs: roundTwo(event.durationMs),
+        context: event.context ? { ...event.context } : null,
+      }));
     const applicationLongTasks = buildApplicationIntervalAttribution(this.longTasks, performancePhaseMeasures);
     const applicationLongAnimationFrames = buildApplicationIntervalAttribution(
       this.longAnimationFrames,
@@ -313,7 +331,7 @@ export class PerformanceMonitor {
         generatedAt: exportedAt,
       },
       exportedAt,
-      runtimeSeconds: roundOne((performance.now() - this.startedAt) / 1000),
+      runtimeSeconds: roundOne((reportBuiltAt - this.startedAt) / 1000),
       browser: {
         ...getBrowserInfo(),
         performanceObserverSupportedEntryTypes: [...(PerformanceObserver.supportedEntryTypes ?? [])],
@@ -321,7 +339,7 @@ export class PerformanceMonitor {
       viewport: getViewportInfo(),
       renderer: {
         ...renderer,
-        timingNote: 'sceneUpdateMs/renderMs remain render-data-only compatibility metrics. simulationUpdateMs measures SimulationTick; applicationUpdateMs combines simulation and render-data JavaScript work. Nested phase overlap owns application attribution for LongTask and LoAF windows.',
+        timingNote: 'All frame samples, LongTasks, LoAF entries, slow phase measures and phase aggregates belong to the same bounded observation epoch. sceneUpdateMs/renderMs remain render-data-only compatibility metrics; simulationUpdateMs measures SimulationTick; applicationUpdateMs combines simulation and render-data JavaScript work.',
       },
       scene: {
         mapWidthCells: state.map.width,
@@ -345,6 +363,7 @@ export class PerformanceMonitor {
         selectedUnitId: state.selectedUnitId,
       },
       computation: {
+        diagnosticsScope: 'runtime-cumulative; reload the page before an isolated comparison',
         aiScheduler: getAiSchedulerPerformanceDiagnostics(),
         threatRelativeCover: getThreatRelativeCoverFieldDiagnostics(state.map),
         directionalTactical: getDirectionalTacticalFieldDiagnostics(state.map),
@@ -368,6 +387,9 @@ export class PerformanceMonitor {
       summary: {
         sampleCount: samples.length,
         sampledDurationSeconds: roundTwo(sampledDurationMs / 1000),
+        measurementWindowSeconds: roundTwo(measurementWindowMs / 1000),
+        measurementWindowStartedRuntimeSeconds: roundTwo((this.measurementStartedAt - this.startedAt) / 1000),
+        measurementFrameLimit: MAX_SAMPLES,
         effectiveFps: effectiveFps === null ? null : roundTwo(effectiveFps),
         fpsAtP95FrameTime: p95FrameMs && p95FrameMs > 0 ? roundTwo(1000 / p95FrameMs) : null,
         frameMs: buildStats(frameValues),
@@ -441,8 +463,9 @@ export class PerformanceMonitor {
     this.longTaskObserver = new PerformanceObserver((list) => {
       for (const rawEntry of list.getEntries()) {
         const entry = rawEntry as LongTaskEntryLike;
+        if (entry.startTime < this.measurementStartedAt) continue;
         this.longTasks.push({
-          startMs: roundOne(entry.startTime - this.startedAt),
+          startMs: roundOne(entry.startTime - this.measurementStartedAt),
           durationMs: roundTwo(entry.duration),
           scenario: currentScenario(),
           attribution: Array.from(entry.attribution ?? []).map((item) => ({
@@ -464,13 +487,14 @@ export class PerformanceMonitor {
     this.longAnimationFrameObserver = new PerformanceObserver((list) => {
       for (const rawEntry of list.getEntries()) {
         const entry = rawEntry as LongAnimationFrameEntryLike;
+        if (entry.startTime < this.measurementStartedAt) continue;
         this.longAnimationFrames.push({
-          startMs: roundOne(entry.startTime - this.startedAt),
+          startMs: roundOne(entry.startTime - this.measurementStartedAt),
           durationMs: roundTwo(entry.duration),
           blockingDurationMs: roundTwo(entry.blockingDuration ?? 0),
-          renderStartMs: relativeTimestamp(entry.renderStart, this.startedAt),
-          styleAndLayoutStartMs: relativeTimestamp(entry.styleAndLayoutStart, this.startedAt),
-          firstUiEventTimestampMs: relativeTimestamp(entry.firstUIEventTimestamp, this.startedAt),
+          renderStartMs: relativeTimestamp(entry.renderStart, this.measurementStartedAt),
+          styleAndLayoutStartMs: relativeTimestamp(entry.styleAndLayoutStart, this.measurementStartedAt),
+          firstUiEventTimestampMs: relativeTimestamp(entry.firstUIEventTimestamp, this.measurementStartedAt),
           scenario: currentScenario(),
           scripts: Array.from(entry.scripts ?? []).map((script) => ({
             invoker: script.invoker ?? '',
@@ -490,17 +514,23 @@ export class PerformanceMonitor {
     this.longAnimationFrameObserver.observe({ entryTypes: ['long-animation-frame'] });
   }
 
+  private resetMeasurementWindow(startedAt: number): void {
+    this.samples.fill(undefined);
+    this.writeIndex = 0;
+    this.storedCount = 0;
+    this.lastSampleAt = null;
+    this.pendingSimulationUpdateMs = 0;
+    this.longTasks.length = 0;
+    this.longAnimationFrames.length = 0;
+    this.measurementStartedAt = startedAt;
+    resetPerformancePhaseRuntimeDiagnostics();
+    clearPerformancePhaseMeasures();
+  }
+
   private getSamples(): PerformanceFrameSample[] {
-    if (this.storedCount < MAX_SAMPLES) {
-      return this.samples.slice(0, this.storedCount).filter(isFrameSample);
-    }
-    return [
-      ...this.samples.slice(this.writeIndex),
-      ...this.samples.slice(0, this.writeIndex),
-    ].filter(isFrameSample);
+    return this.samples.slice(0, this.storedCount).filter(isFrameSample);
   }
 }
-
 
 function buildPerformancePhaseAggregates(
   runtime: readonly PerformancePhaseRuntimeDiagnostic[],
@@ -591,6 +621,15 @@ function unionDuration(intervals: ReadonlyArray<readonly [number, number]>): num
     end = next[1];
   }
   return total + end - start;
+}
+
+function clearPerformancePhaseMeasures(): void {
+  const names = new Set(
+    performance.getEntriesByType('measure')
+      .filter((entry) => entry.name.startsWith(PHASE_MEASURE_PREFIX))
+      .map((entry) => entry.name),
+  );
+  for (const name of names) performance.clearMeasures(name);
 }
 
 function shortPhaseName(name: string): string {

@@ -7,7 +7,7 @@ import './ui/combat-lab-experiment-run.css';
 import './ui/combat-lab-batch-results.css';
 import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
 import { collectGameApplicationElements, GameApplication } from '../game/GameApplication';
-import type { GamePauseController } from '../game/GameApplicationTypes';
+import type { GameApplicationContext, GamePauseController } from '../game/GameApplicationTypes';
 import { installAppShellMenu } from '../shared/AppShellMenu';
 import { CombatLabExtension } from './CombatLabExtension';
 import { CombatLabVisualSession } from './runtime/CombatLabVisualSession';
@@ -31,7 +31,11 @@ async function startCombatLab(): Promise<void> {
       state: session.state,
       elements: collectGameApplicationElements(),
       pauseController: createSessionPauseController(session, extensionRoot),
-      installExtension: (context) => CombatLabExtension.create(extensionRoot, session, context),
+      installExtension: (context) => CombatLabExtension.create(
+        extensionRoot,
+        session,
+        createCombatLabRenderContext(context),
+      ),
     });
   } catch (error) {
     console.error(error);
@@ -47,6 +51,17 @@ window.addEventListener('beforeunload', () => {
   application?.destroy();
   application = null;
 });
+
+function createCombatLabRenderContext(context: GameApplicationContext): GameApplicationContext {
+  return {
+    ...context,
+    // The Pixi ticker already renders every frame. Combat Lab callers only need
+    // to mutate renderer state; the next automatic frame publishes it. Keeping
+    // forceRender as a no-op prevents duplicate renderFrame passes and preserves
+    // the revision-owned static map cache.
+    forceRender: () => {},
+  };
+}
 
 function createSessionPauseController(
   session: CombatLabVisualSession,
