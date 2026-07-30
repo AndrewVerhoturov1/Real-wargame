@@ -1,0 +1,87 @@
+name: Combat Lab Exact Static Artifact 222cbd9
+
+on:
+  push:
+    branches:
+      - ci/combat-lab-vercel-deploy-222cbd9
+
+permissions:
+  contents: read
+
+concurrency:
+  group: combat-lab-static-artifact-222cbd901029751396c6891fa63c1633eb408f31
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Verify and package exact static output
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PRODUCT_BRANCH: feature/20260730-combat-lab-user-acceptance-fixes
+      PRODUCT_SHA: 222cbd901029751396c6891fa63c1633eb408f31
+    steps:
+      - name: Checkout exact product source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          branch_sha="$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')"
+          test "$actual_sha" = "$PRODUCT_SHA"
+          test "$branch_sha" = "$PRODUCT_SHA"
+          test -z "$(git status --short)"
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run canonical Preview verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run verify:preview -- --report "$RUNNER_TEMP/preview-verification.json"
+
+      - name: Build production static output
+        run: npm run build
+
+      - name: Add exact deployment identity
+        run: >-
+          node scripts/write_deployment_source.mjs
+          --root dist
+          --ref "$PRODUCT_BRANCH"
+          --sha "$PRODUCT_SHA"
+          --report "$RUNNER_TEMP/preview-verification.json"
+
+      - name: Verify packaged pages and identity
+        run: |
+          npm run verify:deployment-pages -- --root dist --require-source
+          test -f dist/index.html
+          test -f dist/combat-lab.html
+          test -f dist/ai-node-editor.html
+          test -f dist/deployment-source.json
+
+      - name: Write artifact manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          find dist -type f -print0 | sort -z | xargs -0 sha256sum > dist/artifact-sha256.txt
+          printf '%s\n' "$PRODUCT_SHA" > dist/exact-source-sha.txt
+
+      - name: Upload exact static artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-static-222cbd9
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
