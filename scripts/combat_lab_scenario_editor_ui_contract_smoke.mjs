@@ -34,11 +34,14 @@ assert.match(tracks, /enabled: !step\.enabled/);
 assert.match(tracks, /removeStep/);
 assert.doesNotMatch(tracks, /react-beautiful-dnd|sortablejs|interactjs|@dnd-kit/);
 
-for (const label of ['Условие начала', 'Условие завершения', 'Повтор', 'Timeout', 'При ошибке', 'Breakpoint']) {
-  assert.match(inspector, new RegExp(label));
+for (const label of ['Условие начала', 'Условие завершения', 'Повтор', 'Предельное время', 'При ошибке', 'Точка остановки']) {
+  assert.match(`${inspector}\n${card}`, new RegExp(label));
 }
+assert.match(inspector, /Игровое действие завершено/);
+assert.match(inspector, /Проверяемое условие/);
+assert.doesNotMatch(inspector + card, /Breakpoint|Timeout|Production action/);
 assert.match(inspector, /accuracyControls\.mount/);
-assert.match(inspector, /Параметры точности подключаются адаптером/);
+assert.match(inspector, /Параметры точности подключаются/);
 
 assert.match(css, /overflow-x:\s*hidden/);
 assert.match(css, /grid-template-columns:/);

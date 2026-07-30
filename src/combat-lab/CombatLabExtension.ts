@@ -31,36 +31,31 @@ import { CombatLabBatchResultsView } from './ui/CombatLabBatchResultsView';
 import { CombatLabExperimentRunToolbar } from './ui/CombatLabExperimentRunToolbar';
 import { combatLabMetricLabelRu } from './ui/CombatLabMetricLabels';
 import { CombatLabScenarioRuntimeStatus } from './ui/CombatLabScenarioRuntimeStatus';
-import { CombatLabShell, createCombatLabLayout } from './ui/CombatLabShell';
+import { CombatLabShell, createCombatLabLayout, type CombatLabLayoutV1 } from './ui/CombatLabShell';
+import {
+  isCombatLabWorkspaceTab,
+  type CombatLabWorkspaceHosts,
+  type CombatLabWorkspaceTab,
+} from './ui/CombatLabWorkspaceHosts';
+import { CombatLabWorkspaceTabs } from './ui/CombatLabWorkspaceTabs';
 
-type CombatLabDockTab = 'stand' | 'metrics' | 'log';
-type CombatLabStandView = 'scene' | 'program';
-type CombatLabMetricsView = 'current' | 'batch';
 type ExperimentChangeSource = 'editor' | 'external';
 
-interface DockLayout {
-  readonly root: HTMLElement;
-  readonly status: HTMLElement;
-  readonly toggle: HTMLButtonElement;
-  readonly tabButtons: ReadonlyMap<CombatLabDockTab, HTMLButtonElement>;
-  readonly tabPanels: ReadonlyMap<CombatLabDockTab, HTMLElement>;
-  readonly standButtons: ReadonlyMap<CombatLabStandView, HTMLButtonElement>;
-  readonly standPanels: ReadonlyMap<CombatLabStandView, HTMLElement>;
-  readonly metricsButtons: ReadonlyMap<CombatLabMetricsView, HTMLButtonElement>;
-  readonly metricsPanels: ReadonlyMap<CombatLabMetricsView, HTMLElement>;
-  readonly toolbarHost: HTMLElement;
-  readonly runtimeStatusHost: HTMLElement;
+interface WorkspaceMountLayout {
   readonly templateSelect: HTMLSelectElement;
   readonly templateLoadButton: HTMLButtonElement;
   readonly validationHost: HTMLElement;
   readonly scenePanelHost: HTMLElement;
   readonly programHost: HTMLElement;
   readonly mapModeStatus: HTMLElement;
+  readonly parametersPanelHost: HTMLElement;
   readonly manualHost: HTMLElement;
+  readonly runtimeStatusHost: HTMLElement;
   readonly currentMetricsHost: HTMLElement;
   readonly batchPanelHost: HTMLElement;
   readonly batchResultsHost: HTMLElement;
-  readonly logHost: HTMLElement;
+  readonly runtimeJournalHost: HTMLElement;
+  readonly authoringLogHost: HTMLElement;
 }
 
 interface SharedSimulationControls {
@@ -77,8 +72,10 @@ interface BoardCanvasInternals {
 }
 
 export class CombatLabExtension implements GameApplicationExtension {
-  private readonly layout: DockLayout;
+  private readonly workspace: CombatLabWorkspaceTabs;
+  private readonly layout: WorkspaceMountLayout;
   private readonly renderer: CombatLabRenderer;
+  private readonly legacyRoot = node('div', 'combat-lab-legacy-manual-root');
   private readonly legacyShell: CombatLabShell;
   private readonly draft: CombatLabExperimentDraft;
   private readonly visualController: CombatLabExperimentVisualController;
@@ -97,7 +94,7 @@ export class CombatLabExtension implements GameApplicationExtension {
   private validationIssues: readonly CombatLabExperimentIssueV1[];
   private runtimeSnapshot: CombatLabScenarioRuntimeSnapshotV1 | null = null;
   private latestBatchResult: CombatLabBatchResultV1 | null = null;
-  private collapsed = false;
+  private lastJournalIdentity = '';
   private destroyed = false;
 
   private constructor(
@@ -105,7 +102,9 @@ export class CombatLabExtension implements GameApplicationExtension {
     private readonly session: CombatLabVisualSession,
     private readonly context: GameApplicationContext,
   ) {
-    this.layout = createCombatLabDockLayout(root);
+    this.workspace = CombatLabWorkspaceTabs.create({ host: root });
+    this.layout = createWorkspaceMountLayout(this.workspace.hosts);
+
     const initialExperiment = buildCombatLabBuiltInExperiment(session.definition.scenarioId, session.seed);
     this.draft = new CombatLabExperimentDraft(initialExperiment);
     this.validationIssues = validateCombatLabExperiment(initialExperiment);
@@ -118,13 +117,11 @@ export class CombatLabExtension implements GameApplicationExtension {
       onRuntimeChanged: this.handleRuntimeChanged,
     });
 
-    const legacyRoot = node('div', 'combat-lab-legacy-manual-root');
-    const legacyLayout = createCombatLabLayout(legacyRoot);
+    const legacyLayout = createCombatLabLayout(this.legacyRoot);
     this.legacyShell = new CombatLabShell(legacyLayout, session, this.renderer);
     legacyLayout.top.replaceChildren();
-    this.layout.manualHost.append(legacyLayout.left, legacyLayout.right);
-    this.layout.logHost.append(...Array.from(legacyLayout.bottom.childNodes));
-    this.currentMetrics = installLegacyMetricsView(legacyLayout.right, this.layout.currentMetricsHost);
+    this.currentMetrics = installLegacyMetricsView(legacyLayout, this.layout.currentMetricsHost);
+    this.layout.manualHost.append(legacyLayout.right);
 
     this.scenePanel = new CombatLabScenePanel({
       state: session.state,
@@ -153,13 +150,10 @@ export class CombatLabExtension implements GameApplicationExtension {
     });
 
     this.runToolbar = CombatLabExperimentRunToolbar.create({
-      host: this.layout.toolbarHost,
+      host: this.workspace.toolbarHost,
       controller: this.visualController,
       getValidationIssues: () => this.validationIssues,
-      onRequestBatch: () => {
-        this.activateTab('metrics');
-        this.activateMetricsView('batch');
-      },
+      onRequestBatch: () => this.activateTab('batch'),
     });
     this.runtimeStatus = CombatLabScenarioRuntimeStatus.create({ host: this.layout.runtimeStatusHost });
 
@@ -167,8 +161,7 @@ export class CombatLabExtension implements GameApplicationExtension {
       host: this.layout.batchResultsHost,
       onReplayRepresentative: (representative) => {
         replayCombatLabRepresentativeRun(this.visualController, representative);
-        this.activateTab('stand');
-        this.activateStandView('program');
+        this.activateTab('program');
       },
     });
     this.batchResults.clear();
@@ -181,8 +174,7 @@ export class CombatLabExtension implements GameApplicationExtension {
         if (this.destroyed) return;
         this.latestBatchResult = result;
         this.batchResults.render(result);
-        this.activateTab('metrics');
-        this.activateMetricsView('batch');
+        this.activateTab('batch');
       },
     });
 
@@ -210,10 +202,8 @@ export class CombatLabExtension implements GameApplicationExtension {
     }
     this.layout.templateSelect.value = initialExperiment.baseScenarioId ?? '';
     this.listen(this.layout.templateLoadButton, 'click', this.handleTemplateLoad);
-    this.listen(this.layout.toggle, 'click', this.handleToggle);
-    for (const [tab, button] of this.layout.tabButtons) this.listen(button, 'click', () => this.activateTab(tab));
-    for (const [view, button] of this.layout.standButtons) this.listen(button, 'click', () => this.activateStandView(view));
-    for (const [view, button] of this.layout.metricsButtons) this.listen(button, 'click', () => this.activateMetricsView(view));
+    this.listen(this.workspace.toggle, 'click', this.handleToggle);
+    this.listen(this.workspace.root, 'combat-lab-workspace-tab-change', this.handleWorkspaceTabChanged as EventListener);
     this.listen(this.root, 'combat-lab:activate-tab', this.handleTabRequest as EventListener);
     this.listen(this.root, 'combat-lab:toggle-pause', this.handleTogglePauseRequest);
     this.listen(this.root, 'combat-lab:set-paused', this.handleSetPausedRequest as EventListener);
@@ -221,13 +211,11 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.root.dataset.combatLabExtension = 'active';
     document.body.classList.add('combat-lab-dock-open');
     document.body.classList.remove('combat-lab-dock-collapsed');
-    this.activateTab('stand');
-    this.activateStandView('scene');
-    this.activateMetricsView('current');
     this.renderer.setAuthoredExperiment(initialExperiment);
     this.handleEditorSelection(this.editorPanel.getSelectedStep());
     this.renderValidation();
     this.handleRuntimeChanged(this.visualController.getSnapshot());
+    this.syncVisibleWorkspace();
     context.forceRender();
   }
 
@@ -255,8 +243,9 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.sharedSimulationControls.destroy();
     this.renderer.clearAuthoringOverlay();
     this.renderer.destroy();
-    this.root.replaceChildren();
+    this.legacyRoot.replaceChildren();
     delete this.root.dataset.combatLabExtension;
+    this.workspace.destroy();
     document.body.classList.remove('combat-lab-dock-open', 'combat-lab-dock-collapsed');
   }
 
@@ -264,8 +253,6 @@ export class CombatLabExtension implements GameApplicationExtension {
     if (this.destroyed) return;
     this.runtimeSnapshot = snapshot;
     this.runToolbar?.refresh(snapshot);
-    this.runtimeStatus?.refresh(snapshot);
-    this.editorPanel?.setRuntimeSnapshot(snapshot);
     const activeStep = snapshot.steps.find((step) => (
       step.state === 'running' || step.state === 'waiting' || step.state === 'paused_at_breakpoint'
     ));
@@ -274,7 +261,7 @@ export class CombatLabExtension implements GameApplicationExtension {
       : this.editorPanel?.getSelectedStep() ?? null);
     this.updateInteractionState();
     this.updateCompactStatus();
-    this.legacyShell?.refreshLive(true);
+    this.syncVisibleWorkspace();
     this.sharedSimulationControls?.sync();
     this.context.forceRender();
   };
@@ -282,7 +269,8 @@ export class CombatLabExtension implements GameApplicationExtension {
   private readonly handleFrame = (): void => {
     if (this.destroyed) return;
     setFireAllowed(this.session.state, true);
-    this.legacyShell?.refreshLive();
+    if (this.workspace.isActive('metrics')) this.legacyShell?.refreshLive();
+    if (this.workspace.isActive('journal')) this.renderRuntimeJournal();
     this.updateCompactStatus();
     this.sharedSimulationControls?.sync();
     syncGamePauseControl(this.session);
@@ -387,19 +375,32 @@ export class CombatLabExtension implements GameApplicationExtension {
 
   private showAuthoringMessage(messageRu: string, error: boolean): void {
     const entry = node('div', `combat-lab-journal-entry${error ? ' is-error' : ''}`, messageRu);
-    this.layout.logHost.prepend(entry);
+    this.layout.authoringLogHost.prepend(entry);
   }
 
-  private activateTab(tab: CombatLabDockTab): void {
-    activateChoice(tab, this.layout.tabButtons, this.layout.tabPanels);
+  private activateTab(tab: CombatLabWorkspaceTab): void {
+    this.workspace.activate(tab);
   }
 
-  private activateStandView(view: CombatLabStandView): void {
-    activateChoice(view, this.layout.standButtons, this.layout.standPanels);
+  private syncVisibleWorkspace(): void {
+    if (this.destroyed) return;
+    const snapshot = this.runtimeSnapshot;
+    if (snapshot && this.workspace.isActive('program')) this.editorPanel?.setRuntimeSnapshot(snapshot);
+    if (snapshot && this.workspace.isActive('metrics')) {
+      this.runtimeStatus?.refresh(snapshot);
+      this.legacyShell?.refreshLive(true);
+    }
+    if (this.workspace.isActive('journal')) this.renderRuntimeJournal();
   }
 
-  private activateMetricsView(view: CombatLabMetricsView): void {
-    activateChoice(view, this.layout.metricsButtons, this.layout.metricsPanels);
+  private renderRuntimeJournal(): void {
+    const entries = this.session.getSnapshot().eventJournal.slice(-80).reverse();
+    const identity = entries.join('\u0000');
+    if (identity === this.lastJournalIdentity) return;
+    this.lastJournalIdentity = identity;
+    this.layout.runtimeJournalHost.replaceChildren(
+      ...entries.map((entry) => node('div', 'combat-lab-journal-entry', entry)),
+    );
   }
 
   private updateCompactStatus(): void {
@@ -407,7 +408,7 @@ export class CombatLabExtension implements GameApplicationExtension {
     if (!snapshot) return;
     const visual = asCombatLabExperimentVisualSnapshot(snapshot);
     const status = visual?.visualStatus ?? snapshot.status;
-    this.layout.status.textContent = `${snapshot.simulatedSeconds.toFixed(1)} с · ${status} · ×${this.session.getSpeed()}`;
+    this.workspace.status.textContent = `${snapshot.simulatedSeconds.toFixed(1)} с · ${status} · ×${this.session.getSpeed()}`;
   }
 
   private listen(target: EventTarget, type: string, callback: EventListenerOrEventListenerObject | (() => void)): void {
@@ -419,18 +420,19 @@ export class CombatLabExtension implements GameApplicationExtension {
   }
 
   private readonly handleToggle = (): void => {
-    this.collapsed = !this.collapsed;
-    this.layout.root.classList.toggle('collapsed', this.collapsed);
-    this.layout.toggle.textContent = this.collapsed ? 'Полигон ›' : 'Свернуть';
-    this.layout.toggle.setAttribute('aria-expanded', String(!this.collapsed));
-    document.body.classList.toggle('combat-lab-dock-collapsed', this.collapsed);
-    document.body.classList.toggle('combat-lab-dock-open', !this.collapsed);
+    const collapsed = this.workspace.root.classList.contains('collapsed');
+    document.body.classList.toggle('combat-lab-dock-collapsed', collapsed);
+    document.body.classList.toggle('combat-lab-dock-open', !collapsed);
     window.requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
   };
 
+  private readonly handleWorkspaceTabChanged = (): void => {
+    this.syncVisibleWorkspace();
+  };
+
   private readonly handleTabRequest = (event: Event): void => {
-    const tab = (event as CustomEvent<CombatLabDockTab>).detail;
-    if (this.layout.tabPanels.has(tab)) this.activateTab(tab);
+    const requested = (event as CustomEvent<unknown>).detail;
+    if (isCombatLabWorkspaceTab(requested)) this.activateTab(requested);
   };
 
   private readonly handleTogglePauseRequest = (): void => {
@@ -448,125 +450,78 @@ export class CombatLabExtension implements GameApplicationExtension {
   };
 }
 
-function createCombatLabDockLayout(host: HTMLElement): DockLayout {
-  host.replaceChildren();
-  const dock = node('section', 'combat-lab-dock combat-lab-drawer');
-  dock.setAttribute('aria-label', 'Испытательный полигон');
-  const header = node('header', 'combat-lab-dock-header');
-  const brand = node('div', 'combat-lab-dock-brand');
-  brand.append(node('strong', '', 'Испытательный полигон'), node('span', '', 'Stage 10 · редактор и серии прогонов'));
-  const status = node('span', 'combat-lab-dock-status');
-  const toggle = createToggle();
-  header.append(brand, status, toggle);
-
-  const tabButtons = new Map<CombatLabDockTab, HTMLButtonElement>();
-  const tabPanels = new Map<CombatLabDockTab, HTMLElement>();
-  const tabList = choiceButtons<CombatLabDockTab>([
-    ['stand', 'Стенд'], ['metrics', 'Метрики'], ['log', 'Журнал'],
-  ], tabButtons, 'combat-lab-tab-list');
-  for (const [tab, button] of tabButtons) {
-    button.setAttribute('data-combat-lab-tab', tab);
-  }
-  const tabPanelHost = node('div', 'combat-lab-tab-panels');
-  for (const tab of ['stand', 'metrics', 'log'] as const) {
-    const panel = node('section', `combat-lab-tab-panel combat-lab-${tab}-panel`);
-    panel.dataset.combatLabTabPanel = tab;
-    panel.setAttribute('role', 'tabpanel');
-    tabPanels.set(tab, panel);
-    tabPanelHost.append(panel);
-  }
-
-  const toolbarHost = node('div', 'combat-lab-stage10-toolbar-host');
-  const runtimeStatusHost = node('div', 'combat-lab-stage10-runtime-status-host');
-  const standButtons = new Map<CombatLabStandView, HTMLButtonElement>();
-  const standPanels = new Map<CombatLabStandView, HTMLElement>();
-  const standSwitch = choiceButtons<CombatLabStandView>([
-    ['scene', 'Сцена'], ['program', 'Программа'],
-  ], standButtons, 'combat-lab-subtab-list');
-  const scenePanel = node('section', 'combat-lab-subtab-panel combat-lab-stage10-scene');
-  const programPanel = node('section', 'combat-lab-subtab-panel combat-lab-stage10-program');
-  standPanels.set('scene', scenePanel);
-  standPanels.set('program', programPanel);
-
+function createWorkspaceMountLayout(hosts: CombatLabWorkspaceHosts): WorkspaceMountLayout {
   const templatePanel = node('section', 'combat-lab-panel combat-lab-template-panel');
-  templatePanel.append(node('h2', 'combat-lab-section-title', 'Шаблон стенда'));
+  templatePanel.append(node('h3', 'combat-lab-section-title', 'Шаблон начальной сцены'));
   const templateSelect = document.createElement('select');
   templateSelect.setAttribute('aria-label', 'Встроенный шаблон эксперимента');
   const templateLoadButton = createButton('Загрузить шаблон', 'primary');
   templatePanel.append(field('Шаблон', templateSelect), templateLoadButton);
   const validationHost = node('div', 'combat-lab-stage10-validation-host');
   const scenePanelHost = node('div', 'combat-lab-stage10-scene-host');
-  const mapModeStatus = node('div', 'combat-lab-editor-status');
-  const manualDetails = document.createElement('details');
-  manualDetails.className = 'combat-lab-details combat-lab-manual-controls';
-  manualDetails.append(node('summary', '', 'Ручные действия и диагностика'));
-  const manualHost = node('div', 'combat-lab-stage10-manual-host');
-  manualDetails.append(manualHost);
-  scenePanel.append(templatePanel, validationHost, scenePanelHost, mapModeStatus, manualDetails);
-  const programHost = node('div', 'combat-lab-stage10-program-host');
-  programPanel.append(programHost);
-  tabPanels.get('stand')!.append(toolbarHost, runtimeStatusHost, standSwitch, scenePanel, programPanel);
+  hosts.scene.append(templatePanel, validationHost, scenePanelHost);
 
-  const metricsButtons = new Map<CombatLabMetricsView, HTMLButtonElement>();
-  const metricsPanels = new Map<CombatLabMetricsView, HTMLElement>();
-  const metricsSwitch = choiceButtons<CombatLabMetricsView>([
-    ['current', 'Текущий прогон'], ['batch', 'Серия прогонов'],
-  ], metricsButtons, 'combat-lab-subtab-list');
-  const currentPanel = node('section', 'combat-lab-subtab-panel combat-lab-current-metrics');
-  const batchPanel = node('section', 'combat-lab-subtab-panel combat-lab-batch-metrics');
-  metricsPanels.set('current', currentPanel);
-  metricsPanels.set('batch', batchPanel);
-  const currentMetricsHost = node('div', 'combat-lab-stage10-current-metrics-host');
+  const programHost = node('div', 'combat-lab-stage10-program-host');
+  const mapModeStatus = node('div', 'combat-lab-editor-status');
+  hosts.program.append(programHost, mapModeStatus);
+
   const batchPanelHost = node('div', 'combat-lab-stage10-batch-panel-host');
   const batchResultsHost = node('div', 'combat-lab-stage10-batch-results-host');
-  currentPanel.append(currentMetricsHost);
-  batchPanel.append(batchPanelHost, batchResultsHost);
-  tabPanels.get('metrics')!.append(metricsSwitch, currentPanel, batchPanel);
+  hosts.batch.append(batchPanelHost, batchResultsHost);
 
-  const logHost = node('div', 'combat-lab-stage10-log-host');
-  tabPanels.get('log')!.classList.add('combat-lab-log-panel');
-  tabPanels.get('log')!.append(logHost);
+  const parametersPanelHost = node('div', 'combat-lab-selected-unit-parameters-host');
+  parametersPanelHost.dataset.combatLabParametersHost = 'selected-unit';
+  parametersPanelHost.append(node('div', 'combat-lab-empty-tab', 'Выберите бойца, чтобы открыть его параметры.'));
+  const manualHost = node('div', 'combat-lab-stage10-manual-host');
+  hosts.parameters.append(
+    node('h3', 'combat-lab-workspace-subheading', 'Параметры выбранного бойца'),
+    parametersPanelHost,
+    node('div', 'combat-lab-workspace-divider'),
+    node('h3', 'combat-lab-workspace-subheading', 'Ручные действия'),
+    manualHost,
+  );
 
-  dock.append(header, tabList, tabPanelHost);
-  host.append(dock);
+  const runtimeStatusHost = node('div', 'combat-lab-stage10-runtime-status-host');
+  const currentMetricsHost = node('div', 'combat-lab-stage10-current-metrics-host');
+  hosts.metrics.append(runtimeStatusHost, currentMetricsHost);
+
+  const authoringLogHost = node('div', 'combat-lab-authoring-log');
+  const runtimeJournalHost = node('div', 'combat-lab-journal combat-lab-runtime-journal');
+  hosts.journal.append(authoringLogHost, runtimeJournalHost);
+
   return {
-    root: dock,
-    status,
-    toggle,
-    tabButtons,
-    tabPanels,
-    standButtons,
-    standPanels,
-    metricsButtons,
-    metricsPanels,
-    toolbarHost,
-    runtimeStatusHost,
     templateSelect,
     templateLoadButton,
     validationHost,
     scenePanelHost,
     programHost,
     mapModeStatus,
+    parametersPanelHost,
     manualHost,
+    runtimeStatusHost,
     currentMetricsHost,
     batchPanelHost,
     batchResultsHost,
-    logHost,
+    runtimeJournalHost,
+    authoringLogHost,
   };
 }
 
-function installLegacyMetricsView(source: HTMLElement, host: HTMLElement): DisposableView {
-  const diagnostics = source.querySelector<HTMLElement>('.combat-lab-diagnostics');
-  const title = source.querySelector<HTMLElement>('.combat-lab-section-title:last-of-type');
+function installLegacyMetricsView(legacyLayout: CombatLabLayoutV1, host: HTMLElement): DisposableView {
+  const diagnostics = legacyLayout.right.querySelector<HTMLElement>('.combat-lab-diagnostics');
+  const title = legacyLayout.right.querySelector<HTMLElement>('.combat-lab-section-title:last-of-type');
+  const layerList = legacyLayout.left.querySelector<HTMLElement>('.combat-lab-layer-list');
   if (!diagnostics) {
-    host.append(node('div', 'combat-lab-empty-tab', 'Диагностика появится после запуска стенда.'));
+    host.append(node('div', 'combat-lab-empty-tab', 'Диагностика появится после запуска эксперимента.'));
     return { destroy: () => host.replaceChildren() };
   }
   title?.remove();
   const grid = node('div', 'combat-lab-metric-grid');
   const details = document.createElement('details');
   details.className = 'combat-lab-details combat-lab-raw-diagnostics';
-  details.append(node('summary', '', 'Полная диагностика'), diagnostics);
+  details.append(node('summary', '', 'Подробная диагностика'));
+  if (layerList) details.append(layerList);
+  details.append(diagnostics);
   host.append(grid, details);
   const render = () => renderMetricCards(grid, diagnostics.textContent ?? '');
   const observer = new MutationObserver(render);
@@ -608,7 +563,7 @@ function installSharedSimulationControls(
   const firePermissionButton = document.querySelector<HTMLButtonElement>('.simulation-controls [data-action="toggle-fire-permission"]');
   const originalPauseHandler = pauseButton?.onclick ?? null;
   const originalStepHandler = stepButton?.onclick ?? null;
-  const originalSpeedHandlers = speedButtons.map((button) => button.onclick);
+  const originalSpeedHandlers = speedButtons.map((buttonElement) => buttonElement.onclick);
   const originalLegacyFireState = legacyFireButton ? { hidden: legacyFireButton.hidden, disabled: legacyFireButton.disabled } : null;
   const originalFirePermissionState = firePermissionButton ? { hidden: firePermissionButton.hidden, disabled: firePermissionButton.disabled } : null;
 
@@ -620,10 +575,10 @@ function installSharedSimulationControls(
       pauseButton.classList.toggle('active', session.isPaused());
       pauseButton.setAttribute('aria-pressed', String(session.isPaused()));
     }
-    for (const button of speedButtons) {
-      const active = Number(button.dataset.speed) === controller.getSpeed();
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-pressed', String(active));
+    for (const buttonElement of speedButtons) {
+      const active = Number(buttonElement.dataset.speed) === controller.getSpeed();
+      buttonElement.classList.toggle('active', active);
+      buttonElement.setAttribute('aria-pressed', String(active));
     }
   };
   if (pauseButton) pauseButton.onclick = () => {
@@ -638,16 +593,16 @@ function installSharedSimulationControls(
     sync();
     forceRender();
   };
-  speedButtons.forEach((button) => {
-    button.onclick = () => {
-      controller.setSpeed(Number(button.dataset.speed));
+  speedButtons.forEach((buttonElement) => {
+    buttonElement.onclick = () => {
+      controller.setSpeed(Number(buttonElement.dataset.speed));
       sync();
     };
   });
-  for (const button of [legacyFireButton, firePermissionButton]) {
-    if (!button) continue;
-    button.hidden = true;
-    button.disabled = true;
+  for (const buttonElement of [legacyFireButton, firePermissionButton]) {
+    if (!buttonElement) continue;
+    buttonElement.hidden = true;
+    buttonElement.disabled = true;
   }
   sync();
   return {
@@ -655,7 +610,7 @@ function installSharedSimulationControls(
     destroy(): void {
       if (pauseButton) pauseButton.onclick = originalPauseHandler;
       if (stepButton) stepButton.onclick = originalStepHandler;
-      speedButtons.forEach((button, index) => { button.onclick = originalSpeedHandlers[index] ?? null; });
+      speedButtons.forEach((buttonElement, index) => { buttonElement.onclick = originalSpeedHandlers[index] ?? null; });
       if (legacyFireButton && originalLegacyFireState) {
         legacyFireButton.hidden = originalLegacyFireState.hidden;
         legacyFireButton.disabled = originalLegacyFireState.disabled;
@@ -685,43 +640,6 @@ function renderMetricCards(host: HTMLElement, json: string): void {
   if (entries.length === 0) host.append(node('div', 'combat-lab-empty-tab', 'Метрики появятся после прогона.'));
 }
 
-function activateChoice<T extends string>(
-  activeValue: T,
-  buttons: ReadonlyMap<T, HTMLButtonElement>,
-  panels: ReadonlyMap<T, HTMLElement>,
-): void {
-  for (const [value, button] of buttons) {
-    const active = value === activeValue;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-selected', String(active));
-    button.tabIndex = active ? 0 : -1;
-  }
-  for (const [value, panel] of panels) panel.hidden = value !== activeValue;
-}
-
-function choiceButtons<T extends string>(
-  entries: ReadonlyArray<readonly [T, string]>,
-  output: Map<T, HTMLButtonElement>,
-  className: string,
-): HTMLElement {
-  const host = node('nav', className);
-  host.setAttribute('role', 'tablist');
-  for (const [value, label] of entries) {
-    const control = createButton(label);
-    control.setAttribute('role', 'tab');
-    output.set(value, control);
-    host.append(control);
-  }
-  return host;
-}
-
-function createToggle(): HTMLButtonElement {
-  const toggle = createButton('Свернуть', 'combat-lab-dock-toggle combat-lab-drawer-toggle');
-  toggle.setAttribute('aria-expanded', 'true');
-  toggle.setAttribute('aria-controls', 'combat-lab-extension-root');
-  return toggle;
-}
-
 function createButton(label: string, className = ''): HTMLButtonElement {
   const control = document.createElement('button');
   control.type = 'button';
@@ -748,13 +666,13 @@ function keepProductionTickerPaused(session: CombatLabVisualSession): void {
 }
 
 function syncGamePauseControl(session: CombatLabVisualSession): void {
-  const button = document.querySelector<HTMLButtonElement>('#pause-toggle');
-  if (!button) return;
+  const buttonElement = document.querySelector<HTMLButtonElement>('#pause-toggle');
+  if (!buttonElement) return;
   const paused = session.isPaused();
   const label = paused ? 'Пауза: вкл' : 'Пауза: выкл';
-  if (button.textContent !== label) button.textContent = label;
-  if (button.getAttribute('aria-pressed') !== String(paused)) button.setAttribute('aria-pressed', String(paused));
-  button.classList.toggle('hud-toggle-off', !paused);
+  if (buttonElement.textContent !== label) buttonElement.textContent = label;
+  if (buttonElement.getAttribute('aria-pressed') !== String(paused)) buttonElement.setAttribute('aria-pressed', String(paused));
+  buttonElement.classList.toggle('hud-toggle-off', !paused);
 }
 
 function formatMetric(value: unknown): string {

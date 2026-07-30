@@ -61,7 +61,7 @@ export class CombatLabBatchResultsView {
       const card = element('article', 'combat-lab-batch-representative');
       card.append(
         element('strong', '', representativeTitle(result, representative)),
-        element('span', '', `Seed ${representative.seed} · ${formatSeconds(representative.simulatedSeconds)}`),
+        element('span', '', `Начальное число случайности ${representative.seed} · ${formatSeconds(representative.simulatedSeconds)}`),
       );
       const replay = document.createElement('button');
       replay.type = 'button';
@@ -134,12 +134,15 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', 
 function formatInteger(value: number): string {
   return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value);
 }
+
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 3 }).format(value);
 }
+
 function formatPercent(value: number): string {
   return new Intl.NumberFormat('ru-RU', { style: 'percent', maximumFractionDigits: 1 }).format(value);
 }
+
 function formatSeconds(value: number): string {
   return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(value)} с`;
 }

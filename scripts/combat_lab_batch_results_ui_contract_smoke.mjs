@@ -5,7 +5,15 @@ const [panel, css] = await Promise.all([
   readFile('src/combat-lab/ui/CombatLabBatchPanel.ts', 'utf8'),
   readFile('src/combat-lab/ui/combat-lab-batch-results.css', 'utf8'),
 ]);
-for (const text of ['Прогоны', 'Явный список Seed', 'Максимум времени', 'Workers', 'Запустить серию', 'Отменить']) assert.match(panel, new RegExp(text));
+for (const text of [
+  'Число прогонов',
+  'Явный список начальных чисел случайности',
+  'Предельное время, с',
+  'Параллельные обработчики',
+  'Запустить серию',
+  'Отменить',
+]) assert.match(panel, new RegExp(text));
+assert.doesNotMatch(panel, /Legacy source-contract markers|Явный список Seed|Максимум времени|field\('Workers'/);
 assert.match(panel, /runCount.*10_000/s);
 assert.match(panel, /parseCombatLabExplicitSeeds/);
 assert.match(panel, /Строка \$\{lineIndex \+ 1\}, значение \$\{tokenIndex \+ 1\}/);

@@ -34,9 +34,7 @@ export interface CombatLabExplicitSeedParseFailureV1 {
   readonly messageRu: string;
 }
 
-export type CombatLabExplicitSeedParseResultV1 =
-  | CombatLabExplicitSeedParseSuccessV1
-  | CombatLabExplicitSeedParseFailureV1;
+export type CombatLabExplicitSeedParseResultV1 = CombatLabExplicitSeedParseSuccessV1 | CombatLabExplicitSeedParseFailureV1;
 
 export class CombatLabBatchPanel {
   readonly element = document.createElement('section');
@@ -58,9 +56,9 @@ export class CombatLabBatchPanel {
   constructor(private readonly options: CombatLabBatchPanelOptions) {
     this.element.className = 'combat-lab-batch-panel';
     this.seedStrategy.append(
-      option('fixed', 'Один Seed'),
-      option('sequential', 'Последовательные Seed'),
-      option('explicit', 'Явный список Seed'),
+      option('fixed', 'Одно начальное число'),
+      option('sequential', 'Последовательные начальные числа'),
+      option('explicit', 'Явный список начальных чисел'),
     );
     for (let count = 1; count <= 4; count += 1) this.workerCount.append(option(String(count), String(count)));
     this.workerCount.value = String(defaultCombatLabWorkerCount());
@@ -89,20 +87,20 @@ export class CombatLabBatchPanel {
     const controls = document.createElement('div');
     controls.className = 'combat-lab-batch-panel__controls';
     controls.append(
-      field('Прогоны', this.runCount),
-      field('Seed', this.seedStrategy),
-      field('Первый / фиксированный Seed', this.seed),
-      field('Явный список Seed', this.explicitSeeds, 'combat-lab-batch-panel__explicit'),
-      field('Максимум времени, с', this.maximumSeconds),
-      field('Workers', this.workerCount),
+      field('Число прогонов', this.runCount),
+      field('Способ задания случайности', this.seedStrategy),
+      field('Первое или фиксированное начальное число случайности', this.seed),
+      field('Явный список начальных чисел случайности', this.explicitSeeds, 'combat-lab-batch-panel__explicit'),
+      field('Предельное время, с', this.maximumSeconds),
+      field('Параллельные обработчики', this.workerCount),
     );
     const actions = document.createElement('div');
     actions.className = 'combat-lab-batch-panel__actions';
     actions.append(this.startButton, this.cancelButton, this.progress);
     this.element.append(
-      heading('Серия прогонов'),
+      heading('Настройки серии прогонов'),
       controls,
-      heading('Собираемые метрики', 'h4'),
+      heading('Собираемые показатели', 'h4'),
       metrics,
       actions,
       this.status,
@@ -256,15 +254,19 @@ export class CombatLabBatchPanel {
     const runCount = Number(this.runCount.value);
     if (!Number.isInteger(runCount) || runCount < 1 || runCount > 10_000) return failure('Число прогонов должно быть от 1 до 10 000.');
     const seed = Number(this.seed.value);
-    if (!validSeed(seed)) return failure('Seed должен быть целым числом от 1 до 4294967295.');
+    if (!validSeed(seed)) return failure('Начальное число случайности должно быть целым числом от 1 до 4294967295.');
     const maximumSimulationSeconds = Number(this.maximumSeconds.value);
     if (!Number.isFinite(maximumSimulationSeconds) || maximumSimulationSeconds < 0.1 || maximumSimulationSeconds > 600) {
-      return failure('Максимальное время должно быть от 0,1 до 600 секунд.');
+      return failure('Предельное время должно быть от 0,1 до 600 секунд.');
     }
     const workerCount = Number(this.workerCount.value);
-    if (!Number.isInteger(workerCount) || workerCount < 1 || workerCount > 4) return failure('Число workers должно быть от 1 до 4.');
-    const metricIds = [...this.metricInputs.entries()].filter(([, input]) => input.checked).map(([metricId]) => metricId);
-    if (metricIds.length === 0) return failure('Выберите хотя бы одну метрику.');
+    if (!Number.isInteger(workerCount) || workerCount < 1 || workerCount > 4) {
+      return failure('Число параллельных обработчиков должно быть от 1 до 4.');
+    }
+    const metricIds = [...this.metricInputs.entries()]
+      .filter(([, input]) => input.checked)
+      .map(([metricId]) => metricId);
+    if (metricIds.length === 0) return failure('Выберите хотя бы один показатель.');
 
     let seedStrategy: CombatLabExperimentV1['batchDefaults']['seedStrategy'];
     if (this.seedStrategy.value === 'fixed') seedStrategy = { kind: 'fixed', seed };
@@ -272,7 +274,9 @@ export class CombatLabBatchPanel {
     else {
       const parsed = parseCombatLabExplicitSeeds(this.explicitSeeds.value);
       if (!parsed.ok) return failure(parsed.messageRu);
-      if (parsed.seeds.length !== runCount) return failure(`В явном списке ${parsed.seeds.length} Seed, а прогонов указано ${runCount}.`);
+      if (parsed.seeds.length !== runCount) {
+        return failure(`В явном списке ${parsed.seeds.length} начальных чисел, а прогонов указано ${runCount}.`);
+      }
       seedStrategy = { kind: 'explicit', seeds: parsed.seeds };
     }
     return {
@@ -308,13 +312,13 @@ export function parseCombatLabExplicitSeeds(text: string): CombatLabExplicitSeed
       if (!validSeed(seed)) {
         return {
           ok: false,
-          messageRu: `Строка ${lineIndex + 1}, значение ${tokenIndex + 1}: «${token}» не является Seed 1..4294967295.`,
+          messageRu: `Строка ${lineIndex + 1}, значение ${tokenIndex + 1}: «${token}» не является допустимым начальным числом 1..4294967295.`,
         };
       }
       seeds.push(seed);
     }
   }
-  if (seeds.length === 0) return { ok: false, messageRu: 'Явный список Seed пуст.' };
+  if (seeds.length === 0) return { ok: false, messageRu: 'Явный список начальных чисел пуст.' };
   return { ok: true, seeds: Object.freeze(seeds) };
 }
 
@@ -355,7 +359,7 @@ function field(labelRu: string, control: HTMLElement, className = ''): HTMLLabel
   return label;
 }
 function heading(text: string, tag: 'h3' | 'h4' = 'h3'): HTMLHeadingElement {
-  const node = document.createElement(tag);
-  node.textContent = text;
-  return node;
+  const headingElement = document.createElement(tag);
+  headingElement.textContent = text;
+  return headingElement;
 }

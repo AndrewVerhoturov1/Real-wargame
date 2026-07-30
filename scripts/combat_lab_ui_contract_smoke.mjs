@@ -8,6 +8,8 @@ const [
   renderer,
   overlay,
   extension,
+  workspaceHosts,
+  workspaceTabs,
   gameApplication,
   adapter,
   commands,
@@ -26,6 +28,8 @@ const [
   readFile('src/combat-lab/rendering/CombatLabRenderer.ts', 'utf8'),
   readFile('src/combat-lab/rendering/CombatLabDiagnosticOverlayRenderer.ts', 'utf8'),
   readFile('src/combat-lab/CombatLabExtension.ts', 'utf8'),
+  readFile('src/combat-lab/ui/CombatLabWorkspaceHosts.ts', 'utf8'),
+  readFile('src/combat-lab/ui/CombatLabWorkspaceTabs.ts', 'utf8'),
   readFile('src/game/GameApplication.ts', 'utf8'),
   readFile('src/rendering/PixiTacticalBoardAdapter.ts', 'utf8'),
   readFile('src/core/testing/combat-lab/CombatLabCommands.ts', 'utf8'),
@@ -73,13 +77,18 @@ assert.doesNotMatch(renderer, /new Application\s*\(/, 'Combat Lab must not own a
 assert.doesNotMatch(renderer, /tickSimulation\(/, 'Renderer must advance only through CombatLabVisualSession.');
 
 assert.match(extension, /CombatLabShell/);
-assert.match(extension, /combat-lab-drawer/);
-assert.match(extension, /combat-lab-drawer-toggle/);
-assert.match(extension, /aria-expanded/);
+assert.match(extension, /CombatLabWorkspaceTabs\.create/);
+assert.match(workspaceTabs, /combat-lab-drawer/);
+assert.match(workspaceTabs, /combat-lab-drawer-toggle/);
+assert.match(workspaceTabs, /aria-expanded/);
+assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 6, 'Combat Lab must publish exactly six workspace tabs.');
+assert.doesNotMatch(workspaceHosts, /labelRu:\s*'Стенд'/, 'The removed Stand tab must not return.');
 assert.match(extension, /installSharedSimulationControls/);
 assert.match(extension, /data-action="fire-contact"/);
 assert.doesNotMatch(extension, /adoptSimulationSidebar/);
 assert.doesNotMatch(extension, /['"]fighter['"]/);
+assert.doesNotMatch(extension, /Static Stage 10 compatibility markers|LegacyStage10HostContract/);
+assert.doesNotMatch(extension, /installWorkspaceLabelLocalizer|activateTab\('stand'\)|activateMetricsView\('batch'\)/);
 assert.match(scenarioFactories, /aiControl:\s*'manual'/, 'Every Combat Lab fixture must opt out of ordinary Graph AI control.');
 assert.match(scenarioFactories, /disableLegacyAutomaticFire\(state\)/, 'Combat Lab states must lock the old automatic-fire system off.');
 assert.match(combatRules, /legacyAutomaticFireDisabledStates\s*=\s*new WeakSet/);

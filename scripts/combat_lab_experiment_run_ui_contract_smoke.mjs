@@ -16,9 +16,10 @@ assert.match(toolbar, /removeEventListener/);
 assert.match(toolbar, /destroy\(\): void/);
 assert.match(status, /experimentTitleRu/);
 assert.match(status, /simulatedSeconds\.toFixed\(3\)/);
-for (const text of ['Эксперимент', 'Seed', 'Время', 'Состояние', 'Активный шаг', 'Попытка', 'Причина ошибки', 'Условие успеха']) {
+for (const text of ['Эксперимент', 'Начальное число случайности', 'Время', 'Состояние', 'Активный шаг', 'Попытка', 'Причина ошибки', 'Условие успеха']) {
   assert.match(status, new RegExp(text));
 }
+assert.doesNotMatch(status, /row\('Seed'/);
 assert.match(css, /flex-wrap:\s*wrap/);
 assert.match(css, /overflow-x:\s*hidden/);
 assert.doesNotMatch(toolbar + status, /tickSimulation|executeCombatLabCommand|setInterval|requestAnimationFrame/);

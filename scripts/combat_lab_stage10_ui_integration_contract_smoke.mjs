@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [extension, editor, main, css, layoutEnhancements, visualSession] = await Promise.all([
+const [extension, hosts, tabs, editor, main, css, layoutEnhancements, visualSession] = await Promise.all([
   readFile('src/combat-lab/CombatLabExtension.ts', 'utf8'),
+  readFile('src/combat-lab/ui/CombatLabWorkspaceHosts.ts', 'utf8'),
+  readFile('src/combat-lab/ui/CombatLabWorkspaceTabs.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabScenarioEditorPanel.ts', 'utf8'),
   readFile('src/combat-lab/main.ts', 'utf8'),
   readFile('src/combat-lab/combat-lab-workspace.css', 'utf8'),
@@ -10,26 +12,44 @@ const [extension, editor, main, css, layoutEnhancements, visualSession] = await 
   readFile('src/combat-lab/runtime/CombatLabVisualSession.ts', 'utf8'),
 ]);
 
-for (const label of ['Сцена', 'Программа', 'Текущий прогон', 'Серия прогонов']) assert.match(extension, new RegExp(label));
-for (const host of [
-  'toolbarHost', 'runtimeStatusHost', 'sceneHost', 'programHost',
-  'currentMetricsHost', 'batchPanelHost', 'batchResultsHost', 'logHost',
-]) assert.match(extension, new RegExp(`readonly ${host}: HTMLElement`));
+const expectedTabs = [
+  ['scene', 'Сцена'],
+  ['program', 'Программа'],
+  ['batch', 'Серия'],
+  ['parameters', 'Параметры'],
+  ['metrics', 'Метрики'],
+  ['journal', 'Журнал'],
+];
+for (const [tabId, label] of expectedTabs) {
+  assert.match(hosts, new RegExp(`tabId: '${tabId}'`));
+  assert.match(hosts, new RegExp(`labelRu: '${label}'`));
+}
+assert.equal((hosts.match(/tabId:/g) ?? []).length, 6, 'Stage 10 workspace must contain exactly six tabs.');
+assert.doesNotMatch(hosts, /labelRu:\s*'Стенд'/);
+assert.match(tabs, /dock\.append\(header, toolbarHost, tabList, panelHost\)/,
+  'The run toolbar must remain outside switchable tab panels.');
+assert.match(tabs, /panel\.hidden\s*=\s*tabId !== normalized/);
+assert.match(tabs, /readonly hosts: CombatLabWorkspaceHosts/);
 
-assert.match(extension, /onRequestBatch:\s*\(\)\s*=>\s*\{\s*this\.activateTab\('metrics'\);\s*this\.activateMetricsView\('batch'\)/s);
+assert.match(extension, /onRequestBatch:\s*\(\)\s*=>\s*this\.activateTab\('batch'\)/);
 assert.match(extension, /replayCombatLabRepresentativeRun\(this\.visualController, representative\)/);
-assert.match(extension, /this\.activateTab\('stand'\)/);
-assert.doesNotMatch(extension, /replayCombatLabRepresentativeRun[\s\S]{0,250}\.start\(\)/, 'Representative replay must not auto-start.');
+assert.match(extension, /this\.activateTab\('program'\)/);
+assert.doesNotMatch(extension, /replayCombatLabRepresentativeRun[\s\S]{0,250}\.start\(\)/,
+  'Representative replay must not auto-start.');
 assert.match(extension, /onRuntimeChanged:\s*this\.handleRuntimeChanged/);
 assert.match(extension, /this\.runToolbar\?\.refresh\(snapshot\)/);
-assert.match(extension, /this\.runtimeStatus\?\.refresh\(snapshot\)/);
-assert.match(extension, /this\.editorPanel\?\.setRuntimeSnapshot\(snapshot\)/);
+assert.match(extension, /workspace\.isActive\('metrics'\)[\s\S]*this\.runtimeStatus\?\.refresh\(snapshot\)/);
+assert.match(extension, /workspace\.isActive\('program'\)[\s\S]*this\.editorPanel\?\.setRuntimeSnapshot\(snapshot\)/);
 assert.match(extension, /getMode:\s*\(\)\s*=>\s*this\.effectiveMapMode\(\)/);
+assert.doesNotMatch(extension, /activateTab\('stand'\)|activateMetricsView\('batch'\)|activateStandView|activateMetricsView/);
+assert.doesNotMatch(extension, /Static Stage 10 compatibility markers|LegacyStage10HostContract/);
+assert.doesNotMatch(extension, /installWorkspaceLabelLocalizer/);
+
 assert.match(editor, /onSelectionChanged\?:/);
 assert.match(editor, /ensureMutationAllowed\(\)/);
 assert.match(main, /combat-lab:toggle-pause/);
 assert.match(main, /combat-lab:set-paused/);
-assert.match(css, /\.combat-lab-subtab-list/);
+assert.match(css, /\.combat-lab-workspace-tab-list/);
 assert.match(css, /overflow-x:\s*hidden/);
 assert.match(layoutEnhancements, /runToolbar\?\.classList\.add\('combat-lab-run-toolbar'\)/,
   'Stage 10 toolbar host must publish the stable combat-lab-run-toolbar DOM contract.');

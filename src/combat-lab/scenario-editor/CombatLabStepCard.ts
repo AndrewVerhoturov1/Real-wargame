@@ -63,7 +63,7 @@ export class CombatLabStepCard {
       compactFact('Начало', conditionSummary(step.startCondition)),
       compactFact('Завершение', completionSummary(step)),
       compactFact('Повтор', repeatSummary(step)),
-      compactFact('Timeout', `${step.timeoutSeconds} с`),
+      compactFact('Предельное время', `${step.timeoutSeconds} с`),
       compactFact('Ошибка', failurePolicyLabel(step.failurePolicy)),
     );
     if (step.breakpointBefore) body.append(compactFact('Точка остановки', 'перед действием'));

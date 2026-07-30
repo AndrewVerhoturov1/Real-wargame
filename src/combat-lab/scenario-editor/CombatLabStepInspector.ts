@@ -67,8 +67,8 @@ export class CombatLabStepInspector {
     this.root.replaceChildren(
       heading,
       field('Название', title),
-      inlineChecks(labelledCheck('Шаг включён', enabled), labelledCheck('Breakpoint перед шагом', breakpoint)),
-      field('Timeout, с', timeout),
+      inlineChecks(labelledCheck('Шаг включён', enabled), labelledCheck('Точка остановки перед шагом', breakpoint)),
+      field('Предельное время, с', timeout),
       field('При ошибке', failure),
       this.buildActionEditor(experiment, step.action),
       this.buildConditionEditor('Условие начала', experiment, step.startCondition, (condition) => this.update({ startCondition: condition })),
@@ -87,7 +87,7 @@ export class CombatLabStepInspector {
           (accuracyOverrides) => this.update({ accuracyOverrides }),
         );
       } else {
-        accuracyHost.append(text('div', 'combat-lab-editor-note', 'Параметры точности подключаются адаптером штатных Combat Lab accuracy controls.'));
+        accuracyHost.append(text('div', 'combat-lab-editor-note', 'Параметры точности подключаются через штатный адаптер Combat Lab.'));
       }
     }
   }
@@ -145,7 +145,7 @@ export class CombatLabStepInspector {
         ], action.targetPosture, (targetPosture) => this.updateAction({ ...action, targetPosture: targetPosture as typeof action.targetPosture }))));
         break;
       case 'wait':
-        details.append(field('Длительность, с; пусто — ждать condition', nullableNumberInput(action.durationSeconds, 0, 600, 0.1, (durationSeconds) => this.updateAction({ ...action, durationSeconds }))));
+        details.append(field('Длительность, с; пусто — ждать условие', nullableNumberInput(action.durationSeconds, 0, 600, 0.1, (durationSeconds) => this.updateAction({ ...action, durationSeconds }))));
         break;
       case 'reload':
       case 'deploy':
@@ -232,12 +232,12 @@ export class CombatLabStepInspector {
   private buildCompletionEditor(experiment: CombatLabExperimentV1, completion: CombatLabCompletionV1): HTMLElement {
     const details = detailsBlock('Условие завершения', false);
     details.append(field('Тип', selectControl([
-      ['production_action', 'Production action complete'], ['shot_resolved', 'Выстрел разрешён'], ['condition', 'Заданное условие'],
+      ['production_action', 'Игровое действие завершено'], ['shot_resolved', 'Выстрел разрешён'], ['condition', 'Заданное условие'],
     ], completion.kind, (kind) => this.update({ completion: kind === 'condition'
       ? { kind: 'condition', condition: { kind: 'always' } }
       : { kind: kind as 'production_action' | 'shot_resolved' } }))));
     if (completion.kind === 'condition') {
-      details.append(this.buildConditionEditor('Проверяемое condition', experiment, completion.condition, (condition) => this.update({ completion: { kind: 'condition', condition } })));
+      details.append(this.buildConditionEditor('Проверяемое условие', experiment, completion.condition, (condition) => this.update({ completion: { kind: 'condition', condition } })));
     }
     return details;
   }

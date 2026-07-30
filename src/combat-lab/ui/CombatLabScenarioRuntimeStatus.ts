@@ -35,7 +35,7 @@ export class CombatLabScenarioRuntimeStatus {
     this.root.dataset.status = status;
     this.root.replaceChildren(
       row('Эксперимент', `${title} · ревизия ${snapshot.experimentRevision}`),
-      row('Seed', seed === null ? '—' : String(seed)),
+      row('Начальное число случайности', seed === null ? '—' : String(seed)),
       row('Время', `${snapshot.simulatedSeconds.toFixed(3)} с`),
       row('Состояние', statusLabel(status)),
       row('Активный шаг', active ?? '—'),

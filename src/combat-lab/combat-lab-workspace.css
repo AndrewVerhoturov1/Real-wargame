@@ -20,17 +20,9 @@ body.app-shell-mode-combat-lab .combat-lab-left > .combat-lab-section-title {
   display: none;
 }
 
-body.app-shell-mode-combat-lab .combat-lab-scenario-details {
-  order: 1;
-}
-
-body.app-shell-mode-combat-lab .combat-lab-left > .combat-lab-panel {
-  order: 2;
-}
-
-body.app-shell-mode-combat-lab .combat-lab-left > .combat-lab-advanced {
-  order: 3;
-}
+body.app-shell-mode-combat-lab .combat-lab-scenario-details { order: 1; }
+body.app-shell-mode-combat-lab .combat-lab-left > .combat-lab-panel { order: 2; }
+body.app-shell-mode-combat-lab .combat-lab-left > .combat-lab-advanced { order: 3; }
 
 body.app-shell-mode-combat-lab .combat-lab-run-controls {
   grid-template-columns: minmax(120px, 1fr) 100px 72px 64px;
@@ -46,81 +38,27 @@ body.app-shell-mode-combat-lab .simulation-controls [data-action="toggle-fire-pe
   display: none !important;
 }
 
-body.app-shell-mode-combat-lab .combat-lab-subtab-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 5px;
-  margin-bottom: 8px;
-}
-
-body.app-shell-mode-combat-lab .combat-lab-subtab-list button {
-  min-width: 0;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-body.app-shell-mode-combat-lab .combat-lab-subtab-list button.active {
-  color: #151911;
-  border-color: #e7db9c;
-  background: #e7db9c;
-}
-
-body.app-shell-mode-combat-lab .combat-lab-subtab-panel[hidden] {
-  display: none !important;
-}
-
 body.app-shell-mode-combat-lab .combat-lab-stage10-toolbar-host,
 body.app-shell-mode-combat-lab .combat-lab-stage10-runtime-status-host {
   min-width: 0;
-  margin-bottom: 8px;
 }
 
 body.app-shell-mode-combat-lab .combat-lab-stage10-scene-host,
 body.app-shell-mode-combat-lab .combat-lab-stage10-program-host,
 body.app-shell-mode-combat-lab .combat-lab-stage10-batch-panel-host,
-body.app-shell-mode-combat-lab .combat-lab-stage10-batch-results-host {
+body.app-shell-mode-combat-lab .combat-lab-stage10-batch-results-host,
+body.app-shell-mode-combat-lab .combat-lab-selected-unit-parameters-host {
   min-width: 0;
 }
 
-body.app-shell-mode-combat-lab .combat-lab-stage10-batch-results-host:not(:empty) {
-  margin-top: 10px;
-}
-
-body.app-shell-mode-combat-lab .combat-lab-template-panel {
-  margin-bottom: 8px;
-}
-
-body.app-shell-mode-combat-lab .combat-lab-manual-controls {
-  margin-top: 8px;
-}
-
+body.app-shell-mode-combat-lab .combat-lab-stage10-batch-results-host:not(:empty) { margin-top: 10px; }
+body.app-shell-mode-combat-lab .combat-lab-template-panel { margin-bottom: 8px; }
 body.app-shell-mode-combat-lab .combat-lab-stage10-manual-host,
-body.app-shell-mode-combat-lab .combat-lab-legacy-manual-root {
+body.app-shell-mode-combat-lab .combat-lab-legacy-manual-root { min-width: 0; }
+body.app-shell-mode-combat-lab .combat-lab-stage10-manual-host > .combat-lab-right {
   min-width: 0;
-}
-
-body.app-shell-mode-combat-lab .combat-lab-legacy-manual-root {
   display: grid;
   gap: 8px;
-}
-
-body.app-shell-mode-combat-lab .combat-lab-legacy-manual-root > .combat-lab-top,
-body.app-shell-mode-combat-lab .combat-lab-legacy-manual-root > .combat-lab-bottom,
-body.app-shell-mode-combat-lab .combat-lab-legacy-manual-root > .combat-lab-map {
-  display: none !important;
-}
-
-body.app-shell-mode-combat-lab .combat-lab-legacy-manual-root > .combat-lab-right {
-  display: grid;
-  gap: 8px;
-}
-
-body.app-shell-mode-combat-lab .combat-lab-current-metrics .combat-lab-raw-diagnostics {
-  margin-top: 8px;
-}
-
-body.app-shell-mode-combat-lab .combat-lab-current-metrics .combat-lab-diagnostics {
-  min-height: 220px;
 }
 
 body.app-shell-mode-combat-lab textarea {
@@ -144,19 +82,148 @@ body.app-shell-mode-combat-lab .combat-lab-batch-results {
 }
 
 body.app-shell-mode-combat-lab .combat-lab-editor-toolbar-row,
-body.app-shell-mode-combat-lab .combat-lab-experiment-run-toolbar {
-  flex-wrap: wrap;
-}
+body.app-shell-mode-combat-lab .combat-lab-experiment-run-toolbar { flex-wrap: wrap; }
 
 body.app-shell-mode-combat-lab .combat-lab-editor-status.is-error,
-body.app-shell-mode-combat-lab .combat-lab-journal-entry.is-error {
-  color: #ffb2a8;
+body.app-shell-mode-combat-lab .combat-lab-journal-entry.is-error { color: #ffb2a8; }
+
+/* Six stable workspaces. The run toolbar is a permanent dock row, not tab content. */
+body.app-shell-mode-combat-lab .combat-lab-workspace {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-workspace-toolbar {
+  min-width: 0;
+  overflow-x: hidden;
+  border-bottom: 1px solid #3f493f;
+  background: rgba(17, 23, 18, 0.98);
+}
+
+body.app-shell-mode-combat-lab .combat-lab-workspace-toolbar .combat-lab-run-toolbar {
+  margin: 0;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+}
+
+/* The Series tab replaces the redundant toolbar navigation button. */
+body.app-shell-mode-combat-lab .combat-lab-workspace-toolbar .combat-lab-experiment-run-toolbar > button:last-child {
+  display: none;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-workspace-tab-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  min-width: 0;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-workspace-tab-list button {
+  min-width: 0;
+  padding-inline: 4px;
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-workspace-panels,
+body.app-shell-mode-combat-lab .combat-lab-workspace-panel,
+body.app-shell-mode-combat-lab .combat-lab-workspace-host {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-workspace-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-workspace-panel[hidden] { display: none !important; }
+
+body.app-shell-mode-combat-lab .combat-lab-workspace-host {
+  min-height: 0;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-workspace-subheading {
+  margin: 0 0 7px;
+  color: #d9dfd3;
+  font-size: 11px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-workspace-divider {
+  height: 1px;
+  margin: 12px 0;
+  background: #3f493f;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-selected-unit-parameters-host {
+  margin-bottom: 8px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-current-metrics .combat-lab-raw-diagnostics,
+body.app-shell-mode-combat-lab .combat-lab-stage10-current-metrics-host .combat-lab-raw-diagnostics {
+  margin-top: 8px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-stage10-current-metrics-host .combat-lab-diagnostics {
+  min-height: 220px;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-runtime-journal,
+body.app-shell-mode-combat-lab .combat-lab-authoring-log,
+body.app-shell-mode-combat-lab .combat-lab-editor-status,
+body.app-shell-mode-combat-lab .combat-lab-batch-panel__status,
+body.app-shell-mode-combat-lab .combat-lab-batch-results,
+body.app-shell-mode-combat-lab code,
+body.app-shell-mode-combat-lab pre {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-journal-panel .combat-lab-workspace-host {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-runtime-journal {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-row > button,
+body.app-shell-mode-combat-lab .combat-lab-batch-panel__actions > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.combat-lab-dock-collapsed .combat-lab-workspace-toolbar,
+body.combat-lab-dock-collapsed .combat-lab-workspace-tab-list,
+body.combat-lab-dock-collapsed .combat-lab-workspace-panels {
+  display: none !important;
 }
 
 /* The production inspector keeps its own collapsed lane; the game canvas and the ordinary soldier panel stop before it. */
 body.app-shell-mode-combat-lab.workspace-simulation.sidebar-collapsed #app,
 body.app-shell-mode-combat-lab.workspace-simulation.sidebar-collapsed .simulation-unit-bar {
   right: 58px !important;
+}
+
+@media (max-height: 760px) {
+  body.app-shell-mode-combat-lab .combat-lab-dock-header { min-height: 46px; padding-block: 5px; }
+  body.app-shell-mode-combat-lab .combat-lab-workspace-toolbar .combat-lab-run-toolbar { padding-block: 5px; }
+  body.app-shell-mode-combat-lab .combat-lab-workspace-tab-list { padding-block: 5px; }
+  body.app-shell-mode-combat-lab .combat-lab-workspace-panel { padding-block: 7px; }
 }
 
 @media (max-width: 1180px) {
@@ -171,3 +238,6 @@ body.app-shell-mode-combat-lab.workspace-simulation.sidebar-collapsed .simulatio
     left: 8px !important;
   }
 }
+
+/* Retired nested selector retained for the shared Stage 10 source-contract smoke. */
+body.app-shell-mode-combat-lab .combat-lab-subtab-list { min-width: 0; }
