@@ -12,7 +12,7 @@ import type { CombatLabExperimentRunRequestV1, CombatLabExperimentRunResultV1 } 
 import type { CombatLabExperimentV1 } from './CombatLabExperimentContracts';
 import { digestCombatLabExperiment } from './CombatLabExperimentDigest';
 import { validateCombatLabExperiment } from './CombatLabExperimentValidation';
-import { CombatLabScenarioExecutor } from './CombatLabScenarioExecutor';
+import { CombatLabParticipantScenarioExecutor } from './CombatLabParticipantScenarioExecutor';
 
 const MAX_UINT32 = 0xffff_ffff;
 const EPSILON_SECONDS = 1e-9;
@@ -32,7 +32,7 @@ export function runCombatLabExperiment(
   const state = createEmptySimulationState();
   restoreSimulationStateFromSceneSnapshot(state, experiment.sceneSnapshot);
   const startedSeconds = state.simulationTimeSeconds;
-  const executor = CombatLabScenarioExecutor.create(experiment, state);
+  const executor = CombatLabParticipantScenarioExecutor.create(experiment, state);
   const metricCollector = createCombatLabMetricCollector(state);
   let commandDigest = digestStableValue({ schemaVersion: 1, seed: request.seed, commandResults: [] });
   const maximumSeconds = Math.min(
@@ -111,40 +111,15 @@ function prepareExperimentForHeadlessRun(
     defaults: {
       ...experiment.defaults,
       seed,
-      accuracyOverrides: withRunSeed(experiment.defaults.accuracyOverrides, seed, 0),
     },
-    tracks: experiment.tracks.map((track, trackIndex) => ({
+    tracks: experiment.tracks.map((track) => ({
       ...track,
-      steps: track.steps.map((step, stepIndex) => ({
+      steps: track.steps.map((step) => ({
         ...step,
         breakpointBefore: false,
-        accuracyOverrides: withRunSeed(
-          step.accuracyOverrides,
-          seed,
-          trackIndex * 1_024 + stepIndex + 1,
-        ),
       })),
     })),
   };
-}
-
-function withRunSeed<T extends { readonly randomSeed: number } | null>(
-  overrides: T,
-  seed: number,
-  salt: number,
-): T {
-  if (!overrides) return overrides;
-  return { ...overrides, randomSeed: deriveSeed(seed, salt) } as T;
-}
-
-function deriveSeed(seed: number, salt: number): number {
-  let value = (seed + Math.imul(salt + 1, 0x9e37_79b9)) >>> 0;
-  value ^= value >>> 16;
-  value = Math.imul(value, 0x85eb_ca6b) >>> 0;
-  value ^= value >>> 13;
-  value = Math.imul(value, 0xc2b2_ae35) >>> 0;
-  value ^= value >>> 16;
-  return value === 0 ? 1 : value;
 }
 
 function createEmptySimulationState(): SimulationState {

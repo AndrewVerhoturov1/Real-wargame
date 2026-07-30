@@ -72,13 +72,15 @@ export function validateCombatLabExperiment(
     issues.push(error('combat_lab_marker_limit_exceeded', `Число меток превышает предел ${COMBAT_LAB_EXPERIMENT_LIMITS_V1.maximumMarkers}.`, '$.markers'));
   }
 
-  const roleIds = collectUniqueIds(roles, 'roleId', '$.roles', 'combat_lab_role_id_duplicate', 'Роль', issues);
+  const roleIds = collectUniqueIds(roles, 'roleId', '$.roles', 'combat_lab_role_id_duplicate', 'Участник', issues);
   const markerIds = collectUniqueIds(markers, 'markerId', '$.markers', 'combat_lab_marker_id_duplicate', 'Метка', issues);
   const trackIds = collectUniqueIds(tracks, 'trackId', '$.tracks', 'combat_lab_track_id_duplicate', 'Дорожка', issues);
+  validateParticipantRecords(roles, issues);
+
   const stepLocations: StepLocation[] = [];
   tracks.forEach((track, trackIndex) => {
     const trackPath = `$.tracks[${trackIndex}]`;
-    if (!roleIds.has(track.actorRoleId)) missingReference(issues, 'combat_lab_track_actor_missing', 'Исполнитель дорожки не найден среди ролей.', `${trackPath}.actorRoleId`);
+    if (!roleIds.has(track.actorRoleId)) missingReference(issues, 'combat_lab_track_actor_missing', 'Исполнитель дорожки не найден среди участников.', `${trackPath}.actorRoleId`);
     if (track.enabled === false) {
       issues.push(warning('combat_lab_track_disabled', 'Отключённая дорожка статически недостижима при запуске.', trackPath));
     }
@@ -100,7 +102,7 @@ export function validateCombatLabExperiment(
   const sceneUnitIds = new Set(sceneUnits.map((unit) => unit.id));
   roles.forEach((role, index) => {
     if (!sceneUnitIds.has(role.unitId)) {
-      issues.push(error('combat_lab_role_unit_missing', `Боец роли «${role.roleId}» отсутствует в снимке сцены.`, `$.roles[${index}].unitId`));
+      issues.push(error('combat_lab_role_unit_missing', `Боец участника «${role.roleId}» отсутствует в снимке сцены.`, `$.roles[${index}].unitId`));
     }
   });
 
@@ -134,4 +136,69 @@ export function validateCombatLabExperiment(
   detectDependencyCycles(stepLocations, issues);
 
   return issues;
+}
+
+function validateParticipantRecords(
+  roles: readonly CombatLabExperimentRoleV1[],
+  issues: CombatLabExperimentIssueV1[],
+): void {
+  const unitOwners = new Map<string, number>();
+  roles.forEach((role, index) => {
+    const path = `$.roles[${index}]`;
+    if (!role.unitId?.trim()) issues.push(error('combat_lab_participant_unit_id_invalid', 'Идентификатор бойца должен быть непустой строкой.', `${path}.unitId`));
+    if (!role.titleRu?.trim()) issues.push(error('combat_lab_participant_title_invalid', 'Имя бойца должно быть непустой строкой.', `${path}.titleRu`));
+    const previous = unitOwners.get(role.unitId);
+    if (previous !== undefined) {
+      issues.push(error('combat_lab_participant_unit_duplicate', `Один боец начальной сцены назначен участникам ${previous + 1} и ${index + 1}.`, `${path}.unitId`));
+    } else if (role.unitId) {
+      unitOwners.set(role.unitId, index);
+    }
+    validateParticipantParameters(role, path, issues);
+  });
+}
+
+function validateParticipantParameters(
+  role: CombatLabExperimentRoleV1,
+  path: string,
+  issues: CombatLabExperimentIssueV1[],
+): void {
+  if (role.parameters === undefined) return;
+  const parameters = asRecord(role.parameters);
+  if (!parameters || parameters.schemaVersion !== 1) {
+    issues.push(error('combat_lab_participant_parameters_invalid', 'Параметры бойца должны иметь schemaVersion: 1.', `${path}.parameters`));
+    return;
+  }
+  if (parameters.accuracy === null) return;
+  const accuracy = asRecord(parameters.accuracy);
+  if (!accuracy) {
+    issues.push(error('combat_lab_participant_accuracy_invalid', 'Параметры точности бойца должны быть объектом или null.', `${path}.parameters.accuracy`));
+    return;
+  }
+  finiteRange(accuracy.dispersionMultiplier, 0.25, 4, `${path}.parameters.accuracy.dispersionMultiplier`, issues);
+  finiteRange(accuracy.aimTimeSeconds, 0.1, 10, `${path}.parameters.accuracy.aimTimeSeconds`, issues);
+  finiteRange(accuracy.shootingSkill, 0, 1, `${path}.parameters.accuracy.shootingSkill`, issues);
+  finiteRange(accuracy.randomnessMultiplier, 0, 2, `${path}.parameters.accuracy.randomnessMultiplier`, issues);
+  if (accuracy.physicalAimThreshold !== undefined) finiteRange(accuracy.physicalAimThreshold, 0, 1, `${path}.parameters.accuracy.physicalAimThreshold`, issues);
+  if (accuracy.weaponProficiency !== 'untrained' && accuracy.weaponProficiency !== 'trained' && accuracy.weaponProficiency !== 'specialist') {
+    issues.push(error('combat_lab_participant_proficiency_invalid', 'Неизвестный уровень владения оружием.', `${path}.parameters.accuracy.weaponProficiency`));
+  }
+  if (!Number.isInteger(accuracy.randomSeed) || finite(accuracy.randomSeed) < 1 || finite(accuracy.randomSeed) > 0xffff_ffff) {
+    issues.push(error('combat_lab_participant_random_seed_invalid', 'Seed параметров бойца должен быть целым числом в диапазоне 1..4294967295.', `${path}.parameters.accuracy.randomSeed`));
+  }
+  if (accuracy.usePhysicalAimThreshold !== true) {
+    issues.push(error('combat_lab_participant_aim_mode_invalid', 'Параметры бойца должны использовать физический порог прицеливания.', `${path}.parameters.accuracy.usePhysicalAimThreshold`));
+  }
+}
+
+function finiteRange(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+  path: string,
+  issues: CombatLabExperimentIssueV1[],
+): void {
+  const numeric = finite(value, Number.NaN);
+  if (!Number.isFinite(numeric) || numeric < minimum || numeric > maximum) {
+    issues.push(error('combat_lab_participant_accuracy_range_invalid', `Значение должно находиться в диапазоне ${minimum}..${maximum}.`, path));
+  }
 }

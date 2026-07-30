@@ -15,7 +15,7 @@ function semanticExperimentValue(experiment: CombatLabExperimentV1): unknown {
     roles: experiment.roles.map((role) => ({
       roleId: role.roleId,
       unitId: role.unitId,
-      selectableAs: [...role.selectableAs],
+      parameters: role.parameters ?? { schemaVersion: 1, accuracy: null },
     })),
     markers: experiment.markers.map((marker) => marker.kind === 'circle'
       ? {
@@ -77,9 +77,7 @@ function semanticSceneSnapshot(scene: CombatLabExperimentV1['sceneSnapshot']): u
   return {
     ...rest,
     ...(staticTacticalPositionArtifact
-      ? {
-          staticTacticalPositionArtifact: stripVolatileArtifactMetadata(staticTacticalPositionArtifact),
-        }
+      ? { staticTacticalPositionArtifact: stripVolatileArtifactMetadata(staticTacticalPositionArtifact) }
       : {}),
   };
 }
@@ -90,10 +88,5 @@ function stripVolatileArtifactMetadata(value: unknown): unknown {
   return rest;
 }
 
-function semanticCondition(condition: CombatLabConditionV1): CombatLabConditionV1 {
-  return condition;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+function semanticCondition(condition: CombatLabConditionV1): CombatLabConditionV1 { return condition; }
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
