@@ -2,6 +2,8 @@ import type {
   CombatLabExperimentV1,
   CombatLabScenarioRuntimeSnapshotV1,
 } from '../../core/testing/combat-lab/experiment';
+import { sharedMapInputOwnership, type MapInputLease } from '../../input/MapInputOwnership';
+import { CombatLabActionDialog } from './CombatLabActionDialog';
 import { CombatLabEditorHistory } from './CombatLabEditorHistory';
 import type { CombatLabExperimentDraft } from './CombatLabExperimentDraft';
 import type { CombatLabMapPickRequestV1 } from './CombatLabMapAuthoringController';
@@ -9,7 +11,6 @@ import type {
   CombatLabScenarioEditorCapabilitiesV1,
   CombatLabSelectedStepV1,
 } from './CombatLabScenarioEditorTypes';
-import { CombatLabStepInspector } from './CombatLabStepInspector';
 import { CombatLabTrackList } from './CombatLabTrackList';
 import './combat-lab-scenario-editor.css';
 
@@ -32,10 +33,10 @@ export class CombatLabScenarioEditorPanel {
   readonly root = document.createElement('section');
   private readonly status = document.createElement('div');
   private readonly trackHost = document.createElement('div');
-  private readonly inspectorHost = document.createElement('div');
   private readonly history: CombatLabEditorHistory;
   private readonly trackList: CombatLabTrackList;
-  private readonly inspector: CombatLabStepInspector;
+  private actionDialog: CombatLabActionDialog | null = null;
+  private mapInputLease: MapInputLease | null = null;
   private runtimeSnapshot: CombatLabScenarioRuntimeSnapshotV1 | null = null;
   private runtimePresentationKey = '';
   private selectedStep: CombatLabSelectedStepV1 | null = null;
@@ -47,13 +48,13 @@ export class CombatLabScenarioEditorPanel {
     this.root.className = 'combat-lab-scenario-editor';
     this.root.setAttribute('aria-label', 'Редактор программы эксперимента');
     this.mapMode = options.initialMapMode ?? 'scenario_editor';
+    this.syncMapInputOwnership();
     this.history = new CombatLabEditorHistory(options.draft.getExperiment());
     const toolbar = this.buildToolbar();
     this.status.className = 'combat-lab-editor-status';
     this.status.setAttribute('role', 'status');
     this.trackHost.className = 'combat-lab-editor-track-host';
-    this.inspectorHost.className = 'combat-lab-editor-inspector-host';
-    this.root.append(toolbar, this.status, this.trackHost, this.inspectorHost);
+    this.root.append(toolbar, this.status, this.trackHost);
     options.host.append(this.root);
     this.syncModeButtons();
 
@@ -64,13 +65,7 @@ export class CombatLabScenarioEditorPanel {
       getRuntimeSnapshot: () => this.runtimeSnapshot,
       getSelectedStep: () => this.selectedStep,
       onSelectStep: (trackId, stepId) => this.selectStep(trackId, stepId),
-      onDraftMutation: (mutation) => this.applyMutation(mutation),
-      onError: (messageRu) => this.showStatus(messageRu, true),
-    });
-    this.inspector = new CombatLabStepInspector({
-      host: this.inspectorHost,
-      draft: options.draft,
-      capabilities: options.capabilities,
+      onEditStep: (trackId, stepId, returnFocusTo) => this.openActionDialog(trackId, stepId, returnFocusTo),
       onDraftMutation: (mutation) => this.applyMutation(mutation),
       onError: (messageRu) => this.showStatus(messageRu, true),
     });
@@ -79,9 +74,7 @@ export class CombatLabScenarioEditorPanel {
     this.showStatus('Программа готова к редактированию.', false);
   }
 
-  static create(options: CombatLabScenarioEditorPanelOptions): CombatLabScenarioEditorPanel {
-    return new CombatLabScenarioEditorPanel(options);
-  }
+  static create(options: CombatLabScenarioEditorPanelOptions): CombatLabScenarioEditorPanel { return new CombatLabScenarioEditorPanel(options); }
 
   setRuntimeSnapshot(snapshot: CombatLabScenarioRuntimeSnapshotV1 | null): void {
     this.runtimeSnapshot = snapshot;
@@ -100,23 +93,15 @@ export class CombatLabScenarioEditorPanel {
     this.options.onSelectRole(track.actorRoleId);
     this.publishSelection();
     this.trackList.render();
-    this.renderInspector();
   }
 
-  getMapMode(): CombatLabMapInteractionModeV1 {
-    return this.mapMode;
-  }
-
-  getSelectedActorRoleId(): string | null {
-    return this.selectedActorRoleId;
-  }
-
-  getSelectedStep(): CombatLabSelectedStepV1 | null {
-    return this.selectedStep ? { ...this.selectedStep } : null;
-  }
+  getMapMode(): CombatLabMapInteractionModeV1 { return this.mapMode; }
+  getSelectedActorRoleId(): string | null { return this.selectedActorRoleId; }
+  getSelectedStep(): CombatLabSelectedStepV1 | null { return this.selectedStep ? { ...this.selectedStep } : null; }
 
   acceptExternalExperiment(experiment: CombatLabExperimentV1, recordHistory = true): void {
     if (this.destroyed) return;
+    this.closeActionDialog();
     this.options.draft.replaceExperiment(experiment);
     if (recordHistory) this.history.execute(experiment);
     this.ensureSelectionExists(experiment);
@@ -128,10 +113,33 @@ export class CombatLabScenarioEditorPanel {
     if (this.destroyed) return;
     this.destroyed = true;
     window.removeEventListener('keydown', this.handleGlobalKeyDown);
+    this.closeActionDialog();
     this.trackList.destroy();
-    this.inspector.destroy();
+    this.mapInputLease?.release();
+    this.mapInputLease = null;
+    sharedMapInputOwnership.release('combat-lab-authoring');
     this.options.onSelectionChanged?.(null);
     this.root.remove();
+  }
+
+  private openActionDialog(trackId: string, stepId: string, returnFocusTo: HTMLElement): void {
+    if (!this.ensureMutationAllowed()) return;
+    this.selectStep(trackId, stepId);
+    this.closeActionDialog();
+    this.actionDialog = CombatLabActionDialog.open({
+      draft: this.options.draft,
+      trackId,
+      stepId,
+      capabilities: this.options.capabilities,
+      onDraftMutation: (mutation) => this.applyMutation(mutation),
+      onError: (messageRu) => this.showStatus(messageRu, true),
+      returnFocusTo,
+    });
+  }
+
+  private closeActionDialog(): void {
+    this.actionDialog?.destroy();
+    this.actionDialog = null;
   }
 
   private buildToolbar(): HTMLElement {
@@ -165,12 +173,12 @@ export class CombatLabScenarioEditorPanel {
     const trackGroup = document.createElement('div');
     trackGroup.className = 'combat-lab-editor-toolbar-row';
     const roleSelect = document.createElement('select');
-    roleSelect.setAttribute('aria-label', 'Роль для новой дорожки');
+    roleSelect.setAttribute('aria-label', 'Боец для новой дорожки');
     this.fillRoleSelect(roleSelect);
     const addTrack = button('Создать дорожку', () => {
       if (!this.ensureMutationAllowed()) return;
       const roleId = roleSelect.value;
-      if (!roleId) return this.showStatus('Сначала назначьте роль бойцу.', true);
+      if (!roleId) return this.showStatus('Сначала выберите бойца.', true);
       this.applyMutation(() => {
         const trackId = this.options.draft.addTrack(roleId);
         this.selectedActorRoleId = roleId;
@@ -188,13 +196,12 @@ export class CombatLabScenarioEditorPanel {
     select.replaceChildren();
     const placeholder = document.createElement('option');
     placeholder.value = '';
-    placeholder.textContent = 'Роль исполнителя…';
+    placeholder.textContent = 'Боец…';
     select.append(placeholder);
-    const experiment = this.options.draft.getExperiment();
-    for (const role of experiment.roles) {
+    for (const role of this.options.draft.getExperiment().roles) {
       const option = document.createElement('option');
       option.value = role.roleId;
-      option.textContent = `${role.titleRu} · ${role.roleId}`;
+      option.textContent = role.titleRu;
       select.append(option);
     }
   }
@@ -202,11 +209,22 @@ export class CombatLabScenarioEditorPanel {
   private setMapMode(mode: CombatLabMapInteractionModeV1): void {
     if (this.mapMode === mode) return;
     this.mapMode = mode;
+    this.syncMapInputOwnership();
     this.syncModeButtons();
     this.options.onMapModeChanged?.(mode);
-    this.showStatus(mode === 'scenario_editor'
-      ? 'Правая кнопка добавляет действия в программу.'
-      : 'Правая кнопка снова отдаёт непосредственные игровые приказы.', false);
+    this.showStatus(mode === 'scenario_editor' ? 'Правая кнопка добавляет действия в программу.' : 'Правая кнопка снова отдаёт непосредственные игровые приказы.', false);
+  }
+
+  private syncMapInputOwnership(): void {
+    if (this.mapMode === 'manual_control') {
+      this.mapInputLease?.release();
+      this.mapInputLease = null;
+      sharedMapInputOwnership.release('combat-lab-authoring');
+      return;
+    }
+    if (this.mapInputLease || sharedMapInputOwnership.isOwnedBy('combat-lab-authoring')) return;
+    this.mapInputLease = sharedMapInputOwnership.acquire('combat-lab-authoring');
+    if (!this.mapInputLease) this.showStatus?.('Карта занята другим инструментом. Завершите текущий жест.', true);
   }
 
   private syncModeButtons(): void {
@@ -228,11 +246,12 @@ export class CombatLabScenarioEditorPanel {
     this.publishSelection();
     this.options.onExperimentChanged(next);
     this.renderAll();
-    this.showStatus(`Изменение сохранено · revision ${next.revision}.`, false);
+    this.showStatus('Изменение сохранено.', false);
   }
 
   private undo(): void {
     if (!this.ensureMutationAllowed()) return;
+    this.closeActionDialog();
     const previous = this.history.undo();
     if (!previous) return this.showStatus('Отменять больше нечего.', false);
     this.options.draft.replaceExperiment(previous);
@@ -240,11 +259,12 @@ export class CombatLabScenarioEditorPanel {
     this.publishSelection();
     this.options.onExperimentChanged(previous);
     this.renderAll();
-    this.showStatus(`Отменено · revision ${previous.revision}.`, false);
+    this.showStatus('Изменение отменено.', false);
   }
 
   private redo(): void {
     if (!this.ensureMutationAllowed()) return;
+    this.closeActionDialog();
     const next = this.history.redo();
     if (!next) return this.showStatus('Повторять больше нечего.', false);
     this.options.draft.replaceExperiment(next);
@@ -252,7 +272,7 @@ export class CombatLabScenarioEditorPanel {
     this.publishSelection();
     this.options.onExperimentChanged(next);
     this.renderAll();
-    this.showStatus(`Повторено · revision ${next.revision}.`, false);
+    this.showStatus('Изменение повторено.', false);
   }
 
   private ensureSelectionExists(experiment: CombatLabExperimentV1): void {
@@ -278,19 +298,12 @@ export class CombatLabScenarioEditorPanel {
 
   private renderAll(): void {
     this.trackList.render();
-    this.renderInspector();
     const roleSelect = this.root.querySelector<HTMLSelectElement>('.combat-lab-editor-toolbar-row select');
     if (roleSelect) this.fillRoleSelect(roleSelect);
     this.syncModeButtons();
   }
 
-  private renderInspector(): void {
-    this.inspector.render(this.selectedStep?.trackId ?? null, this.selectedStep?.stepId ?? null);
-  }
-
-  private publishSelection(): void {
-    this.options.onSelectionChanged?.(this.getSelectedStep());
-  }
+  private publishSelection(): void { this.options.onSelectionChanged?.(this.getSelectedStep()); }
 
   private ensureMutationAllowed(): boolean {
     if (this.options.isMutationAllowed?.() !== false) return true;
@@ -319,15 +332,8 @@ export class CombatLabScenarioEditorPanel {
 
 function buildRuntimePresentationKey(snapshot: CombatLabScenarioRuntimeSnapshotV1 | null): string {
   if (!snapshot) return 'none';
-  return snapshot.steps.map((step) => [
-    step.trackId,
-    step.stepId,
-    step.state,
-    step.reasonCode ?? '',
-    step.reasonRu ?? '',
-  ].join('\u0000')).join('\u0001');
+  return snapshot.steps.map((step) => [step.trackId, step.stepId, step.state, step.reasonCode ?? '', step.reasonRu ?? ''].join('\u0000')).join('\u0001');
 }
-
 function button(label: string, onClick: () => void, className = '', title = ''): HTMLButtonElement {
   const control = document.createElement('button');
   control.type = 'button';
@@ -337,10 +343,6 @@ function button(label: string, onClick: () => void, className = '', title = ''):
   control.addEventListener('click', onClick);
   return control;
 }
-
 function isTextEntry(target: EventTarget | null): boolean {
-  return target instanceof HTMLInputElement
-    || target instanceof HTMLTextAreaElement
-    || target instanceof HTMLSelectElement
-    || (target instanceof HTMLElement && target.isContentEditable);
+  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable);
 }

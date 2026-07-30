@@ -30,6 +30,8 @@ export type CombatLabFailurePolicyV1 = 'stop_experiment' | 'wait' | 'skip_step';
 export type CombatLabPostureV1 = Extract<CombatLabScriptCommandV1, { readonly kind: 'posture' }>['targetPosture'];
 export type CombatLabFireModeV1 = Extract<CombatLabScriptCommandV1, { readonly kind: 'fire' }>['mode'];
 export type CombatLabFirstAidZoneV1 = Extract<CombatLabScriptCommandV1, { readonly kind: 'first_aid' }>['zone'];
+export type CombatLabTacticalOrderPresetV1 = 'move' | 'recon' | 'assault';
+export type CombatLabCancelActionTargetV1 = 'movement' | 'fire' | 'reload' | 'deployment' | 'transfer' | 'first_aid';
 
 export interface CombatLabExperimentV1 {
   readonly schemaVersion: 1;
@@ -120,8 +122,17 @@ export type CombatLabActionV1 =
       readonly minimumPerceptionQuality: number;
       readonly forceFire: boolean;
     }
+  /** Legacy import-only alias. New authoring uses cancel_action/fire. */
   | { readonly kind: 'stop_fire'; readonly actorRoleId: string }
-  | { readonly kind: 'move'; readonly actorRoleId: string; readonly markerId: string }
+  | {
+      readonly kind: 'move';
+      readonly actorRoleId: string;
+      readonly markerId: string;
+      readonly tacticalOrderPresetId?: CombatLabTacticalOrderPresetV1;
+      readonly finalFacingMarkerId?: string | null;
+    }
+  | { readonly kind: 'face'; readonly actorRoleId: string; readonly markerId: string }
+  | { readonly kind: 'cancel_action'; readonly actorRoleId: string; readonly target: CombatLabCancelActionTargetV1 }
   | { readonly kind: 'posture'; readonly actorRoleId: string; readonly targetPosture: CombatLabPostureV1 }
   | { readonly kind: 'wait'; readonly durationSeconds: number | null }
   | { readonly kind: 'reload'; readonly actorRoleId: string; readonly helperRoleId: string | null }

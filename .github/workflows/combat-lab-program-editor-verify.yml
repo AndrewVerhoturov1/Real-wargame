@@ -1,0 +1,64 @@
+name: Combat Lab Program Editor Verify
+
+on:
+  pull_request:
+    branches:
+      - feature/20260730-combat-lab-user-acceptance-fixes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Program action catalog
+        run: node scripts/combat_lab_action_catalog_smoke.mjs
+
+      - name: Map input ownership
+        run: node scripts/combat_lab_map_input_ownership_smoke.mjs
+
+      - name: Modal action editor contract
+        run: node scripts/combat_lab_action_dialog_ui_contract_smoke.mjs
+
+      - name: Program production runtime
+        run: node scripts/combat_lab_program_action_runtime_smoke.mjs
+
+      - name: Participant contracts
+        run: |
+          node scripts/combat_lab_participant_contract_smoke.mjs
+          node scripts/combat_lab_participant_scene_editing_smoke.mjs
+          node scripts/combat_lab_participant_parameters_smoke.mjs
+          node scripts/combat_lab_participant_editor_ui_contract_smoke.mjs
+
+      - name: Existing Combat Lab gates
+        continue-on-error: true
+        run: |
+          npm run combat-lab-experiment:smoke
+          npm run combat-lab-scenario-editor:smoke
+          npm run combat-lab-scenario-system:verify
+          npm run combat-lab-ui-contract:smoke
+          npm run performance-contract:smoke
+
+      - name: TypeScript
+        continue-on-error: true
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build

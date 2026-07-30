@@ -1,17 +1,19 @@
-import type { CameraController } from '../../input/CameraController';
 import { clampGridPositionToMap, worldToGrid } from '../../core/map/MapModel';
 import type { SimulationState } from '../../core/simulation/SimulationState';
 import { findUnitAtGridPosition, type UnitModel } from '../../core/units/UnitModel';
 import type {
   CombatLabExperimentRoleV1,
   CombatLabExperimentV1,
-  CombatLabFireModeV1,
   CombatLabScenarioStepV1,
 } from '../../core/testing/combat-lab/experiment';
 import type { GameApplicationContext } from '../../game/GameApplicationTypes';
-import { CombatLabExperimentDraft } from './CombatLabExperimentDraft';
+import type { CameraController } from '../../input/CameraController';
+import type { CombatLabActionDescriptorV1 } from './CombatLabActionCatalog';
+import { getCombatLabActionDescriptor } from './CombatLabActionCatalog';
+import type { CombatLabExperimentDraft } from './CombatLabExperimentDraft';
 import {
   createCombatLabScenarioStep,
+  createCombatLabScenarioStepFromCatalog,
   markerAt,
 } from './CombatLabEditorFactories';
 import { CombatLabMapContextMenu, type CombatLabMapContextMenuItemV1 } from './CombatLabMapContextMenu';
@@ -54,7 +56,7 @@ export class CombatLabMapAuthoringController {
   private constructor(private readonly options: CombatLabMapAuthoringControllerOptions) {
     const internals = options.context.board as unknown as CombatLabBoardAuthoringInternals;
     if (!internals.app?.canvas || typeof internals.camera?.screenToWorld !== 'function') {
-      throw new Error('Production board не предоставляет существующее преобразование координат карты.');
+      throw new Error('Карта не предоставляет штатное преобразование координат.');
     }
     this.canvas = internals.app.canvas;
     this.camera = internals.camera;
@@ -78,9 +80,7 @@ export class CombatLabMapAuthoringController {
     this.menu.close();
     this.pendingPick = request;
     this.canvas.dataset.combatLabMapPick = request.kind;
-    this.message(request.kind === 'target_role'
-      ? 'Выберите бойца левой кнопкой на карте.'
-      : 'Укажите место левой кнопкой на карте.', false);
+    this.message(request.kind === 'target_role' ? 'Выберите бойца левой кнопкой на карте.' : 'Укажите место левой кнопкой на карте.', false);
   }
 
   syncMode(): void {
@@ -148,12 +148,7 @@ export class CombatLabMapAuthoringController {
   private resolvePoint(event: { readonly clientX: number; readonly clientY: number }): AuthoredPoint {
     const world = this.camera.screenToWorld(event);
     const grid = clampGridPositionToMap(this.options.state.map, worldToGrid(this.options.state.map, world));
-    return {
-      gridX: grid.x,
-      gridY: grid.y,
-      xMetres: grid.x * this.options.state.map.metersPerCell,
-      yMetres: grid.y * this.options.state.map.metersPerCell,
-    };
+    return { gridX: grid.x, gridY: grid.y, xMetres: grid.x * this.options.state.map.metersPerCell, yMetres: grid.y * this.options.state.map.metersPerCell };
   }
 
   private completePick(request: CombatLabMapPickRequestV1, point: AuthoredPoint): void {
@@ -161,14 +156,7 @@ export class CombatLabMapAuthoringController {
       if (request.kind === 'point_marker' || request.kind === 'circle_marker') {
         const committed = this.commitComposite((draft) => {
           const experiment = draft.getExperiment();
-          draft.addMarker(markerAt(
-            experiment,
-            request.kind === 'circle_marker' ? 'circle' : 'point',
-            request.suggestedTitleRu,
-            point.xMetres,
-            point.yMetres,
-            request.kind === 'circle_marker' ? request.defaultRadiusMetres : 5,
-          ));
+          draft.addMarker(markerAt(experiment, request.kind === 'circle_marker' ? 'circle' : 'point', request.suggestedTitleRu, point.xMetres, point.yMetres, request.kind === 'circle_marker' ? request.defaultRadiusMetres : 5));
         });
         if (committed) this.message(request.kind === 'circle_marker' ? 'Круглая область создана.' : 'Точечная метка создана.', false);
       } else {
@@ -178,12 +166,9 @@ export class CombatLabMapAuthoringController {
           const targetRole = ensureRoleForUnit(draft, unit);
           const experiment = draft.getExperiment();
           const actorRole = experiment.roles.find((role) => role.roleId === request.actorRoleId);
-          if (!actorRole) throw new Error(`Роль исполнителя «${request.actorRoleId}» не найдена.`);
-          const step = createCombatLabScenarioStep(experiment, actorRole.roleId, request.actionKind, {
-            targetRoleId: targetRole.roleId,
-            markerId: null,
-          });
-          appendStep(draft, actorRole.roleId, step);
+          if (!actorRole) throw new Error('Исполнитель не найден.');
+          const descriptorId = request.actionKind === 'fire' ? 'fire-single' : request.actionKind === 'first_aid' ? 'first-aid' : 'transfer';
+          appendStep(draft, actorRole.roleId, createCombatLabScenarioStepFromCatalog(experiment, actorRole.roleId, descriptorId, { targetRoleId: targetRole.roleId, markerId: null }));
         });
         if (committed) this.message('Цель выбрана, действие добавлено в дорожку.', false);
       }
@@ -200,86 +185,27 @@ export class CombatLabMapAuthoringController {
     const actorRoleId = this.options.getSelectedActorRoleId();
     const actorRole = experiment.roles.find((role) => role.roleId === actorRoleId);
     const actorUnit = actorRole ? this.options.state.units.find((unit) => unit.id === actorRole.unitId) : undefined;
-    if (!actorRole || !actorUnit) {
-      return [disabledItem('actor-required', 'Сначала выберите дорожку исполнителя', 'Действие добавляется только в выбранную дорожку.')];
-    }
-    if (!target) return this.groundItems(point, actorRole, actorUnit);
-    return target.side === actorUnit.side
-      ? this.friendlyItems(target, actorRole)
-      : this.enemyItems(target, actorRole, actorUnit);
+    if (!actorRole || !actorUnit) return [disabledItem('actor-required', 'Сначала выберите дорожку бойца', 'Действие добавляется в выбранную дорожку.')];
+    if (!target) return this.groundItems(point, actorRole);
+    return target.side === actorUnit.side ? this.friendlyItems(target, actorRole) : this.enemyItems(target, actorRole, actorUnit);
   }
 
   private enemyItems(target: UnitModel, actorRole: CombatLabExperimentRoleV1, actorUnit: UnitModel): readonly CombatLabMapContextMenuItemV1[] {
-    const experiment = this.options.draft.getExperiment();
-    const existingTargetRole = experiment.roles.find((role) => role.unitId === target.id);
-    const fireModes: ReadonlyArray<readonly [CombatLabFireModeV1, string]> = [
-      ['single', 'Одиночный выстрел'],
-      ['short_burst', 'Короткая очередь'],
-      ['long_burst', 'Длинная очередь'],
-      ['suppress', 'Подавляющий огонь'],
-    ];
-    const items: CombatLabMapContextMenuItemV1[] = fireModes.map(([mode, label]) => {
-      const availability = fireModeAvailability(actorUnit, mode);
-      return {
-        id: `fire-${mode}`,
-        labelRu: label,
-        disabled: !availability.enabled,
-        reasonRu: availability.reasonRu,
-        onSelect: () => this.commitTargetAction(actorRole.roleId, target, (draft, targetRole) => {
-          const step = createCombatLabScenarioStep(draft.getExperiment(), actorRole.roleId, 'fire', {
-            targetRoleId: targetRole.roleId,
-            markerId: null,
-            fireMode: mode,
-          });
-          appendStep(draft, actorRole.roleId, step);
-        }),
-      };
-    });
-    const singleAvailability = fireModeAvailability(actorUnit, 'single');
-    items.push({
-      id: 'fire-until-incapacitated',
-      labelRu: 'Стрелять до потери боеспособности',
-      disabled: !singleAvailability.enabled,
-      reasonRu: singleAvailability.reasonRu,
-      onSelect: () => this.commitTargetAction(actorRole.roleId, target, (draft, targetRole) => {
-        const experimentNow = draft.getExperiment();
-        const base = createCombatLabScenarioStep(experimentNow, actorRole.roleId, 'fire', {
-          targetRoleId: targetRole.roleId,
-          markerId: null,
-          fireMode: 'single',
-        });
-        const step: CombatLabScenarioStepV1 = {
-          ...base,
-          titleRu: `Стрелять по ${targetRole.titleRu} до потери боеспособности`,
-          repeat: {
-            kind: 'until_condition',
-            condition: { kind: 'role_state', roleId: targetRole.roleId, state: 'incapacitated' },
-            maximumAttempts: 100,
-            retryDelaySeconds: 0,
-          },
-        };
-        appendStep(draft, actorRole.roleId, step);
-      }),
+    const ids = ['fire-single', 'fire-short', 'fire-long'] as const;
+    const items = ids.map((id) => {
+      const descriptor = getCombatLabActionDescriptor(id);
+      const availability = fireModeAvailability(actorUnit, descriptor.fireMode ?? 'single');
+      return this.targetCatalogItem(descriptor, actorRole, target, availability);
     });
     items.push({
-      id: 'wait-contact',
-      labelRu: 'Ждать обнаружения цели',
-      onSelect: () => this.commitTargetAction(actorRole.roleId, target, (draft, targetRole) => {
-        const base = createCombatLabScenarioStep(draft.getExperiment(), actorRole.roleId, 'wait');
-        appendStep(draft, actorRole.roleId, {
-          ...base,
-          titleRu: `Ждать обнаружения ${targetRole.titleRu}`,
-          action: { kind: 'wait', durationSeconds: null },
-          completion: {
-            kind: 'condition',
-            condition: { kind: 'contact', observerRoleId: actorRole.roleId, targetRoleId: targetRole.roleId, present: true },
-          },
-        });
+      id: 'face-enemy',
+      labelRu: 'Повернуться к цели',
+      onSelect: () => this.commitComposite((draft) => {
+        const marker = markerAt(draft.getExperiment(), 'point', `Направление: ${target.labels.ru}`, target.position.x * this.options.state.map.metersPerCell, target.position.y * this.options.state.map.metersPerCell);
+        draft.addMarker(marker);
+        appendStep(draft, actorRole.roleId, createCombatLabScenarioStepFromCatalog(draft.getExperiment(), actorRole.roleId, 'face', { markerId: marker.markerId }));
       }),
     });
-    if (!existingTargetRole) {
-      items.unshift(disabledItem('role-created', 'Цели будет назначена стабильная роль', `unit: ${target.id}`));
-    }
     return items;
   }
 
@@ -289,20 +215,8 @@ export class CombatLabMapAuthoringController {
     const targetTrack = targetRole ? experiment.tracks.find((track) => track.actorRoleId === targetRole.roleId) : null;
     const targetStep = targetTrack?.steps.filter((step) => step.enabled).at(-1) ?? null;
     return [
-      {
-        id: 'first-aid',
-        labelRu: 'Оказать первую помощь',
-        onSelect: () => this.commitTargetAction(actorRole.roleId, target, (draft, role) => {
-          appendStep(draft, actorRole.roleId, createCombatLabScenarioStep(draft.getExperiment(), actorRole.roleId, 'first_aid', { targetRoleId: role.roleId }));
-        }),
-      },
-      {
-        id: 'transfer-ammo',
-        labelRu: 'Передать 30 патронов',
-        onSelect: () => this.commitTargetAction(actorRole.roleId, target, (draft, role) => {
-          appendStep(draft, actorRole.roleId, createCombatLabScenarioStep(draft.getExperiment(), actorRole.roleId, 'transfer', { targetRoleId: role.roleId }));
-        }),
-      },
+      this.targetCatalogItem(getCombatLabActionDescriptor('first-aid'), actorRole, target),
+      this.targetCatalogItem(getCombatLabActionDescriptor('transfer'), actorRole, target),
       {
         id: 'select-helper',
         labelRu: 'Выбрать как помощника',
@@ -316,82 +230,77 @@ export class CombatLabMapAuthoringController {
         id: 'wait-friendly-step',
         labelRu: 'Ждать завершения его действия',
         disabled: !targetRole || !targetTrack || !targetStep,
-        reasonRu: !targetRole ? 'Бойцу ещё не назначена роль.' : !targetStep ? 'В его дорожке нет действия.' : null,
+        reasonRu: !targetRole ? 'Боец ещё не включён в программу.' : !targetStep ? 'В его дорожке нет действия.' : null,
         onSelect: () => {
           if (!targetRole || !targetTrack || !targetStep) return;
           this.commitComposite((draft) => {
             const base = createCombatLabScenarioStep(draft.getExperiment(), actorRole.roleId, 'wait');
-            appendStep(draft, actorRole.roleId, {
-              ...base,
-              titleRu: `Ждать ${targetRole.titleRu}: ${targetStep.titleRu}`,
-              action: { kind: 'wait', durationSeconds: null },
-              completion: {
-                kind: 'condition',
-                condition: { kind: 'step_state', trackId: targetTrack.trackId, stepId: targetStep.stepId, state: 'completed' },
-              },
-            });
+            appendStep(draft, actorRole.roleId, { ...base, titleRu: `Ждать: ${targetStep.titleRu}`, action: { kind: 'wait', durationSeconds: null }, completion: { kind: 'condition', condition: { kind: 'step_state', trackId: targetTrack.trackId, stepId: targetStep.stepId, state: 'completed' } } });
           });
         },
       },
     ];
   }
 
-  private groundItems(
-    point: AuthoredPoint,
-    actorRole: CombatLabExperimentRoleV1,
-    actorUnit: UnitModel,
-  ): readonly CombatLabMapContextMenuItemV1[] {
-    const suppressAvailability = fireModeAvailability(actorUnit, 'suppress');
+  private groundItems(point: AuthoredPoint, actorRole: CombatLabExperimentRoleV1): readonly CombatLabMapContextMenuItemV1[] {
+    const moveItems = (['move', 'recon', 'assault'] as const).map((id) => ({
+      id: `ground-${id}`,
+      labelRu: getCombatLabActionDescriptor(id).labelRu,
+      onSelect: () => this.commitComposite((draft) => {
+        const marker = markerAt(draft.getExperiment(), 'point', 'Позиция', point.xMetres, point.yMetres);
+        draft.addMarker(marker);
+        appendStep(draft, actorRole.roleId, createCombatLabScenarioStepFromCatalog(draft.getExperiment(), actorRole.roleId, id, { markerId: marker.markerId }));
+      }),
+    }));
+    const cancellations = (['cancel-movement', 'cancel-fire', 'cancel-reload', 'cancel-deployment', 'cancel-transfer', 'cancel-first-aid'] as const).map((id) => ({
+      id: `ground-${id}`,
+      labelRu: getCombatLabActionDescriptor(id).labelRu,
+      onSelect: () => this.commitComposite((draft) => appendStep(draft, actorRole.roleId, createCombatLabScenarioStepFromCatalog(draft.getExperiment(), actorRole.roleId, id))),
+    }));
     return [
+      ...moveItems,
       {
-        id: 'move-here',
-        labelRu: 'Двигаться сюда',
+        id: 'face-here',
+        labelRu: 'Повернуться сюда',
         onSelect: () => this.commitComposite((draft) => {
-          const marker = markerAt(draft.getExperiment(), 'point', 'Позиция', point.xMetres, point.yMetres);
+          const marker = markerAt(draft.getExperiment(), 'point', 'Направление', point.xMetres, point.yMetres);
           draft.addMarker(marker);
-          appendStep(draft, actorRole.roleId, createCombatLabScenarioStep(draft.getExperiment(), actorRole.roleId, 'move', { markerId: marker.markerId }));
+          appendStep(draft, actorRole.roleId, createCombatLabScenarioStepFromCatalog(draft.getExperiment(), actorRole.roleId, 'face', { markerId: marker.markerId }));
         }),
       },
       {
         id: 'point-marker',
         labelRu: 'Создать точечную метку',
-        onSelect: () => this.commitComposite((draft) => {
-          draft.addMarker(markerAt(draft.getExperiment(), 'point', 'Точка', point.xMetres, point.yMetres));
-        }),
+        onSelect: () => this.commitComposite((draft) => draft.addMarker(markerAt(draft.getExperiment(), 'point', 'Точка', point.xMetres, point.yMetres))),
       },
       {
         id: 'circle-marker',
         labelRu: 'Создать круглую область',
-        onSelect: () => this.commitComposite((draft) => {
-          draft.addMarker(markerAt(draft.getExperiment(), 'circle', 'Область', point.xMetres, point.yMetres, 5));
-        }),
+        onSelect: () => this.commitComposite((draft) => draft.addMarker(markerAt(draft.getExperiment(), 'circle', 'Область', point.xMetres, point.yMetres, 5))),
       },
-      {
-        id: 'suppress-area',
-        labelRu: 'Подавлять область',
-        disabled: !suppressAvailability.enabled,
-        reasonRu: suppressAvailability.reasonRu,
-        onSelect: () => this.commitComposite((draft) => {
-          const marker = markerAt(draft.getExperiment(), 'circle', 'Область подавления', point.xMetres, point.yMetres, 5);
-          draft.addMarker(marker);
-          appendStep(draft, actorRole.roleId, createCombatLabScenarioStep(draft.getExperiment(), actorRole.roleId, 'fire', {
-            markerId: marker.markerId,
-            fireMode: 'suppress',
-          }));
-        }),
-      },
+      ...cancellations,
     ];
   }
 
-  private commitTargetAction(
-    _actorRoleId: string,
+  private targetCatalogItem(
+    descriptor: CombatLabActionDescriptorV1,
+    actorRole: CombatLabExperimentRoleV1,
     target: UnitModel,
-    action: (draft: CombatLabExperimentDraft, targetRole: CombatLabExperimentRoleV1) => void,
-  ): void {
-    const committed = this.commitComposite((draft) => {
-      const role = ensureRoleForUnit(draft, target);
-      action(draft, role);
-    });
+    availability: { enabled: boolean; reasonRu: string | null } = { enabled: true, reasonRu: null },
+  ): CombatLabMapContextMenuItemV1 {
+    return {
+      id: descriptor.id,
+      labelRu: descriptor.labelRu,
+      disabled: !availability.enabled,
+      reasonRu: availability.reasonRu,
+      onSelect: () => this.commitTargetAction(target, (draft, targetRole) => {
+        appendStep(draft, actorRole.roleId, createCombatLabScenarioStepFromCatalog(draft.getExperiment(), actorRole.roleId, descriptor.id, { targetRoleId: targetRole.roleId, markerId: null }));
+      }),
+    };
+  }
+
+  private commitTargetAction(target: UnitModel, action: (draft: CombatLabExperimentDraft, targetRole: CombatLabExperimentRoleV1) => void): void {
+    const committed = this.commitComposite((draft) => action(draft, ensureRoleForUnit(draft, target)));
     if (committed) this.message('Действие добавлено в дорожку.', false);
   }
 
@@ -438,22 +347,15 @@ function appendStep(draft: CombatLabExperimentDraft, actorRoleId: string, step: 
   draft.addStep(trackId, step);
 }
 
-function ensureRoleForUnit(
-  draft: CombatLabExperimentDraft,
-  unit: UnitModel,
-  preferredTitleRu?: string,
-): CombatLabExperimentRoleV1 {
+function ensureRoleForUnit(draft: CombatLabExperimentDraft, unit: UnitModel, preferredTitleRu?: string): CombatLabExperimentRoleV1 {
   const experiment = draft.getExperiment();
   const existing = experiment.roles.find((role) => role.unitId === unit.id);
   if (existing) return existing;
-  const roleId = nextRoleId(experiment, unit.side === 'red' ? 'target' : 'ally');
   const role: CombatLabExperimentRoleV1 = {
-    roleId,
+    roleId: nextRoleId(experiment, unit.side === 'red' ? 'target' : 'ally'),
     unitId: unit.id,
     titleRu: preferredTitleRu ?? unit.labels.ru,
-    selectableAs: unit.side === 'red'
-      ? ['target', 'first_aid_target', 'ammo_target']
-      : ['shooter', 'target', 'assistant', 'first_aid_actor', 'first_aid_target', 'ammo_source', 'ammo_target'],
+    parameters: { schemaVersion: 1, accuracy: null },
   };
   draft.assignRole(role);
   return role;
@@ -465,18 +367,13 @@ function nextRoleId(experiment: CombatLabExperimentV1, prefix: string): string {
     const roleId = `${prefix}-${index}`;
     if (!used.has(roleId)) return roleId;
   }
-  throw new Error('Достигнут предел ID ролей.');
+  throw new Error('Достигнут предел идентификаторов бойцов.');
 }
 
-function fireModeAvailability(unit: UnitModel, mode: CombatLabFireModeV1): { enabled: boolean; reasonRu: string | null } {
+function disabledItem(id: string, labelRu: string, reasonRu: string): CombatLabMapContextMenuItemV1 { return { id, labelRu, disabled: true, reasonRu, onSelect: () => undefined }; }
+
+function fireModeAvailability(unit: UnitModel, mode: 'single' | 'short_burst' | 'long_burst' | 'suppress'): { enabled: boolean; reasonRu: string | null } {
   const weapon = unit.infantryCombatRuntime.primaryWeapon;
-  if (!weapon) return { enabled: false, reasonRu: 'У исполнителя нет основного оружия.' };
-  if (!weapon.resolved.weapon.availableFireModes.includes(mode)) {
-    return { enabled: false, reasonRu: `Оружие не поддерживает режим ${mode}.` };
-  }
-  return { enabled: true, reasonRu: null };
-}
-
-function disabledItem(id: string, labelRu: string, reasonRu: string): CombatLabMapContextMenuItemV1 {
-  return { id, labelRu, disabled: true, reasonRu, onSelect: () => undefined };
+  if (!weapon) return { enabled: false, reasonRu: 'У бойца нет оружия.' };
+  return weapon.resolved.weapon.fireModes.includes(mode) ? { enabled: true, reasonRu: null } : { enabled: false, reasonRu: 'Оружие не поддерживает этот режим огня.' };
 }

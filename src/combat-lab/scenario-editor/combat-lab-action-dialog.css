@@ -1,0 +1,16 @@
+.combat-lab-action-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(860px, calc(100vh - 32px));
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: #171b22;
+  color: #eef2f7;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+}
+
+.combat-lab-action-dialog::backdrop { background: rgba(5, 8, 12, 0.7); }
+.combat-lab-action-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
+.combat-lab-action-dialog__header h2 { margin: 0; font-size: 18px; }
+.combat-lab-action-dialog__content { max-height: calc(100vh - 110px); overflow: auto; padding: 16px; }
+.combat-lab-action-dialog .combat-lab-step-inspector { margin: 0; }

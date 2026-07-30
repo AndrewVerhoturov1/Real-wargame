@@ -11,6 +11,7 @@ import { getUnitCommandToolState, setRouteFacingDraft } from '../core/ui/Runtime
 import type { PixiTacticalBoardApp } from '../rendering/PixiApp';
 import { installTacticalOrderVisualQaHarness } from '../testing/TacticalOrderVisualQaHarness';
 import { TacticalOrderStatusCard } from '../ui/TacticalOrderStatusCard';
+import { sharedMapInputOwnership, type MapInputLease } from './MapInputOwnership';
 import {
   beginTacticalOrderGesture,
   cancelTacticalOrderGesture,
@@ -54,6 +55,7 @@ export function installTacticalOrderRadialInput(
   let currentGrid: GridPosition | null = null;
   let holdTimer: number | null = null;
   let keyboardConfirmed = false;
+  let inputLease: MapInputLease | null = null;
   let destroyed = false;
 
   const notifyChanged = (): void => {
@@ -72,6 +74,11 @@ export function installTacticalOrderRadialInput(
     holdTimer = null;
   };
 
+  const releaseInputLease = (): void => {
+    inputLease?.release();
+    inputLease = null;
+  };
+
   const close = (reason?: TacticalOrderGestureCancelReason): void => {
     clearTimer();
     const closingGesture = gesture;
@@ -87,6 +94,7 @@ export function installTacticalOrderRadialInput(
     if (capturedPointerId !== null && canvas.hasPointerCapture(capturedPointerId)) {
       canvas.releasePointerCapture(capturedPointerId);
     }
+    releaseInputLease();
     notifyChanged();
   };
 
@@ -122,6 +130,9 @@ export function installTacticalOrderRadialInput(
     if (getUnitCommandToolState(state).turnToolActive) return;
     if (state.selectedUnitIds.length === 0) return;
 
+    const lease = sharedMapInputOwnership.acquire('tactical-orders');
+    if (!lease) return;
+    inputLease = lease;
     event.preventDefault();
     event.stopImmediatePropagation();
     clearTimer();
@@ -257,6 +268,7 @@ export function installTacticalOrderRadialInput(
     window.clearInterval(statusInterval);
     destroyVisualQaHarness();
     close('destroy');
+    releaseInputLease();
     canvas.removeEventListener('contextmenu', handleContextMenu, true);
     canvas.removeEventListener('pointerdown', handlePointerDown, true);
     canvas.removeEventListener('pointermove', handlePointerMove, true);
