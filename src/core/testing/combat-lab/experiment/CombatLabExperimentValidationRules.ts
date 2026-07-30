@@ -29,7 +29,7 @@ export function validateStep(
   _knownStepIds: ReadonlySet<string>,
   issues: CombatLabExperimentIssueV1[],
 ): void {
-  validateFiniteRange(step.timeoutSeconds, 0, COMBAT_LAB_EXPERIMENT_LIMITS_V1.maximumSimulationSeconds, `${path}.timeoutSeconds`, 'combat_lab_step_timeout_invalid', 'Timeout шага должен быть больше нуля и не превышать 600 секунд.', issues, false);
+  validateFiniteRange(step.timeoutSeconds, 0, COMBAT_LAB_EXPERIMENT_LIMITS_V1.maximumSimulationSeconds, `${path}.timeoutSeconds`, 'combat_lab_step_timeout_invalid', 'Предельное время шага должно быть больше нуля и не превышать 600 секунд.', issues, false);
   validateRepeat(step.repeat, `${path}.repeat`, issues);
   validateActionReferences(step.action, `${path}.action`, roleIds, markerIds, issues);
   if (step.startCondition.kind === 'elapsed' && step.startCondition.anchor === 'step_start') {
@@ -39,7 +39,7 @@ export function validateStep(
     issues.push(error('combat_lab_wait_completion_missing', 'Ожидание без длительности должно иметь условие завершения.', `${path}.completion`));
   }
   if (step.completion.kind === 'shot_resolved' && step.action.kind !== 'fire') {
-    issues.push(error('combat_lab_shot_completion_action_invalid', 'shot_resolved допустим только для огневого действия.', `${path}.completion.kind`));
+    issues.push(error('combat_lab_shot_completion_action_invalid', 'Ожидание разрешения выстрела допустимо только для огневого действия.', `${path}.completion.kind`));
   }
 }
 
@@ -53,28 +53,34 @@ function validateActionReferences(
   const roleRef = (roleId: string | null, field: string): void => {
     if (roleId !== null && !roleIds.has(roleId)) missingReference(issues, 'combat_lab_action_role_missing', 'Ссылка действия ведёт на отсутствующую роль.', `${path}.${field}`);
   };
+  const markerRef = (markerId: string | null | undefined, field: string): void => {
+    if (markerId && !markerIds.has(markerId)) missingReference(issues, 'combat_lab_action_marker_missing', 'Ссылка действия ведёт на отсутствующую метку.', `${path}.${field}`);
+  };
   switch (action.kind) {
     case 'fire':
       roleRef(action.actorRoleId, 'actorRoleId');
       if (action.target.kind === 'role') roleRef(action.target.roleId, 'target.roleId');
-      else if (!markerIds.has(action.target.markerId)) missingReference(issues, 'combat_lab_action_marker_missing', 'Ссылка действия ведёт на отсутствующую метку.', `${path}.target.markerId`);
-      if (!Number.isFinite(action.targetRadiusMetres) || action.targetRadiusMetres < 0) {
-        issues.push(error('combat_lab_fire_radius_invalid', 'Радиус огня должен быть конечным неотрицательным числом.', `${path}.targetRadiusMetres`));
-      }
-      if (!Number.isFinite(action.minimumSolutionQuality) || action.minimumSolutionQuality < 0 || action.minimumSolutionQuality > 1) {
-        issues.push(error('combat_lab_fire_solution_quality_invalid', 'Порог решения стрельбы должен находиться в диапазоне 0..1.', `${path}.minimumSolutionQuality`));
-      }
-      if (!Number.isFinite(action.minimumPerceptionQuality) || action.minimumPerceptionQuality < 0 || action.minimumPerceptionQuality > 1) {
-        issues.push(error('combat_lab_fire_perception_quality_invalid', 'Порог качества контакта должен находиться в диапазоне 0..1.', `${path}.minimumPerceptionQuality`));
-      }
+      else markerRef(action.target.markerId, 'target.markerId');
+      if (!Number.isFinite(action.targetRadiusMetres) || action.targetRadiusMetres < 0) issues.push(error('combat_lab_fire_radius_invalid', 'Радиус огня должен быть конечным неотрицательным числом.', `${path}.targetRadiusMetres`));
+      if (!Number.isFinite(action.minimumSolutionQuality) || action.minimumSolutionQuality < 0 || action.minimumSolutionQuality > 1) issues.push(error('combat_lab_fire_solution_quality_invalid', 'Порог решения стрельбы должен находиться в диапазоне 0..1.', `${path}.minimumSolutionQuality`));
+      if (!Number.isFinite(action.minimumPerceptionQuality) || action.minimumPerceptionQuality < 0 || action.minimumPerceptionQuality > 1) issues.push(error('combat_lab_fire_perception_quality_invalid', 'Порог качества контакта должен находиться в диапазоне 0..1.', `${path}.minimumPerceptionQuality`));
       break;
     case 'stop_fire':
     case 'posture':
+    case 'cancel_action':
       roleRef(action.actorRoleId, 'actorRoleId');
       break;
     case 'move':
       roleRef(action.actorRoleId, 'actorRoleId');
-      if (!markerIds.has(action.markerId)) missingReference(issues, 'combat_lab_action_marker_missing', 'Ссылка движения ведёт на отсутствующую метку.', `${path}.markerId`);
+      markerRef(action.markerId, 'markerId');
+      markerRef(action.finalFacingMarkerId, 'finalFacingMarkerId');
+      if (action.tacticalOrderPresetId !== undefined && !['move', 'recon', 'assault'].includes(action.tacticalOrderPresetId)) {
+        issues.push(error('combat_lab_move_preset_invalid', 'Неизвестный тактический профиль движения.', `${path}.tacticalOrderPresetId`));
+      }
+      break;
+    case 'face':
+      roleRef(action.actorRoleId, 'actorRoleId');
+      markerRef(action.markerId, 'markerId');
       break;
     case 'wait':
       if (action.durationSeconds !== null) validateFiniteRange(action.durationSeconds, 0, COMBAT_LAB_EXPERIMENT_LIMITS_V1.maximumSimulationSeconds, `${path}.durationSeconds`, 'combat_lab_wait_duration_invalid', 'Время ожидания должно быть больше нуля и не превышать 600 секунд.', issues, false);
@@ -122,12 +128,8 @@ export function validateConditionReferences(
   roleRefs.forEach((roleId) => {
     if (!roleIds.has(roleId)) missingReference(issues, 'combat_lab_condition_role_missing', 'Условие ссылается на отсутствующую роль.', path);
   });
-  if (condition.kind === 'ammo' && condition.comparison !== 'empty' && (!Number.isInteger(condition.rounds) || condition.rounds < 0)) {
-    issues.push(error('combat_lab_condition_ammo_invalid', 'Порог боеприпасов должен быть целым неотрицательным числом.', `${path}.rounds`));
-  }
-  if (condition.kind === 'suppression' && (!Number.isFinite(condition.value) || condition.value < 0 || condition.value > 1)) {
-    issues.push(error('combat_lab_condition_suppression_invalid', 'Порог подавления должен находиться в диапазоне 0..1.', `${path}.value`));
-  }
+  if (condition.kind === 'ammo' && condition.comparison !== 'empty' && (!Number.isInteger(condition.rounds) || condition.rounds < 0)) issues.push(error('combat_lab_condition_ammo_invalid', 'Порог боеприпасов должен быть целым неотрицательным числом.', `${path}.rounds`));
+  if (condition.kind === 'suppression' && (!Number.isFinite(condition.value) || condition.value < 0 || condition.value > 1)) issues.push(error('combat_lab_condition_suppression_invalid', 'Порог подавления должен находиться в диапазоне 0..1.', `${path}.value`));
 }
 
 export function validateRepeat(repeat: CombatLabRepeatPolicyV1 | undefined, path: string, issues: CombatLabExperimentIssueV1[]): void {
@@ -135,23 +137,13 @@ export function validateRepeat(repeat: CombatLabRepeatPolicyV1 | undefined, path
     issues.push(error('combat_lab_repeat_missing', 'Для шага или настроек должна быть задана ограниченная политика повтора.', path));
     return;
   }
-  if (!Number.isInteger(repeat.maximumAttempts)
-    || repeat.maximumAttempts < COMBAT_LAB_EXPERIMENT_LIMITS_V1.minimumRepeatAttempts
-    || repeat.maximumAttempts > COMBAT_LAB_EXPERIMENT_LIMITS_V1.maximumRepeatAttempts) {
-    issues.push(error('combat_lab_repeat_attempts_invalid', 'maximumAttempts должен находиться в диапазоне 1..1000.', `${path}.maximumAttempts`));
-  }
-  if (!Number.isFinite(repeat.retryDelaySeconds) || repeat.retryDelaySeconds < 0 || repeat.retryDelaySeconds > COMBAT_LAB_EXPERIMENT_LIMITS_V1.maximumSimulationSeconds) {
-    issues.push(error('combat_lab_repeat_delay_invalid', 'retryDelaySeconds должен находиться в диапазоне 0..600 секунд.', `${path}.retryDelaySeconds`));
-  }
-  if (repeat.kind === 'once' && (repeat.maximumAttempts !== 1 || repeat.retryDelaySeconds !== 0)) {
-    issues.push(error('combat_lab_repeat_once_invalid', 'Политика once должна иметь maximumAttempts: 1 и retryDelaySeconds: 0.', path));
-  }
+  if (!Number.isInteger(repeat.maximumAttempts) || repeat.maximumAttempts < COMBAT_LAB_EXPERIMENT_LIMITS_V1.minimumRepeatAttempts || repeat.maximumAttempts > COMBAT_LAB_EXPERIMENT_LIMITS_V1.maximumRepeatAttempts) issues.push(error('combat_lab_repeat_attempts_invalid', 'Число попыток должно находиться в диапазоне 1..1000.', `${path}.maximumAttempts`));
+  if (!Number.isFinite(repeat.retryDelaySeconds) || repeat.retryDelaySeconds < 0 || repeat.retryDelaySeconds > COMBAT_LAB_EXPERIMENT_LIMITS_V1.maximumSimulationSeconds) issues.push(error('combat_lab_repeat_delay_invalid', 'Задержка между попытками должна находиться в диапазоне 0..600 секунд.', `${path}.retryDelaySeconds`));
+  if (repeat.kind === 'once' && (repeat.maximumAttempts !== 1 || repeat.retryDelaySeconds !== 0)) issues.push(error('combat_lab_repeat_once_invalid', 'Однократное действие должно иметь одну попытку без задержки.', path));
 }
 
 export function validateSeed(seed: unknown, path: string, issues: CombatLabExperimentIssueV1[]): void {
-  if (!Number.isInteger(seed) || (seed as number) < 1 || (seed as number) > 0xffff_ffff) {
-    issues.push(error('combat_lab_seed_invalid', 'Seed должен быть целым числом в диапазоне 1..4294967295.', path));
-  }
+  if (!Number.isInteger(seed) || (seed as number) < 1 || (seed as number) > 0xffff_ffff) issues.push(error('combat_lab_seed_invalid', 'Начальное число случайности должно быть целым в диапазоне 1..4294967295.', path));
 }
 
 export function validateBatchConfig(config: CombatLabBatchConfigV1 | undefined, path: string, issues: CombatLabExperimentIssueV1[]): void {
@@ -161,16 +153,14 @@ export function validateBatchConfig(config: CombatLabBatchConfigV1 | undefined, 
   }
   const limits = COMBAT_LAB_EXPERIMENT_LIMITS_V1;
   if (!Number.isInteger(config.runCount) || config.runCount < limits.minimumRunCount || config.runCount > limits.maximumRunCount) issues.push(error('combat_lab_batch_run_count_invalid', 'Число прогонов должно находиться в диапазоне 1..10000.', `${path}.runCount`));
-  if (!Number.isInteger(config.workerCount) || config.workerCount < limits.minimumWorkerCount || config.workerCount > limits.maximumWorkerCount) issues.push(error('combat_lab_batch_worker_count_invalid', 'Число workers должно находиться в диапазоне 1..4.', `${path}.workerCount`));
+  if (!Number.isInteger(config.workerCount) || config.workerCount < limits.minimumWorkerCount || config.workerCount > limits.maximumWorkerCount) issues.push(error('combat_lab_batch_worker_count_invalid', 'Число параллельных обработчиков должно находиться в диапазоне 1..4.', `${path}.workerCount`));
   if (!Number.isInteger(config.representativeRunCount) || config.representativeRunCount < limits.minimumRepresentativeRuns || config.representativeRunCount > limits.maximumRepresentativeRuns) issues.push(error('combat_lab_batch_representative_count_invalid', 'Число характерных прогонов должно находиться в диапазоне 1..20.', `${path}.representativeRunCount`));
-  if (Number.isInteger(config.runCount) && Number.isInteger(config.representativeRunCount) && config.representativeRunCount > config.runCount) {
-    issues.push(error('combat_lab_batch_representative_exceeds_runs', 'Число характерных прогонов не может превышать общее число прогонов.', `${path}.representativeRunCount`));
-  }
+  if (Number.isInteger(config.runCount) && Number.isInteger(config.representativeRunCount) && config.representativeRunCount > config.runCount) issues.push(error('combat_lab_batch_representative_exceeds_runs', 'Число характерных прогонов не может превышать общее число прогонов.', `${path}.representativeRunCount`));
   validateFiniteRange(config.maximumSimulationSeconds, limits.minimumSimulationSeconds, limits.maximumSimulationSeconds, `${path}.maximumSimulationSeconds`, 'combat_lab_batch_duration_invalid', 'Максимальное время серии должно находиться в диапазоне 0,1..600 секунд.', issues, true);
   if (config.seedStrategy.kind === 'fixed') validateSeed(config.seedStrategy.seed, `${path}.seedStrategy.seed`, issues);
   if (config.seedStrategy.kind === 'sequential') validateSeed(config.seedStrategy.firstSeed, `${path}.seedStrategy.firstSeed`, issues);
   if (config.seedStrategy.kind === 'explicit') {
-    if (config.seedStrategy.seeds.length !== config.runCount) issues.push(error('combat_lab_batch_explicit_seed_count_invalid', 'Для explicit Seed strategy число Seed должно совпадать с числом прогонов.', `${path}.seedStrategy.seeds`));
+    if (config.seedStrategy.seeds.length !== config.runCount) issues.push(error('combat_lab_batch_explicit_seed_count_invalid', 'Число начальных значений должно совпадать с числом прогонов.', `${path}.seedStrategy.seeds`));
     config.seedStrategy.seeds.forEach((seed, index) => validateSeed(seed, `${path}.seedStrategy.seeds[${index}]`, issues));
   }
 }
@@ -185,40 +175,27 @@ export function validateMarkers(experiment: CombatLabExperimentV1, issues: Comba
   const heightMetres = finite(map?.height) * Math.max(0, finite(map?.metersPerCell, 1));
   experiment.markers.forEach((marker, index) => {
     const path = `$.markers[${index}]`;
-    if (!Number.isFinite(marker.xMetres) || !Number.isFinite(marker.yMetres) || marker.xMetres < 0 || marker.yMetres < 0 || marker.xMetres > widthMetres || marker.yMetres > heightMetres) {
-      issues.push(error('combat_lab_marker_out_of_bounds', 'Метка находится за пределами карты.', path));
-    }
+    if (!Number.isFinite(marker.xMetres) || !Number.isFinite(marker.yMetres) || marker.xMetres < 0 || marker.yMetres < 0 || marker.xMetres > widthMetres || marker.yMetres > heightMetres) issues.push(error('combat_lab_marker_out_of_bounds', 'Метка находится за пределами карты.', path));
     if (!Number.isFinite(marker.zMetres)) issues.push(error('combat_lab_marker_height_invalid', 'Высота метки должна быть конечным числом.', `${path}.zMetres`));
     if (marker.kind === 'circle' && (!Number.isFinite(marker.radiusMetres) || marker.radiusMetres <= 0)) issues.push(error('combat_lab_marker_radius_invalid', 'Радиус круглой области должен быть больше нуля.', `${path}.radiusMetres`));
   });
 }
 
-export function validateActionWarnings(
-  step: CombatLabScenarioStepV1,
-  path: string,
-  experiment: CombatLabExperimentV1,
-  sceneUnits: readonly SceneUnitSummary[],
-  issues: CombatLabExperimentIssueV1[],
-): void {
+export function validateActionWarnings(step: CombatLabScenarioStepV1, path: string, experiment: CombatLabExperimentV1, sceneUnits: readonly SceneUnitSummary[], issues: CombatLabExperimentIssueV1[]): void {
   const roleToUnit = new Map(experiment.roles.map((role) => [role.roleId, role.unitId]));
   const unitById = new Map(sceneUnits.map((unit) => [unit.id, unit]));
   const action = step.action;
   if (action.kind === 'fire') {
     const actor = unitById.get(roleToUnit.get(action.actorRoleId) ?? '');
-    if (actor && !actor.primaryWeapon) issues.push(warning('combat_lab_fire_weapon_missing', 'У исполнителя огневого шага нет primary weapon.', `${path}.action.actorRoleId`));
+    if (actor && !actor.primaryWeapon) issues.push(warning('combat_lab_fire_weapon_missing', 'У исполнителя огневого шага нет основного оружия.', `${path}.action.actorRoleId`));
     if (actor?.primaryWeapon && !actor.availableFireModes.includes(action.mode)) issues.push(warning('combat_lab_fire_mode_unsupported', 'Выбранный режим огня не поддерживается оружием исполнителя.', `${path}.action.mode`));
     if (step.repeat.maximumAttempts > 1 && actor && actor.totalRounds < step.repeat.maximumAttempts) issues.push(warning('combat_lab_repeat_ammo_insufficient', 'Исходного боекомплекта может не хватить для ожидаемого числа повторов.', `${path}.repeat.maximumAttempts`));
   }
-  if ((action.kind === 'reload' || action.kind === 'deploy' || action.kind === 'undeploy') && action.helperRoleId === action.actorRoleId) {
-    issues.push(warning('combat_lab_helper_matches_actor', 'Помощник совпадает с исполнителем действия.', `${path}.action.helperRoleId`));
-  }
-  if (action.kind === 'first_aid' && action.actorRoleId === action.targetRoleId) {
-    issues.push(warning('combat_lab_helper_matches_actor', 'Оказывающий помощь совпадает с целью помощи.', `${path}.action.targetRoleId`));
-  }
-  if (action.kind === 'transfer' && action.sourceRoleId === action.targetRoleId) {
-    issues.push(warning('combat_lab_helper_matches_actor', 'Источник и получатель боеприпасов совпадают.', `${path}.action.targetRoleId`));
-  }
+  if ((action.kind === 'reload' || action.kind === 'deploy' || action.kind === 'undeploy') && action.helperRoleId === action.actorRoleId) issues.push(warning('combat_lab_helper_matches_actor', 'Помощник совпадает с исполнителем действия.', `${path}.action.helperRoleId`));
+  if (action.kind === 'first_aid' && action.actorRoleId === action.targetRoleId) issues.push(warning('combat_lab_helper_matches_actor', 'Оказывающий помощь совпадает с целью помощи.', `${path}.action.targetRoleId`));
+  if (action.kind === 'transfer' && action.sourceRoleId === action.targetRoleId) issues.push(warning('combat_lab_helper_matches_actor', 'Источник и получатель боеприпасов совпадают.', `${path}.action.targetRoleId`));
 }
+
 export function isConditionInitiallyTrue(condition: CombatLabConditionV1, experiment: CombatLabExperimentV1, units: readonly SceneUnitSummary[]): boolean {
   if (condition.kind === 'always') return false;
   if (condition.kind === 'elapsed') return condition.seconds <= 0;
@@ -236,14 +213,7 @@ export function isConditionInitiallyTrue(condition: CombatLabConditionV1, experi
   if (condition.kind === 'role_state') {
     const capable = unit.capabilities.alive && unit.capabilities.conscious;
     const canFire = capable && unit.capabilities.canUseWeapon && finite(unit.primaryWeapon?.roundsInWeapon) > 0;
-    const map: Record<typeof condition.state, boolean> = {
-      capable,
-      incapacitated: !capable,
-      can_fire: canFire,
-      cannot_fire: !canFire,
-      can_move: unit.capabilities.canMove,
-      cannot_move: !unit.capabilities.canMove,
-    };
+    const map: Record<typeof condition.state, boolean> = { capable, incapacitated: !capable, can_fire: canFire, cannot_fire: !canFire, can_move: unit.capabilities.canMove, cannot_move: !unit.capabilities.canMove };
     return map[condition.state];
   }
   if (condition.kind === 'ammo') {
