@@ -1,4 +1,4 @@
-name: Combat Lab Acceptance Exact Preview Deploy 562f10d
+name: Combat Lab Acceptance Exact Preview Deploy 222cbd9
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: combat-lab-acceptance-exact-deploy-562f10d008dc301bd5b000ebb6271d4500ecf655
+  group: combat-lab-acceptance-exact-deploy-222cbd901029751396c6891fa63c1633eb408f31
   cancel-in-progress: false
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 60
     env:
       PRODUCT_BRANCH: feature/20260730-combat-lab-user-acceptance-fixes
-      PRODUCT_SHA: 562f10d008dc301bd5b000ebb6271d4500ecf655
+      PRODUCT_SHA: 222cbd901029751396c6891fa63c1633eb408f31
       EXPECTED_VERCEL_PROJECT_NAME: repo
     steps:
       - name: Checkout exact product source
