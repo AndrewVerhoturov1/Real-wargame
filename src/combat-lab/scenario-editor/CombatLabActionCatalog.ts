@@ -59,9 +59,7 @@ const DESCRIPTORS: readonly CombatLabActionDescriptorV1[] = Object.freeze([
   cancelDescriptor('cancel-first-aid', 'Отменить первую помощь', 'first_aid'),
 ]);
 
-export function listCombatLabActionDescriptors(): readonly CombatLabActionDescriptorV1[] {
-  return DESCRIPTORS;
-}
+export function listCombatLabActionDescriptors(): readonly CombatLabActionDescriptorV1[] { return DESCRIPTORS; }
 
 export function getCombatLabActionDescriptor(id: string): CombatLabActionDescriptorV1 {
   const descriptor = DESCRIPTORS.find((candidate) => candidate.id === id);
@@ -85,8 +83,7 @@ export function createCombatLabActionFromCatalog(
     case 'face':
       if (!markerId) throw new Error('Сначала создайте метку направления.');
       return { kind: 'face', actorRoleId, markerId };
-    case 'posture':
-      return { kind: 'posture', actorRoleId, targetPosture: descriptor.posture ?? 'standing' };
+    case 'posture': return { kind: 'posture', actorRoleId, targetPosture: descriptor.posture ?? 'standing' };
     case 'fire': {
       const mode = descriptor.fireMode ?? 'single';
       if (mode === 'suppress') {
@@ -112,12 +109,16 @@ export function findCombatLabActionDescriptorForAction(action: CombatLabActionV1
     : action.kind === 'face' ? 'face'
       : action.kind === 'posture' ? action.targetPosture === 'standing' ? 'stand' : action.targetPosture === 'crouched' ? 'crouch' : 'prone'
         : action.kind === 'fire' ? action.mode === 'single' ? 'fire-single' : action.mode === 'short_burst' ? 'fire-short' : action.mode === 'long_burst' ? 'fire-long' : 'fire-suppress'
-          : action.kind === 'cancel_action' ? `cancel-${action.target}`
+          : action.kind === 'cancel_action' ? cancelDescriptorId(action.target)
             : action.kind === 'stop_fire' ? 'cancel-fire'
               : action.kind === 'first_aid' ? 'first-aid'
                 : action.kind === 'wait' ? action.durationSeconds === null ? 'wait-condition' : 'wait-time'
                   : action.kind;
   return getCombatLabActionDescriptor(id);
+}
+
+function cancelDescriptorId(target: CombatLabCancelActionTargetV1): string {
+  return target === 'first_aid' ? 'cancel-first-aid' : `cancel-${target}`;
 }
 
 function descriptor(
