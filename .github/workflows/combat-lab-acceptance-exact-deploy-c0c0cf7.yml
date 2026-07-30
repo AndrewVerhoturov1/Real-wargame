@@ -1,7 +1,7 @@
 name: Combat Lab Acceptance Exact Preview Deploy c0c0cf7
 
 on:
-  pull_request_target:
+  pull_request:
     branches:
       - ci/20260730-combat-lab-acceptance-deploy-base-c0c0cf7
     types: [opened, synchronize, reopened]
