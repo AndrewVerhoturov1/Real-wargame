@@ -61,15 +61,10 @@ export class CombatLabScenarioExecutor {
   private stopReasonRu: string | null = null;
   private commandSequence = 0;
 
-  static create(
-    experiment: CombatLabExperimentV1,
-    state: SimulationState,
-  ): CombatLabScenarioExecutor {
+  static create(experiment: CombatLabExperimentV1, state: SimulationState): CombatLabScenarioExecutor {
     const issues = validateCombatLabExperiment(experiment);
     const errors = issues.filter((issue) => issue.severity === 'error');
-    if (errors.length > 0) {
-      throw new Error(`Combat Lab experiment is invalid: ${errors.map((issue) => `${issue.path}: ${issue.messageRu}`).join('; ')}`);
-    }
+    if (errors.length > 0) throw new Error(`Combat Lab experiment is invalid: ${errors.map((issue) => `${issue.path}: ${issue.messageRu}`).join('; ')}`);
     return new CombatLabScenarioExecutor(experiment, state);
   }
 
@@ -129,7 +124,7 @@ export class CombatLabScenarioExecutor {
         runtime.breakpointReached = true;
         runtime.state = 'paused_at_breakpoint';
         runtime.reasonCode = 'combat_lab_breakpoint_reached';
-        runtime.reasonRu = 'Выполнение остановлено перед шагом breakpoint.';
+        runtime.reasonRu = 'Выполнение остановлено перед точкой остановки.';
         continue;
       }
 
@@ -142,13 +137,7 @@ export class CombatLabScenarioExecutor {
 
       if (runtime.step.action.kind === 'wait') {
         runtime.ownerToken = null;
-        runtime.observation = captureCombatLabCompletionObservation(
-          this.experiment,
-          this.state,
-          runtime.step.action,
-          null,
-          startedSeconds,
-        );
+        runtime.observation = captureCombatLabCompletionObservation(this.experiment, this.state, runtime.step.action, null, startedSeconds);
         runtime.state = 'running';
         continue;
       }
@@ -161,33 +150,19 @@ export class CombatLabScenarioExecutor {
 
       this.commandSequence += 1;
       const ownerId = `${this.experiment.experimentId}@${this.experiment.revision}:${runtime.trackId}:${runtime.step.stepId}:attempt:${runtime.attempt}`;
-      const result = executeCombatLabCommand(this.state, compiled.command, {
-        ownerId,
-        commandSequence: this.commandSequence,
-        interactive: false,
-      });
+      const result = executeCombatLabCommand(this.state, compiled.command, { ownerId, commandSequence: this.commandSequence, interactive: false });
       results.push(result);
       runtime.ownerToken = result.ownerToken;
       if (!result.accepted) {
-        // Rejection under the `wait` policy is an availability probe, not a
-        // completed production attempt. Keep repeat accounting for accepted
-        // actions only while the step timeout still bounds the wait.
         if (runtime.step.failurePolicy === 'wait') runtime.attempt = Math.max(0, runtime.attempt - 1);
         this.handleAttemptFailure(runtime, result.reasonCode, result.reasonRu, true);
         continue;
       }
-      runtime.observation = captureCombatLabCompletionObservation(
-        this.experiment,
-        this.state,
-        runtime.step.action,
-        result.ownerToken,
-        startedSeconds,
-      );
+      runtime.observation = captureCombatLabCompletionObservation(this.experiment, this.state, runtime.step.action, result.ownerToken, startedSeconds);
       runtime.state = 'running';
       runtime.reasonCode = result.reasonCode;
       runtime.reasonRu = result.reasonRu;
     }
-
     return results;
   }
 
@@ -195,16 +170,10 @@ export class CombatLabScenarioExecutor {
     if (this.isTerminal()) return;
     if (this.status === 'idle') this.status = 'running';
     const phaseSnapshot = this.getSnapshot();
-
     for (const track of this.tracks) {
       const runtime = this.firstUnfinishedStep(track);
       if (!runtime || runtime.state !== 'running' || !runtime.observation) continue;
-      const completion = evaluateCombatLabCompletion(
-        runtime.step.action,
-        runtime.step.completion,
-        runtime.observation,
-        this.conditionContext(runtime, phaseSnapshot),
-      );
+      const completion = evaluateCombatLabCompletion(runtime.step.action, runtime.step.completion, runtime.observation, this.conditionContext(runtime, phaseSnapshot));
       if (completion.status === 'completed') {
         this.handleAttemptCompleted(runtime, completion.reasonCode, completion.reasonRu);
         continue;
@@ -215,11 +184,8 @@ export class CombatLabScenarioExecutor {
       }
       runtime.reasonCode = completion.reasonCode;
       runtime.reasonRu = completion.reasonRu;
-      if (this.stepTimedOut(runtime)) {
-        this.handleTimeout(runtime);
-      }
+      if (this.stepTimedOut(runtime)) this.handleTimeout(runtime);
     }
-
     this.checkGlobalStopConditions();
   }
 
@@ -266,6 +232,10 @@ export class CombatLabScenarioExecutor {
   private compileCommand(action: CombatLabActionV1, step: CombatLabScenarioStepV1): CompiledCommand {
     const roleUnitId = (roleId: string): string | null => this.experiment.roles.find((role) => role.roleId === roleId)?.unitId ?? null;
     const missingRole = (roleId: string): CompiledCommand => ({ command: null, errorCode: 'combat_lab_command_role_missing', errorRu: `Роль «${roleId}» не назначена бойцу.` });
+    const marker = (markerId: string) => this.experiment.markers.find((candidate) => candidate.markerId === markerId) ?? null;
+    const markerMissing = (markerId: string): CompiledCommand => ({ command: null, errorCode: 'combat_lab_command_marker_missing', errorRu: `Метка «${markerId}» отсутствует.` });
+    const metresPerCell = Math.max(0.001, this.state.map.metersPerCell);
+
     if (action.kind === 'fire') {
       const shooterUnitId = roleUnitId(action.actorRoleId);
       if (!shooterUnitId) return missingRole(action.actorRoleId);
@@ -276,40 +246,58 @@ export class CombatLabScenarioExecutor {
         targetUnitId = roleUnitId(action.target.roleId);
         if (!targetUnitId) return missingRole(action.target.roleId);
       } else {
-        const markerId = action.target.markerId;
-        const marker = this.experiment.markers.find((candidate) => candidate.markerId === markerId);
-        if (!marker) return { command: null, errorCode: 'combat_lab_command_marker_missing', errorRu: `Метка «${markerId}» отсутствует.` };
-        targetPointMetres = { xMetres: marker.xMetres, yMetres: marker.yMetres, zMetres: marker.zMetres };
-        if (marker.kind === 'circle') targetRadiusMetres = Math.max(targetRadiusMetres, marker.radiusMetres);
+        const resolved = marker(action.target.markerId);
+        if (!resolved) return markerMissing(action.target.markerId);
+        targetPointMetres = { xMetres: resolved.xMetres, yMetres: resolved.yMetres, zMetres: resolved.zMetres };
+        if (resolved.kind === 'circle') targetRadiusMetres = Math.max(targetRadiusMetres, resolved.radiusMetres);
       }
-      return {
-        command: {
-          kind: 'fire',
-          shooterUnitId,
-          targetUnitId,
-          targetPointMetres,
-          mode: action.mode,
-          targetRadiusMetres,
-          minimumSolutionQuality: action.minimumSolutionQuality,
-          minimumPerceptionQuality: action.minimumPerceptionQuality,
-          forceFire: action.forceFire,
-          accuracyOverrides: step.accuracyOverrides ?? this.experiment.defaults.accuracyOverrides,
-        },
-        errorCode: null,
-        errorRu: null,
-      };
+      return successCommand({
+        kind: 'fire',
+        shooterUnitId,
+        targetUnitId,
+        targetPointMetres,
+        mode: action.mode,
+        targetRadiusMetres,
+        minimumSolutionQuality: action.minimumSolutionQuality,
+        minimumPerceptionQuality: action.minimumPerceptionQuality,
+        forceFire: action.forceFire,
+        accuracyOverrides: step.accuracyOverrides ?? this.experiment.defaults.accuracyOverrides,
+      });
     }
     if (action.kind === 'stop_fire') {
       const unitId = roleUnitId(action.actorRoleId);
-      return unitId ? successCommand({ kind: 'cancel_fire', unitId }) : missingRole(action.actorRoleId);
+      return unitId ? successCommand({ kind: 'cancel_action', unitId, target: 'fire' }) : missingRole(action.actorRoleId);
     }
     if (action.kind === 'move') {
       const unitId = roleUnitId(action.actorRoleId);
       if (!unitId) return missingRole(action.actorRoleId);
-      const marker = this.experiment.markers.find((candidate) => candidate.markerId === action.markerId);
-      if (!marker) return { command: null, errorCode: 'combat_lab_command_marker_missing', errorRu: `Метка «${action.markerId}» отсутствует.` };
-      const metresPerCell = Math.max(0.001, this.state.map.metersPerCell);
-      return successCommand({ kind: 'move', unitId, targetGrid: { x: marker.xMetres / metresPerCell, y: marker.yMetres / metresPerCell } });
+      const target = marker(action.markerId);
+      if (!target) return markerMissing(action.markerId);
+      let finalFacingRadians: number | null = null;
+      if (action.finalFacingMarkerId) {
+        const facing = marker(action.finalFacingMarkerId);
+        if (!facing) return markerMissing(action.finalFacingMarkerId);
+        finalFacingRadians = Math.atan2(facing.yMetres - target.yMetres, facing.xMetres - target.xMetres);
+      }
+      return successCommand({
+        kind: 'move',
+        unitId,
+        targetGrid: { x: target.xMetres / metresPerCell, y: target.yMetres / metresPerCell },
+        tacticalOrderPresetId: action.tacticalOrderPresetId ?? 'move',
+        finalFacingRadians,
+      });
+    }
+    if (action.kind === 'face') {
+      const unitId = roleUnitId(action.actorRoleId);
+      if (!unitId) return missingRole(action.actorRoleId);
+      const target = marker(action.markerId);
+      return target
+        ? successCommand({ kind: 'face', unitId, targetGrid: { x: target.xMetres / metresPerCell, y: target.yMetres / metresPerCell } })
+        : markerMissing(action.markerId);
+    }
+    if (action.kind === 'cancel_action') {
+      const unitId = roleUnitId(action.actorRoleId);
+      return unitId ? successCommand({ kind: 'cancel_action', unitId, target: action.target }) : missingRole(action.actorRoleId);
     }
     if (action.kind === 'posture') {
       const unitId = roleUnitId(action.actorRoleId);
@@ -380,7 +368,7 @@ export class CombatLabScenarioExecutor {
     }
     if (runtime.step.failurePolicy === 'wait' && !this.stepTimedOut(runtime)) {
       if (!commandRejected && runtime.attempt >= runtime.step.repeat.maximumAttempts) {
-        this.failExperiment('combat_lab_repeat_attempts_exhausted', `Шаг «${runtime.step.stepId}» исчерпал maximumAttempts.`);
+        this.failExperiment('combat_lab_repeat_attempts_exhausted', `Шаг «${runtime.step.stepId}» исчерпал число попыток.`);
         runtime.state = 'failed';
         runtime.completedSeconds = this.state.simulationTimeSeconds;
         runtime.reasonCode = 'combat_lab_repeat_attempts_exhausted';
@@ -405,7 +393,7 @@ export class CombatLabScenarioExecutor {
 
   private handleTimeout(runtime: MutableStepRuntime): void {
     const reasonCode = 'combat_lab_step_timeout';
-    const reasonRu = `Шаг «${runtime.step.stepId}» превысил timeout ${runtime.step.timeoutSeconds} с.`;
+    const reasonRu = `Шаг «${runtime.step.stepId}» превысил предельное время ${runtime.step.timeoutSeconds} с.`;
     if (runtime.step.failurePolicy === 'skip_step') {
       runtime.state = 'skipped';
       runtime.completedSeconds = this.state.simulationTimeSeconds;
@@ -454,29 +442,13 @@ export class CombatLabScenarioExecutor {
   }
   private evaluateSuccessCondition(): boolean { return evaluateCombatLabCondition(this.experiment.successCondition, this.rootConditionContext()); }
   private rootConditionContext(): CombatLabConditionContextV1 {
-    return {
-      experiment: this.experiment,
-      state: this.state,
-      runtimeSnapshot: this.getSnapshot(),
-      experimentStartedSeconds: this.experimentStartedSeconds,
-      stepStartedSeconds: null,
-    };
+    return { experiment: this.experiment, state: this.state, runtimeSnapshot: this.getSnapshot(), experimentStartedSeconds: this.experimentStartedSeconds, stepStartedSeconds: null };
   }
-  private conditionContext(
-    runtime: MutableStepRuntime,
-    runtimeSnapshot: CombatLabScenarioRuntimeSnapshotV1 = this.getSnapshot(),
-  ): CombatLabConditionContextV1 {
-    return {
-      experiment: this.experiment,
-      state: this.state,
-      runtimeSnapshot,
-      experimentStartedSeconds: this.experimentStartedSeconds,
-      stepStartedSeconds: runtime.observation?.startedSeconds ?? runtime.startedSeconds,
-    };
+  private conditionContext(runtime: MutableStepRuntime, runtimeSnapshot: CombatLabScenarioRuntimeSnapshotV1 = this.getSnapshot()): CombatLabConditionContextV1 {
+    return { experiment: this.experiment, state: this.state, runtimeSnapshot, experimentStartedSeconds: this.experimentStartedSeconds, stepStartedSeconds: runtime.observation?.startedSeconds ?? runtime.startedSeconds };
   }
   private stepTimedOut(runtime: MutableStepRuntime): boolean {
-    return runtime.startedSeconds !== null
-      && this.state.simulationTimeSeconds - runtime.startedSeconds + EPSILON_SECONDS >= runtime.step.timeoutSeconds;
+    return runtime.startedSeconds !== null && this.state.simulationTimeSeconds - runtime.startedSeconds + EPSILON_SECONDS >= runtime.step.timeoutSeconds;
   }
   private firstUnfinishedStep(track: CombatLabTrackV1): MutableStepRuntime | null {
     for (const step of track.steps) {
