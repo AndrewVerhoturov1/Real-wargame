@@ -18,6 +18,8 @@ import {
   type CombatLabRepresentativeReplayContextV1,
 } from './CombatLabExperimentRunState';
 
+const RUNTIME_PUBLICATION_INTERVAL_MS = 100;
+
 export interface CombatLabExperimentVisualControllerOptions {
   readonly session: CombatLabVisualSession;
   readonly getExperiment: () => CombatLabExperimentV1;
@@ -35,7 +37,8 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
   private representative: CombatLabRepresentativeReplayContextV1 | null = null;
   private publishedSnapshot: CombatLabExperimentVisualRuntimeSnapshotV1 | null = null;
   private pendingCoreSnapshot: CombatLabScenarioRuntimeSnapshotV1 | null = null;
-  private publicationFrame = 0;
+  private publicationTimer = 0;
+  private lastPublicationAtMs = Number.NEGATIVE_INFINITY;
   private destroyed = false;
 
   private constructor(private readonly options: CombatLabExperimentVisualControllerOptions) {}
@@ -63,8 +66,7 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
     this.blockedBeforeTick = false;
     this.representative = null;
     this.journal.clear();
-    const core = executor.getSnapshot();
-    this.publishImmediate(core);
+    this.publishImmediate(executor.getSnapshot());
   }
 
   start(): void {
@@ -202,10 +204,7 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
 
   flushPendingPublication(): void {
     if (this.destroyed) return;
-    if (this.publicationFrame !== 0 && typeof window !== 'undefined') {
-      window.cancelAnimationFrame(this.publicationFrame);
-      this.publicationFrame = 0;
-    }
+    this.cancelPublicationTimer();
     const core = this.pendingCoreSnapshot;
     this.pendingCoreSnapshot = null;
     if (core) this.publishNow(core);
@@ -216,10 +215,7 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
     this.cancelCurrentExperimentActions();
     this.options.session.setPaused(true);
     this.options.session.clearStepHooks(this);
-    if (this.publicationFrame !== 0 && typeof window !== 'undefined') {
-      window.cancelAnimationFrame(this.publicationFrame);
-    }
-    this.publicationFrame = 0;
+    this.cancelPublicationTimer();
     this.pendingCoreSnapshot = null;
     this.destroyed = true;
     this.executor = null;
@@ -240,25 +236,24 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
 
   private schedulePublication(core: CombatLabScenarioRuntimeSnapshotV1): void {
     this.pendingCoreSnapshot = core;
-    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+    if (typeof window === 'undefined') {
       this.flushPendingPublication();
       return;
     }
-    if (this.publicationFrame !== 0) return;
-    this.publicationFrame = window.requestAnimationFrame(() => {
-      this.publicationFrame = 0;
+    if (this.publicationTimer !== 0) return;
+    const elapsedMs = performance.now() - this.lastPublicationAtMs;
+    const delayMs = Math.max(0, RUNTIME_PUBLICATION_INTERVAL_MS - elapsedMs);
+    this.publicationTimer = window.setTimeout(() => {
+      this.publicationTimer = 0;
       if (this.destroyed) return;
       const pending = this.pendingCoreSnapshot;
       this.pendingCoreSnapshot = null;
       if (pending) this.publishNow(pending);
-    });
+    }, delayMs);
   }
 
   private publishImmediate(core: CombatLabScenarioRuntimeSnapshotV1): void {
-    if (this.publicationFrame !== 0 && typeof window !== 'undefined') {
-      window.cancelAnimationFrame(this.publicationFrame);
-      this.publicationFrame = 0;
-    }
+    this.cancelPublicationTimer();
     this.pendingCoreSnapshot = null;
     this.publishNow(core);
   }
@@ -275,7 +270,14 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
       representative: this.representative,
     });
     this.publishedSnapshot = snapshot;
+    this.lastPublicationAtMs = typeof performance === 'undefined' ? Date.now() : performance.now();
     this.options.onRuntimeChanged(snapshot);
+  }
+
+  private cancelPublicationTimer(): void {
+    if (this.publicationTimer === 0 || typeof window === 'undefined') return;
+    window.clearTimeout(this.publicationTimer);
+    this.publicationTimer = 0;
   }
 
   private refreshExecutorForChangedExperiment(): boolean {
