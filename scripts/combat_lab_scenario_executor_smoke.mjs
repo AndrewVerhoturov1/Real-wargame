@@ -15,7 +15,7 @@ assert.match(executor, /maximumAttempts/);
 assert.match(executor, /stop_experiment|skip_step|failurePolicy === 'wait'/);
 assert.match(executor, /paused_at_breakpoint/);
 assert.match(executor, /Object\.freeze/);
-for (const kind of ['fire', 'cancel_fire', 'move', 'posture', 'reload', 'deploy', 'undeploy', 'transfer', 'first_aid']) assert.match(executor, new RegExp(`'${kind}'`));
+for (const kind of ['fire', 'stop_fire', 'move', 'face', 'cancel_action', 'posture', 'reload', 'deploy', 'undeploy', 'transfer', 'first_aid']) assert.match(executor, new RegExp(`'${kind}'`));
 assert.match(conditions, /step_state/);
 assert.match(conditions, /perceptionKnowledge\.contacts/);
 assert.match(conditions, /getEffectiveCombatCapabilities/);
