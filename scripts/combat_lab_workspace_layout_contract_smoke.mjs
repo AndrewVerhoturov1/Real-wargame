@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [extension, workspaceCss, batchPanel, runtimeStatus, stepInspector, stepCard, batchResults] = await Promise.all([
+const [extension, workspaceCss, batchPanel, runtimeStatus, stepInspector, stepCard, actionDialog, batchResults] = await Promise.all([
   readFile('src/combat-lab/CombatLabExtension.ts', 'utf8'),
   readFile('src/combat-lab/combat-lab-workspace.css', 'utf8'),
   readFile('src/combat-lab/ui/CombatLabBatchPanel.ts', 'utf8'),
   readFile('src/combat-lab/ui/CombatLabScenarioRuntimeStatus.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabStepInspector.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabStepCard.ts', 'utf8'),
+  readFile('src/combat-lab/scenario-editor/CombatLabActionDialog.ts', 'utf8'),
   readFile('src/combat-lab/ui/CombatLabBatchResultsView.ts', 'utf8'),
 ]);
 
@@ -24,7 +25,9 @@ assert.match(batchPanel, /Предельное время/);
 assert.match(runtimeStatus, /Начальное число случайности/);
 assert.match(stepInspector, /Точка остановки перед шагом/);
 assert.match(stepInspector, /Игровое действие завершено/);
-assert.match(stepCard, /Предельное время/);
+assert.match(`${stepInspector}\n${actionDialog}`, /Предельное время/);
+assert.match(stepCard, /Изменить/);
+assert.doesNotMatch(stepCard, /Предельное время/);
 assert.match(batchResults, /Начальное число случайности/);
 assert.doesNotMatch(`${extension}\n${batchPanel}`, /Static Stage 10 compatibility markers|Legacy source-contract markers|LegacyStage10HostContract/);
 assert.doesNotMatch(extension, /installWorkspaceLabelLocalizer|createTreeWalker|NodeFilter\.SHOW_TEXT|replaceAll\(/);
