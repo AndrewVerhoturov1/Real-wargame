@@ -1,0 +1,32 @@
+name: Worker Combat Lab Performance Verify
+
+on:
+  push:
+    branches:
+      - worker/20260730-combat-lab-performance
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact worker head
+        uses: actions/checkout@v4
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Combat Lab experiment checks
+        run: npm run combat-lab-experiment:smoke
+      - name: Performance contract check
+        run: npm run performance-contract:smoke
+      - name: Production build
+        run: npm run build
