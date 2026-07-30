@@ -7,6 +7,8 @@ export * from './CombatLabScenarioCompletion';
 export * from './CombatLabScenarioExecutor';
 export * from './CombatLabBuiltInExperiments';
 export * from './CombatLabExperimentRunner';
+export * from './CombatLabParticipantParameters';
+export * from './CombatLabParticipantSceneEditing';
 export * from './CombatLabBatchContracts';
 export * from './CombatLabBatchStatistics';
 export * from './CombatLabRepresentativeRuns';

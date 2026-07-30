@@ -12,27 +12,31 @@ function semanticExperimentValue(experiment: CombatLabExperimentV1): unknown {
     revision: experiment.revision,
     baseScenarioId: experiment.baseScenarioId,
     sceneSnapshot: semanticSceneSnapshot(experiment.sceneSnapshot),
-    roles: experiment.roles.map((role) => ({
-      roleId: role.roleId,
-      unitId: role.unitId,
-      selectableAs: [...role.selectableAs],
-    })),
-    markers: experiment.markers.map((marker) => marker.kind === 'circle'
-      ? {
-          markerId: marker.markerId,
-          kind: marker.kind,
-          xMetres: marker.xMetres,
-          yMetres: marker.yMetres,
-          zMetres: marker.zMetres,
-          radiusMetres: marker.radiusMetres,
-        }
-      : {
-          markerId: marker.markerId,
-          kind: marker.kind,
-          xMetres: marker.xMetres,
-          yMetres: marker.yMetres,
-          zMetres: marker.zMetres,
-        }),
+    roles: [...experiment.roles]
+      .sort((left, right) => compareText(left.roleId, right.roleId))
+      .map((role) => ({
+        roleId: role.roleId,
+        unitId: role.unitId,
+        parameters: role.parameters,
+      })),
+    markers: [...experiment.markers]
+      .sort((left, right) => compareText(left.markerId, right.markerId))
+      .map((marker) => marker.kind === 'circle'
+        ? {
+            markerId: marker.markerId,
+            kind: marker.kind,
+            xMetres: marker.xMetres,
+            yMetres: marker.yMetres,
+            zMetres: marker.zMetres,
+            radiusMetres: marker.radiusMetres,
+          }
+        : {
+            markerId: marker.markerId,
+            kind: marker.kind,
+            xMetres: marker.xMetres,
+            yMetres: marker.yMetres,
+            zMetres: marker.zMetres,
+          }),
     tracks: experiment.tracks.map((track) => ({
       trackId: track.trackId,
       actorRoleId: track.actorRoleId,
@@ -77,9 +81,7 @@ function semanticSceneSnapshot(scene: CombatLabExperimentV1['sceneSnapshot']): u
   return {
     ...rest,
     ...(staticTacticalPositionArtifact
-      ? {
-          staticTacticalPositionArtifact: stripVolatileArtifactMetadata(staticTacticalPositionArtifact),
-        }
+      ? { staticTacticalPositionArtifact: stripVolatileArtifactMetadata(staticTacticalPositionArtifact) }
       : {}),
   };
 }
@@ -90,10 +92,6 @@ function stripVolatileArtifactMetadata(value: unknown): unknown {
   return rest;
 }
 
-function semanticCondition(condition: CombatLabConditionV1): CombatLabConditionV1 {
-  return condition;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+function semanticCondition(condition: CombatLabConditionV1): CombatLabConditionV1 { return condition; }
+function compareText(left: string, right: string): number { return left < right ? -1 : left > right ? 1 : 0; }
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }

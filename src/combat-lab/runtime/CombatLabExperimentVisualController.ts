@@ -1,6 +1,6 @@
 import {
   CombatLabScenarioExecutor,
-  type CombatLabAccuracyOverridesV1,
+  prepareCombatLabExperimentForRun,
   type CombatLabCommandResultV1,
   type CombatLabExperimentV1,
   type CombatLabScenarioRuntimeSnapshotV1,
@@ -52,14 +52,15 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
 
   reset(seed?: number): void {
     this.assertAlive();
-    const experiment = this.options.getExperiment();
+    const sourceExperiment = this.options.getExperiment();
     this.cancelCurrentExperimentActions();
-    this.selectedSeed = normalizeSeed(seed ?? experiment.defaults.seed);
+    this.selectedSeed = normalizeSeed(seed ?? sourceExperiment.defaults.seed);
+    const experiment = prepareCombatLabExperimentForRun(sourceExperiment, this.selectedSeed);
     this.options.session.enableRecommendedProgram(false);
     this.options.session.setPaused(true);
     this.options.session.resetExperimentScene(experiment.sceneSnapshot, this.selectedSeed);
     this.experiment = experiment;
-    const executor = CombatLabScenarioExecutor.create(applyVisualSeed(experiment, this.selectedSeed), this.options.session.state);
+    const executor = CombatLabScenarioExecutor.create(experiment, this.options.session.state);
     this.executor = executor;
     this.visualRevision += 1;
     this.visualStatus = 'ready';
@@ -321,29 +322,6 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
   private assertAlive(): void {
     if (this.destroyed) throw new Error('Combat Lab visual controller is destroyed.');
   }
-}
-
-function applyVisualSeed(experiment: CombatLabExperimentV1, seed: number): CombatLabExperimentV1 {
-  const defaults = Object.freeze({
-    ...experiment.defaults,
-    seed,
-    accuracyOverrides: withRandomSeed(experiment.defaults.accuracyOverrides, seed),
-  });
-  const tracks = Object.freeze(experiment.tracks.map((track) => Object.freeze({
-    ...track,
-    steps: Object.freeze(track.steps.map((step) => Object.freeze({
-      ...step,
-      accuracyOverrides: withRandomSeed(step.accuracyOverrides, seed),
-    }))),
-  })));
-  return Object.freeze({ ...experiment, defaults, tracks });
-}
-
-function withRandomSeed(
-  overrides: CombatLabAccuracyOverridesV1 | null,
-  seed: number,
-): CombatLabAccuracyOverridesV1 | null {
-  return overrides ? Object.freeze({ ...overrides, randomSeed: seed }) : null;
 }
 
 function normalizeSeed(seed: number): number {

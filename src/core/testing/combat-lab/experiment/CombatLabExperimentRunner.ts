@@ -1,7 +1,7 @@
 import { tickSimulation } from '../../../simulation/SimulationTick';
 import { createInitialState, type SimulationState } from '../../../simulation/SimulationState';
 import { restoreSimulationStateFromSceneSnapshot } from '../../../simulation/SceneSnapshot';
-import { COMBAT_LAB_FIXED_STEP_SECONDS } from '../CombatLabContracts';
+import { COMBAT_LAB_FIXED_STEP_SECONDS, type CombatLabCommandResultV1 } from '../CombatLabContracts';
 import { digestCombatLabEvents, digestCombatLabState, digestStableValue } from '../CombatLabDigest';
 import {
   createCombatLabMetricCollector,
@@ -11,8 +11,9 @@ import {
 import type { CombatLabExperimentRunRequestV1, CombatLabExperimentRunResultV1 } from './CombatLabBatchContracts';
 import type { CombatLabExperimentV1 } from './CombatLabExperimentContracts';
 import { digestCombatLabExperiment } from './CombatLabExperimentDigest';
-import { validateCombatLabExperiment } from './CombatLabExperimentValidation';
+import { prepareCombatLabExperimentForRun } from './CombatLabParticipantParameters';
 import { CombatLabScenarioExecutor } from './CombatLabScenarioExecutor';
+import { validateCombatLabExperiment } from './CombatLabExperimentValidation';
 
 const MAX_UINT32 = 0xffff_ffff;
 const EPSILON_SECONDS = 1e-9;
@@ -28,7 +29,7 @@ export function runCombatLabExperiment(
   }
 
   const sourceDigest = digestCombatLabExperiment(request.experiment);
-  const experiment = prepareExperimentForHeadlessRun(request.experiment, request.seed);
+  const experiment = prepareCombatLabExperimentForRun(request.experiment, request.seed);
   const state = createEmptySimulationState();
   restoreSimulationStateFromSceneSnapshot(state, experiment.sceneSnapshot);
   const startedSeconds = state.simulationTimeSeconds;
@@ -56,7 +57,7 @@ export function runCombatLabExperiment(
       break;
     }
 
-    const commandResults = executor.beforeSimulationStep();
+    const commandResults = beforeSimulationStepIgnoringBreakpoints(executor, experiment);
     if (commandResults.length > 0) {
       commandDigest = digestStableValue({ previous: commandDigest, commandResults });
     }
@@ -102,49 +103,18 @@ export function runCombatLabExperiment(
   });
 }
 
-function prepareExperimentForHeadlessRun(
+
+function beforeSimulationStepIgnoringBreakpoints(
+  executor: CombatLabScenarioExecutor,
   experiment: CombatLabExperimentV1,
-  seed: number,
-): CombatLabExperimentV1 {
-  return {
-    ...experiment,
-    defaults: {
-      ...experiment.defaults,
-      seed,
-      accuracyOverrides: withRunSeed(experiment.defaults.accuracyOverrides, seed, 0),
-    },
-    tracks: experiment.tracks.map((track, trackIndex) => ({
-      ...track,
-      steps: track.steps.map((step, stepIndex) => ({
-        ...step,
-        breakpointBefore: false,
-        accuracyOverrides: withRunSeed(
-          step.accuracyOverrides,
-          seed,
-          trackIndex * 1_024 + stepIndex + 1,
-        ),
-      })),
-    })),
-  };
-}
-
-function withRunSeed<T extends { readonly randomSeed: number } | null>(
-  overrides: T,
-  seed: number,
-  salt: number,
-): T {
-  if (!overrides) return overrides;
-  return { ...overrides, randomSeed: deriveSeed(seed, salt) } as T;
-}
-
-function deriveSeed(seed: number, salt: number): number {
-  let value = (seed + Math.imul(salt + 1, 0x9e37_79b9)) >>> 0;
-  value ^= value >>> 16;
-  value = Math.imul(value, 0x85eb_ca6b) >>> 0;
-  value ^= value >>> 13;
-  value = Math.imul(value, 0xc2b2_ae35) >>> 0;
-  value ^= value >>> 16;
-  return value === 0 ? 1 : value;
+): readonly CombatLabCommandResultV1[] {
+  const results = [...executor.beforeSimulationStep()];
+  const maximumResumes = experiment.tracks.reduce((sum, track) => sum + track.steps.length, 0) + 1;
+  for (let resumeIndex = 0; resumeIndex < maximumResumes; resumeIndex += 1) {
+    if (!executor.getSnapshot().steps.some((step) => step.state === 'paused_at_breakpoint')) return results;
+    results.push(...executor.beforeSimulationStep());
+  }
+  throw new Error('Combat Lab headless breakpoint auto-resume guard exhausted.');
 }
 
 function createEmptySimulationState(): SimulationState {

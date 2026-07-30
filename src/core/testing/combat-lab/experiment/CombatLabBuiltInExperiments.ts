@@ -41,6 +41,7 @@ export function buildCombatLabBuiltInExperiment(
     roleId: role.roleId,
     unitId: role.unitId,
     titleRu: role.titleRu,
+    parameters: { schemaVersion: 1, accuracy: null },
     selectableAs: [...role.selectableAs],
   }));
   const roleIdByUnitId = new Map(roles.map((role) => [role.unitId, role.roleId]));

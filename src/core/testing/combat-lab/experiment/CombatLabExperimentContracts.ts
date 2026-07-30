@@ -48,11 +48,18 @@ export interface CombatLabExperimentV1 {
   readonly batchDefaults: CombatLabBatchConfigV1;
 }
 
+export interface CombatLabParticipantParametersV1 {
+  readonly schemaVersion: 1;
+  readonly accuracy: CombatLabAccuracyOverridesV1 | null;
+}
+
 export interface CombatLabExperimentRoleV1 {
   readonly roleId: string;
   readonly unitId: string;
   readonly titleRu: string;
-  readonly selectableAs: CombatLabRoleV1['selectableAs'];
+  readonly parameters: CombatLabParticipantParametersV1;
+  /** Legacy import-only capability list. It never determines action availability. */
+  readonly selectableAs?: CombatLabRoleV1['selectableAs'];
 }
 
 export interface CombatLabPointMarkerV1 {
@@ -99,14 +106,8 @@ export interface CombatLabScenarioStepV1 {
 }
 
 export type CombatLabTargetReferenceV1 =
-  | {
-      readonly kind: 'role';
-      readonly roleId: string;
-    }
-  | {
-      readonly kind: 'marker';
-      readonly markerId: string;
-    };
+  | { readonly kind: 'role'; readonly roleId: string }
+  | { readonly kind: 'marker'; readonly markerId: string };
 
 export type CombatLabActionV1 =
   | {
@@ -119,51 +120,15 @@ export type CombatLabActionV1 =
       readonly minimumPerceptionQuality: number;
       readonly forceFire: boolean;
     }
-  | {
-      readonly kind: 'stop_fire';
-      readonly actorRoleId: string;
-    }
-  | {
-      readonly kind: 'move';
-      readonly actorRoleId: string;
-      readonly markerId: string;
-    }
-  | {
-      readonly kind: 'posture';
-      readonly actorRoleId: string;
-      readonly targetPosture: CombatLabPostureV1;
-    }
-  | {
-      readonly kind: 'wait';
-      readonly durationSeconds: number | null;
-    }
-  | {
-      readonly kind: 'reload';
-      readonly actorRoleId: string;
-      readonly helperRoleId: string | null;
-    }
-  | {
-      readonly kind: 'deploy';
-      readonly actorRoleId: string;
-      readonly helperRoleId: string | null;
-    }
-  | {
-      readonly kind: 'undeploy';
-      readonly actorRoleId: string;
-      readonly helperRoleId: string | null;
-    }
-  | {
-      readonly kind: 'transfer';
-      readonly sourceRoleId: string;
-      readonly targetRoleId: string;
-      readonly requestedRounds: number;
-    }
-  | {
-      readonly kind: 'first_aid';
-      readonly actorRoleId: string;
-      readonly targetRoleId: string;
-      readonly zone: CombatLabFirstAidZoneV1;
-    };
+  | { readonly kind: 'stop_fire'; readonly actorRoleId: string }
+  | { readonly kind: 'move'; readonly actorRoleId: string; readonly markerId: string }
+  | { readonly kind: 'posture'; readonly actorRoleId: string; readonly targetPosture: CombatLabPostureV1 }
+  | { readonly kind: 'wait'; readonly durationSeconds: number | null }
+  | { readonly kind: 'reload'; readonly actorRoleId: string; readonly helperRoleId: string | null }
+  | { readonly kind: 'deploy'; readonly actorRoleId: string; readonly helperRoleId: string | null }
+  | { readonly kind: 'undeploy'; readonly actorRoleId: string; readonly helperRoleId: string | null }
+  | { readonly kind: 'transfer'; readonly sourceRoleId: string; readonly targetRoleId: string; readonly requestedRounds: number }
+  | { readonly kind: 'first_aid'; readonly actorRoleId: string; readonly targetRoleId: string; readonly zone: CombatLabFirstAidZoneV1 };
 
 export type CombatLabStepDependencyStateV1 = 'started' | 'completed' | 'failed';
 export type CombatLabRoleStatePredicateV1 =
@@ -175,67 +140,22 @@ export type CombatLabRoleStatePredicateV1 =
   | 'cannot_move';
 
 export type CombatLabConditionV1 =
-  | {
-      readonly kind: 'always';
-    }
-  | {
-      readonly kind: 'elapsed';
-      readonly anchor: 'experiment_start' | 'step_start';
-      readonly seconds: number;
-    }
-  | {
-      readonly kind: 'step_state';
-      readonly trackId: string;
-      readonly stepId: string;
-      readonly state: CombatLabStepDependencyStateV1;
-    }
-  | {
-      readonly kind: 'role_state';
-      readonly roleId: string;
-      readonly state: CombatLabRoleStatePredicateV1;
-    }
-  | {
-      readonly kind: 'contact';
-      readonly observerRoleId: string;
-      readonly targetRoleId: string;
-      readonly present: boolean;
-    }
-  | {
-      readonly kind: 'ammo';
-      readonly roleId: string;
-      readonly comparison: 'empty';
-    }
-  | {
-      readonly kind: 'ammo';
-      readonly roleId: string;
-      readonly comparison: 'at_most' | 'at_least';
-      readonly rounds: number;
-    }
-  | {
-      readonly kind: 'suppression';
-      readonly roleId: string;
-      readonly comparison: 'at_most' | 'at_least';
-      readonly value: number;
-    };
+  | { readonly kind: 'always' }
+  | { readonly kind: 'elapsed'; readonly anchor: 'experiment_start' | 'step_start'; readonly seconds: number }
+  | { readonly kind: 'step_state'; readonly trackId: string; readonly stepId: string; readonly state: CombatLabStepDependencyStateV1 }
+  | { readonly kind: 'role_state'; readonly roleId: string; readonly state: CombatLabRoleStatePredicateV1 }
+  | { readonly kind: 'contact'; readonly observerRoleId: string; readonly targetRoleId: string; readonly present: boolean }
+  | { readonly kind: 'ammo'; readonly roleId: string; readonly comparison: 'empty' }
+  | { readonly kind: 'ammo'; readonly roleId: string; readonly comparison: 'at_most' | 'at_least'; readonly rounds: number }
+  | { readonly kind: 'suppression'; readonly roleId: string; readonly comparison: 'at_most' | 'at_least'; readonly value: number };
 
 export type CombatLabCompletionV1 =
-  | {
-      readonly kind: 'production_action';
-    }
-  | {
-      readonly kind: 'shot_resolved';
-    }
-  | {
-      readonly kind: 'condition';
-      readonly condition: CombatLabConditionV1;
-    };
+  | { readonly kind: 'production_action' }
+  | { readonly kind: 'shot_resolved' }
+  | { readonly kind: 'condition'; readonly condition: CombatLabConditionV1 };
 
 export type CombatLabRepeatPolicyV1 =
-  | {
-      readonly kind: 'once';
-      readonly maximumAttempts: 1;
-      readonly retryDelaySeconds: 0;
-    }
+  | { readonly kind: 'once'; readonly maximumAttempts: 1; readonly retryDelaySeconds: 0 }
   | {
       readonly kind: 'until_condition';
       readonly condition: CombatLabConditionV1;
@@ -252,33 +172,14 @@ export interface CombatLabExperimentDefaultsV1 {
 }
 
 export type CombatLabExperimentStopConditionV1 =
-  | {
-      readonly kind: 'time';
-      readonly maximumSimulationSeconds: number;
-    }
-  | {
-      readonly kind: 'program_complete';
-      readonly maximumSimulationSeconds: number;
-    }
-  | {
-      readonly kind: 'condition';
-      readonly maximumSimulationSeconds: number;
-      readonly condition: CombatLabConditionV1;
-    };
+  | { readonly kind: 'time'; readonly maximumSimulationSeconds: number }
+  | { readonly kind: 'program_complete'; readonly maximumSimulationSeconds: number }
+  | { readonly kind: 'condition'; readonly maximumSimulationSeconds: number; readonly condition: CombatLabConditionV1 };
 
 export type CombatLabSeedStrategyV1 =
-  | {
-      readonly kind: 'fixed';
-      readonly seed: number;
-    }
-  | {
-      readonly kind: 'sequential';
-      readonly firstSeed: number;
-    }
-  | {
-      readonly kind: 'explicit';
-      readonly seeds: readonly number[];
-    };
+  | { readonly kind: 'fixed'; readonly seed: number }
+  | { readonly kind: 'sequential'; readonly firstSeed: number }
+  | { readonly kind: 'explicit'; readonly seeds: readonly number[] };
 
 export interface CombatLabBatchConfigV1 {
   readonly runCount: number;
