@@ -53,9 +53,12 @@ export class PixiCombatEffectsRenderer {
   private readonly processedImpactIds = new BoundedIdWindow(MAX_PROCESSED_IDS);
   private readonly originByShotId = new BoundedMap<string, ScreenPoint>(MAX_PROCESSED_IDS);
   private effects: CombatVisualEffect[] = [];
-  private previousHistory: readonly CombatEvent[] | null = null;
-  private previousCommittedShots: readonly ShotCommitRecordV1[] | null = null;
-  private previousImpacts: readonly ProjectileImpactV1[] | null = null;
+  private previousHistoryLength = 0;
+  private previousHistoryLastId: string | null = null;
+  private previousCommittedShotLength = 0;
+  private previousCommittedShotLastId: string | null = null;
+  private previousImpactLength = 0;
+  private previousImpactLastId: string | null = null;
 
   constructor() {
     this.container.eventMode = 'none';
@@ -69,17 +72,23 @@ export class PixiCombatEffectsRenderer {
     const history = getCombatEventHistory(state);
     const projectiles = state.infantryCombatProjectiles;
 
-    if (projectiles.committedShots !== this.previousCommittedShots) {
-      this.consumeCommittedShots(state, recentTail(projectiles.committedShots), nowMs);
-      this.previousCommittedShots = projectiles.committedShots;
+    const committedLastId = lastId(projectiles.committedShots, (shot) => shot.shotId);
+    if (sourceChanged(projectiles.committedShots.length, committedLastId, this.previousCommittedShotLength, this.previousCommittedShotLastId)) {
+      this.consumeCommittedShots(state, projectiles.committedShots, nowMs);
+      this.previousCommittedShotLength = projectiles.committedShots.length;
+      this.previousCommittedShotLastId = committedLastId;
     }
-    if (projectiles.impacts !== this.previousImpacts) {
-      this.consumeProjectileImpacts(state, recentTail(projectiles.impacts), nowMs);
-      this.previousImpacts = projectiles.impacts;
+    const impactLastId = lastId(projectiles.impacts, (impact) => impact.impactId);
+    if (sourceChanged(projectiles.impacts.length, impactLastId, this.previousImpactLength, this.previousImpactLastId)) {
+      this.consumeProjectileImpacts(state, projectiles.impacts, nowMs);
+      this.previousImpactLength = projectiles.impacts.length;
+      this.previousImpactLastId = impactLastId;
     }
-    if (history !== this.previousHistory) {
-      this.consumeLegacyEvents(state, recentTail(history), nowMs);
-      this.previousHistory = history;
+    const historyLastId = lastId(history, (event) => event.id);
+    if (sourceChanged(history.length, historyLastId, this.previousHistoryLength, this.previousHistoryLastId)) {
+      this.consumeLegacyEvents(state, history, nowMs);
+      this.previousHistoryLength = history.length;
+      this.previousHistoryLastId = historyLastId;
     }
 
     compactActiveEffects(this.effects, nowMs);
@@ -98,9 +107,12 @@ export class PixiCombatEffectsRenderer {
 
   destroy(): void {
     this.effects.length = 0;
-    this.previousHistory = null;
-    this.previousCommittedShots = null;
-    this.previousImpacts = null;
+    this.previousHistoryLength = 0;
+    this.previousHistoryLastId = null;
+    this.previousCommittedShotLength = 0;
+    this.previousCommittedShotLastId = null;
+    this.previousImpactLength = 0;
+    this.previousImpactLastId = null;
     this.processedLegacyEventIds.clear();
     this.processedShotIds.clear();
     this.processedImpactIds.clear();
@@ -113,7 +125,8 @@ export class PixiCombatEffectsRenderer {
     committedShots: readonly ShotCommitRecordV1[],
     nowMs: number,
   ): void {
-    for (const shot of committedShots) {
+    for (let index = recentStart(committedShots.length); index < committedShots.length; index += 1) {
+      const shot = committedShots[index]!;
       if (this.processedShotIds.has(shot.shotId)) continue;
       this.startShotEffect(state, shot.shotId, shot.muzzlePosition, nowMs);
     }
@@ -124,7 +137,8 @@ export class PixiCombatEffectsRenderer {
     impacts: readonly ProjectileImpactV1[],
     nowMs: number,
   ): void {
-    for (const impact of impacts) {
+    for (let index = recentStart(impacts.length); index < impacts.length; index += 1) {
+      const impact = impacts[index]!;
       if (!this.processedImpactIds.add(impact.impactId)) continue;
       this.startImpactEffect(state, impact.shotId, impact.point, impact.hitType, nowMs);
     }
@@ -135,7 +149,8 @@ export class PixiCombatEffectsRenderer {
     history: readonly CombatEvent[],
     nowMs: number,
   ): void {
-    for (const event of history) {
+    for (let index = recentStart(history.length); index < history.length; index += 1) {
+      const event = history[index]!;
       if (!this.processedLegacyEventIds.add(event.id)) continue;
 
       if (event.kind === 'shot_fired') {
@@ -245,10 +260,22 @@ class BoundedMap<K, V> {
   }
 }
 
-function recentTail<T>(values: readonly T[]): readonly T[] {
-  return values.length <= MAX_RECENT_SOURCE_ENTRIES
-    ? values
-    : values.slice(values.length - MAX_RECENT_SOURCE_ENTRIES);
+function sourceChanged(
+  length: number,
+  lastEntryId: string | null,
+  previousLength: number,
+  previousLastEntryId: string | null,
+): boolean {
+  return length !== previousLength || lastEntryId !== previousLastEntryId;
+}
+
+function lastId<T>(values: readonly T[], readId: (value: T) => string): string | null {
+  const last = values[values.length - 1];
+  return last === undefined ? null : readId(last);
+}
+
+function recentStart(length: number): number {
+  return Math.max(0, length - MAX_RECENT_SOURCE_ENTRIES);
 }
 
 function compactActiveEffects(effects: CombatVisualEffect[], nowMs: number): void {
