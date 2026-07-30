@@ -99,8 +99,14 @@ function actionReferencesRole(step: CombatLabScenarioStepV1, roleId: string): bo
   const action = step.action;
   switch (action.kind) {
     case 'fire': return action.actorRoleId === roleId || (action.target.kind === 'role' && action.target.roleId === roleId);
-    case 'stop_fire': case 'move': case 'posture': return action.actorRoleId === roleId;
-    case 'reload': case 'deploy': case 'undeploy': return action.actorRoleId === roleId || action.helperRoleId === roleId;
+    case 'stop_fire':
+    case 'move':
+    case 'face':
+    case 'cancel_action':
+    case 'posture': return action.actorRoleId === roleId;
+    case 'reload':
+    case 'deploy':
+    case 'undeploy': return action.actorRoleId === roleId || action.helperRoleId === roleId;
     case 'transfer': return action.sourceRoleId === roleId || action.targetRoleId === roleId;
     case 'first_aid': return action.actorRoleId === roleId || action.targetRoleId === roleId;
     case 'wait': return false;
@@ -109,7 +115,9 @@ function actionReferencesRole(step: CombatLabScenarioStepV1, roleId: string): bo
 
 function conditionReferencesRole(condition: CombatLabConditionV1, roleId: string): boolean {
   switch (condition.kind) {
-    case 'role_state': case 'ammo': case 'suppression': return condition.roleId === roleId;
+    case 'role_state':
+    case 'ammo':
+    case 'suppression': return condition.roleId === roleId;
     case 'contact': return condition.observerRoleId === roleId || condition.targetRoleId === roleId;
     default: return false;
   }
