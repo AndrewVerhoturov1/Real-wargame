@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const extension = readFileSync('src/combat-lab/CombatLabExtension.ts', 'utf8');
+const workspaceTabs = readFileSync('src/combat-lab/ui/CombatLabWorkspaceTabs.ts', 'utf8');
+const workspaceHosts = readFileSync('src/combat-lab/ui/CombatLabWorkspaceHosts.ts', 'utf8');
 const shell = readFileSync('src/combat-lab/ui/CombatLabShell.ts', 'utf8');
 const renderer = readFileSync('src/combat-lab/rendering/CombatLabRenderer.ts', 'utf8');
 const visualSession = readFileSync('src/combat-lab/runtime/CombatLabVisualSession.ts', 'utf8');
 const layoutEnhancements = readFileSync('src/ui/TacticalWorkspaceLayoutEnhancements.ts', 'utf8');
 const unitBarPresentation = readFileSync('src/ui/UnitBarPresentation.ts', 'utf8');
-const uiBoundary = `${extension}\n${shell}\n${renderer}\n${layoutEnhancements}\n${unitBarPresentation}`;
+const uiBoundary = `${extension}\n${workspaceTabs}\n${workspaceHosts}\n${shell}\n${renderer}\n${layoutEnhancements}\n${unitBarPresentation}`;
 const labMain = readFileSync('src/combat-lab/main.ts', 'utf8');
 const labCss = readFileSync('src/combat-lab/combat-lab.css', 'utf8');
 const workspaceCss = readFileSync('src/combat-lab/combat-lab-workspace.css', 'utf8');
@@ -21,13 +23,26 @@ const metricLabels = readFileSync('src/combat-lab/ui/CombatLabMetricLabels.ts', 
 const css = `${labCss}\n${workspaceCss}\n${labPolishCss}\n${labHeaderCss}\n${refinedCss}\n${productionCss}\n${finalFixesCss}`;
 
 for (const token of [
-  'combat-lab-dock',
-  'data-combat-lab-tab',
+  'CombatLabWorkspaceTabs.create',
   'installSharedSimulationControls',
   'combat-lab-dock-collapsed',
 ]) {
   assert.ok(extension.includes(token), `Combat Lab extension must contain ${token}`);
 }
+for (const token of [
+  'combat-lab-dock',
+  'dataset.combatLabTab',
+  'dataset.combatLabTabPanel',
+  'role',
+  'tablist',
+  'tabpanel',
+]) {
+  assert.ok(workspaceTabs.includes(token), `Combat Lab workspace tabs must contain ${token}`);
+}
+for (const tabId of ['scene', 'program', 'batch', 'parameters', 'metrics', 'journal']) {
+  assert.ok(workspaceHosts.includes(`tabId: '${tabId}'`), `Combat Lab must declare workspace tab ${tabId}`);
+}
+assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 6, 'Combat Lab must expose exactly six workspace tabs.');
 
 assert.doesNotMatch(extension, /adoptSimulationSidebar/, 'Combat Lab must not reparent the production right inspector.');
 assert.doesNotMatch(extension, /['"]fighter['"]/, 'Combat Lab must not duplicate the fighter tab inside the laboratory dock.');
