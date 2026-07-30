@@ -2,6 +2,7 @@ import type {
   CombatLabExperimentV1,
   CombatLabScenarioRuntimeSnapshotV1,
 } from '../../core/testing/combat-lab/experiment';
+import { sharedMapInputOwnership, type MapInputLease } from '../../input/MapInputOwnership';
 import { CombatLabActionDialog } from './CombatLabActionDialog';
 import { CombatLabEditorHistory } from './CombatLabEditorHistory';
 import type { CombatLabExperimentDraft } from './CombatLabExperimentDraft';
@@ -35,6 +36,7 @@ export class CombatLabScenarioEditorPanel {
   private readonly history: CombatLabEditorHistory;
   private readonly trackList: CombatLabTrackList;
   private actionDialog: CombatLabActionDialog | null = null;
+  private mapInputLease: MapInputLease | null = null;
   private runtimeSnapshot: CombatLabScenarioRuntimeSnapshotV1 | null = null;
   private runtimePresentationKey = '';
   private selectedStep: CombatLabSelectedStepV1 | null = null;
@@ -46,6 +48,7 @@ export class CombatLabScenarioEditorPanel {
     this.root.className = 'combat-lab-scenario-editor';
     this.root.setAttribute('aria-label', 'Редактор программы эксперимента');
     this.mapMode = options.initialMapMode ?? 'scenario_editor';
+    this.syncMapInputOwnership();
     this.history = new CombatLabEditorHistory(options.draft.getExperiment());
     const toolbar = this.buildToolbar();
     this.status.className = 'combat-lab-editor-status';
@@ -112,6 +115,9 @@ export class CombatLabScenarioEditorPanel {
     window.removeEventListener('keydown', this.handleGlobalKeyDown);
     this.closeActionDialog();
     this.trackList.destroy();
+    this.mapInputLease?.release();
+    this.mapInputLease = null;
+    sharedMapInputOwnership.release('combat-lab-authoring');
     this.options.onSelectionChanged?.(null);
     this.root.remove();
   }
@@ -203,9 +209,22 @@ export class CombatLabScenarioEditorPanel {
   private setMapMode(mode: CombatLabMapInteractionModeV1): void {
     if (this.mapMode === mode) return;
     this.mapMode = mode;
+    this.syncMapInputOwnership();
     this.syncModeButtons();
     this.options.onMapModeChanged?.(mode);
     this.showStatus(mode === 'scenario_editor' ? 'Правая кнопка добавляет действия в программу.' : 'Правая кнопка снова отдаёт непосредственные игровые приказы.', false);
+  }
+
+  private syncMapInputOwnership(): void {
+    if (this.mapMode === 'manual_control') {
+      this.mapInputLease?.release();
+      this.mapInputLease = null;
+      sharedMapInputOwnership.release('combat-lab-authoring');
+      return;
+    }
+    if (this.mapInputLease || sharedMapInputOwnership.isOwnedBy('combat-lab-authoring')) return;
+    this.mapInputLease = sharedMapInputOwnership.acquire('combat-lab-authoring');
+    if (!this.mapInputLease) this.showStatus?.('Карта занята другим инструментом. Завершите текущий жест.', true);
   }
 
   private syncModeButtons(): void {
