@@ -1,4 +1,5 @@
 import process from 'node:process';
+import './performance_principles_contract_smoke.mjs';
 import { validateAgentDocuments } from './agent_docs_validation.mjs';
 
 const result = await validateAgentDocuments(process.cwd());
