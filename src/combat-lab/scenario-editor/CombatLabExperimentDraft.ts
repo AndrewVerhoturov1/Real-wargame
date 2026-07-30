@@ -362,7 +362,8 @@ function visitSteps(
 }
 
 function actionReferencesMarker(action: CombatLabActionV1, markerId: string): boolean {
-  if (action.kind === 'move') return action.markerId === markerId;
+  if (action.kind === 'move') return action.markerId === markerId || action.finalFacingMarkerId === markerId;
+  if (action.kind === 'face') return action.markerId === markerId;
   return action.kind === 'fire' && action.target.kind === 'marker' && action.target.markerId === markerId;
 }
 
@@ -371,6 +372,8 @@ function actionReferencesRole(action: CombatLabActionV1, roleId: string): boolea
     case 'fire': return action.actorRoleId === roleId || (action.target.kind === 'role' && action.target.roleId === roleId);
     case 'stop_fire':
     case 'move':
+    case 'face':
+    case 'cancel_action':
     case 'posture': return action.actorRoleId === roleId;
     case 'reload':
     case 'deploy':

@@ -23,7 +23,7 @@ export function normalizeCombatLabParticipantParameters(value: unknown): CombatL
   if (!isRecord(value.accuracy)) return createDefaultCombatLabParticipantParameters();
   return Object.freeze({
     schemaVersion: 1,
-    accuracy: deepFreeze(structuredClone(value.accuracy)) as CombatLabAccuracyOverridesV1,
+    accuracy: deepFreeze(structuredClone(value.accuracy)) as unknown as CombatLabAccuracyOverridesV1,
   });
 }
 

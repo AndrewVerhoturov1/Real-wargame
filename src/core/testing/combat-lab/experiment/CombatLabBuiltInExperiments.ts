@@ -270,6 +270,8 @@ function stepTitleRu(command: CombatLabScriptCommandV1): string {
     case 'fire': return 'Открыть огонь';
     case 'cancel_fire': return 'Остановить огонь';
     case 'move': return 'Двигаться к позиции';
+    case 'face': return 'Повернуться к точке';
+    case 'cancel_action': return 'Отменить действие';
     case 'posture': return 'Изменить позу';
     case 'reload': return 'Перезарядить оружие';
     case 'deploy': return 'Установить оружие';

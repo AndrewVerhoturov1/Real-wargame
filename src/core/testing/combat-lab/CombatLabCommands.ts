@@ -189,7 +189,10 @@ export function executeCombatLabCommand(
     }), ownerToken);
   }
 
-  const actor = findUnit(state, command.actorUnitId);
+  if (command.kind !== 'first_aid') {
+  return rejected('combat_lab_command_kind_unsupported', `Команда ${command.kind} не поддерживается.`);
+}
+const actor = findUnit(state, command.actorUnitId);
   const target = findUnit(state, command.targetUnitId);
   if (!actor) return missingUnit(command.actorUnitId);
   if (!target) return missingUnit(command.targetUnitId);

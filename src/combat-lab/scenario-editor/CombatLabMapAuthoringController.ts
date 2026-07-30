@@ -10,7 +10,7 @@ import type { GameApplicationContext } from '../../game/GameApplicationTypes';
 import type { CameraController } from '../../input/CameraController';
 import type { CombatLabActionDescriptorV1 } from './CombatLabActionCatalog';
 import { getCombatLabActionDescriptor } from './CombatLabActionCatalog';
-import type { CombatLabExperimentDraft } from './CombatLabExperimentDraft';
+import { CombatLabExperimentDraft } from './CombatLabExperimentDraft';
 import {
   createCombatLabScenarioStep,
   createCombatLabScenarioStepFromCatalog,
@@ -375,5 +375,5 @@ function disabledItem(id: string, labelRu: string, reasonRu: string): CombatLabM
 function fireModeAvailability(unit: UnitModel, mode: 'single' | 'short_burst' | 'long_burst' | 'suppress'): { enabled: boolean; reasonRu: string | null } {
   const weapon = unit.infantryCombatRuntime.primaryWeapon;
   if (!weapon) return { enabled: false, reasonRu: 'У бойца нет оружия.' };
-  return weapon.resolved.weapon.fireModes.includes(mode) ? { enabled: true, reasonRu: null } : { enabled: false, reasonRu: 'Оружие не поддерживает этот режим огня.' };
+  return weapon.resolved.weapon.availableFireModes.includes(mode) ? { enabled: true, reasonRu: null } : { enabled: false, reasonRu: 'Оружие не поддерживает этот режим огня.' };
 }
