@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 
-const [scene, roles, files, store] = await Promise.all([
+const [scene, roles, participants, dialog, files, store] = await Promise.all([
   readFile('src/combat-lab/scenario-editor/CombatLabScenePanel.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabRoleEditor.ts', 'utf8'),
+  readFile('src/combat-lab/scenario-editor/CombatLabParticipantEditor.ts', 'utf8'),
+  readFile('src/combat-lab/scenario-editor/CombatLabParticipantDialog.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabExperimentFileActions.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabExperimentLocalStore.ts', 'utf8'),
 ]);
@@ -12,8 +14,16 @@ const [scene, roles, files, store] = await Promise.all([
 assert.match(scene, /captureCombatLabInitialScene/);
 assert.match(scene, /buildExportedScene\(state\)/);
 assert.match(scene, /revision:\s*current\.revision \+ 1/);
-assert.match(roles, /roleId:\s*existing\?\.roleId \?\? id/);
-assert.match(roles, /roleId\.disabled = existing !== null/);
+assert.match(roles, /parametersHost\?/);
+assert.match(roles, /CombatLabParticipantEditor/);
+assert.match(roles, /selected-unit-fallback/);
+assert.match(participants, /Создать бойца/);
+assert.match(participants, /duplicateCombatLabParticipant/);
+assert.match(participants, /removeCombatLabParticipant/);
+assert.match(participants, /readCombatLabParticipantInitialSummaries/);
+assert.match(dialog, /createCombatLabParticipant/);
+assert.match(dialog, /updateCombatLabParticipantInitialState/);
+assert.match(dialog, /Без комплекта/);
 assert.match(files, /\.combat-lab\.json/);
 assert.match(files, /errors\.length > 0 \? null : result\.experiment/);
 assert.match(files, /Текущий эксперимент сохранён/);
@@ -32,9 +42,7 @@ class MemoryStorage {
   setItem(key, value) { this.#values.set(key, String(value)); }
 }
 
-class ThrowingStorage extends MemoryStorage {
-  setItem() { throw new Error('quota'); }
-}
+class ThrowingStorage extends MemoryStorage { setItem() { throw new Error('quota'); } }
 
 const source = stripImports(store);
 const js = ts.transpileModule(source, {
@@ -61,6 +69,4 @@ assert.equal(broken.save({ experimentId: 'broken', titleRu: 'Сбой', revision
 
 console.log('Combat Lab scene authoring UI contract smoke passed.');
 
-function stripImports(value) {
-  return value.replace(/^import[\s\S]*?from ['"][^'"]+['"];\n/mg, '');
-}
+function stripImports(value) { return value.replace(/^import[\s\S]*?from ['"][^'"]+['"];\n/mg, ''); }
