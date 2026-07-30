@@ -5,25 +5,14 @@ export interface MapInputLease {
   release(): void;
 }
 
-/**
- * Coordinates exclusive gesture ownership for the shared tactical map canvas.
- * A lease is idempotent and may only release the owner that acquired it.
- */
+/** Coordinates exclusive gesture ownership for the shared tactical map canvas. */
 export class MapInputOwnership {
   private ownerId: MapInputOwnerId | null = null;
   private revision = 0;
 
-  get currentOwnerId(): MapInputOwnerId | null {
-    return this.ownerId;
-  }
-
-  isOwnedBy(ownerId: MapInputOwnerId): boolean {
-    return this.ownerId === ownerId;
-  }
-
-  isAvailableTo(ownerId: MapInputOwnerId): boolean {
-    return this.ownerId === null || this.ownerId === ownerId;
-  }
+  get currentOwnerId(): MapInputOwnerId | null { return this.ownerId; }
+  isOwnedBy(ownerId: MapInputOwnerId): boolean { return this.ownerId === ownerId; }
+  isAvailableTo(ownerId: MapInputOwnerId): boolean { return this.ownerId === null || this.ownerId === ownerId; }
 
   acquire(ownerId: MapInputOwnerId): MapInputLease | null {
     if (!this.isAvailableTo(ownerId)) return null;
@@ -46,3 +35,6 @@ export class MapInputOwnership {
     this.revision += 1;
   }
 }
+
+/** One application-wide arbiter used by every map gesture producer. */
+export const sharedMapInputOwnership = new MapInputOwnership();
