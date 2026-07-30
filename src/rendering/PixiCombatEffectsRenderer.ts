@@ -36,15 +36,26 @@ interface ImpactEffect {
 type CombatVisualEffect = MuzzleEffect | TracerEffect | ImpactEffect;
 
 const MAX_ACTIVE_EFFECTS = 96;
+const MAX_RECENT_SOURCE_ENTRIES = 256;
+const MAX_PROCESSED_IDS = 512;
 
+/**
+ * Renders short-lived combat effects without turning bounded production ledgers
+ * into per-frame work. Production arrays can be replaced or trimmed, so the
+ * renderer observes only their recent tail and keeps its own bounded identity
+ * window. Unchanged source arrays are skipped entirely.
+ */
 export class PixiCombatEffectsRenderer {
   readonly container = new Container();
   private readonly graphics = new Graphics();
-  private readonly processedLegacyEventIds = new Set<string>();
-  private readonly processedShotIds = new Set<string>();
-  private readonly processedImpactIds = new Set<string>();
-  private readonly originByShotId = new Map<string, ScreenPoint>();
+  private readonly processedLegacyEventIds = new BoundedIdWindow(MAX_PROCESSED_IDS);
+  private readonly processedShotIds = new BoundedIdWindow(MAX_PROCESSED_IDS);
+  private readonly processedImpactIds = new BoundedIdWindow(MAX_PROCESSED_IDS);
+  private readonly originByShotId = new BoundedMap<string, ScreenPoint>(MAX_PROCESSED_IDS);
   private effects: CombatVisualEffect[] = [];
+  private previousHistory: readonly CombatEvent[] | null = null;
+  private previousCommittedShots: readonly ShotCommitRecordV1[] | null = null;
+  private previousImpacts: readonly ProjectileImpactV1[] | null = null;
 
   constructor() {
     this.container.eventMode = 'none';
@@ -57,12 +68,24 @@ export class PixiCombatEffectsRenderer {
     const nowMs = currentTimeMs();
     const history = getCombatEventHistory(state);
     const projectiles = state.infantryCombatProjectiles;
-    this.consumeCommittedShots(state, projectiles.committedShots, nowMs);
-    this.consumeProjectileImpacts(state, projectiles.impacts, nowMs);
-    this.consumeLegacyEvents(state, history, nowMs);
-    this.effects = this.effects
-      .filter((effect) => nowMs - effect.startedMs <= effect.durationMs)
-      .slice(-MAX_ACTIVE_EFFECTS);
+
+    if (projectiles.committedShots !== this.previousCommittedShots) {
+      this.consumeCommittedShots(state, recentTail(projectiles.committedShots), nowMs);
+      this.previousCommittedShots = projectiles.committedShots;
+    }
+    if (projectiles.impacts !== this.previousImpacts) {
+      this.consumeProjectileImpacts(state, recentTail(projectiles.impacts), nowMs);
+      this.previousImpacts = projectiles.impacts;
+    }
+    if (history !== this.previousHistory) {
+      this.consumeLegacyEvents(state, recentTail(history), nowMs);
+      this.previousHistory = history;
+    }
+
+    compactActiveEffects(this.effects, nowMs);
+    if (this.effects.length > MAX_ACTIVE_EFFECTS) {
+      this.effects.splice(0, this.effects.length - MAX_ACTIVE_EFFECTS);
+    }
 
     this.graphics.clear();
     for (const effect of this.effects) {
@@ -71,12 +94,13 @@ export class PixiCombatEffectsRenderer {
       else if (effect.kind === 'tracer') drawTracer(this.graphics, effect, progress);
       else drawImpact(this.graphics, effect, progress);
     }
-
-    this.pruneProcessedHistory(history, projectiles.committedShots, projectiles.impacts);
   }
 
   destroy(): void {
-    this.effects = [];
+    this.effects.length = 0;
+    this.previousHistory = null;
+    this.previousCommittedShots = null;
+    this.previousImpacts = null;
     this.processedLegacyEventIds.clear();
     this.processedShotIds.clear();
     this.processedImpactIds.clear();
@@ -101,8 +125,7 @@ export class PixiCombatEffectsRenderer {
     nowMs: number,
   ): void {
     for (const impact of impacts) {
-      if (this.processedImpactIds.has(impact.impactId)) continue;
-      this.processedImpactIds.add(impact.impactId);
+      if (!this.processedImpactIds.add(impact.impactId)) continue;
       this.startImpactEffect(state, impact.shotId, impact.point, impact.hitType, nowMs);
     }
   }
@@ -113,8 +136,7 @@ export class PixiCombatEffectsRenderer {
     nowMs: number,
   ): void {
     for (const event of history) {
-      if (this.processedLegacyEventIds.has(event.id)) continue;
-      this.processedLegacyEventIds.add(event.id);
+      if (!this.processedLegacyEventIds.add(event.id)) continue;
 
       if (event.kind === 'shot_fired') {
         if (!this.processedShotIds.has(event.shotId)) {
@@ -125,8 +147,7 @@ export class PixiCombatEffectsRenderer {
 
       if (event.kind === 'projectile_impact') {
         const legacyImpactId = `legacy:${event.id}`;
-        if (this.processedImpactIds.has(legacyImpactId)) continue;
-        this.processedImpactIds.add(legacyImpactId);
+        if (!this.processedImpactIds.add(legacyImpactId)) continue;
         this.startImpactEffect(state, event.shotId, event.impactPoint, event.hitType, nowMs);
       }
     }
@@ -171,38 +192,74 @@ export class PixiCombatEffectsRenderer {
       hitType,
     });
   }
+}
 
-  private pruneProcessedHistory(
-    history: readonly CombatEvent[],
-    committedShots: readonly ShotCommitRecordV1[],
-    impacts: readonly ProjectileImpactV1[],
-  ): void {
-    const retainedLegacyEventIds = new Set(history.map((event) => event.id));
-    const retainedShotIds = new Set([
-      ...history.map((event) => event.shotId),
-      ...committedShots.map((shot) => shot.shotId),
-      ...impacts.map((impact) => impact.shotId),
-    ]);
-    const retainedImpactIds = new Set([
-      ...history
-        .filter((event) => event.kind === 'projectile_impact')
-        .map((event) => `legacy:${event.id}`),
-      ...impacts.map((impact) => impact.impactId),
-    ]);
+class BoundedIdWindow {
+  private readonly ids = new Set<string>();
+  private readonly order: string[] = [];
 
-    for (const eventId of this.processedLegacyEventIds) {
-      if (!retainedLegacyEventIds.has(eventId)) this.processedLegacyEventIds.delete(eventId);
+  constructor(private readonly limit: number) {}
+
+  has(id: string): boolean {
+    return this.ids.has(id);
+  }
+
+  add(id: string): boolean {
+    if (this.ids.has(id)) return false;
+    this.ids.add(id);
+    this.order.push(id);
+    while (this.order.length > this.limit) {
+      const oldest = this.order.shift();
+      if (oldest !== undefined) this.ids.delete(oldest);
     }
-    for (const shotId of this.processedShotIds) {
-      if (!retainedShotIds.has(shotId)) this.processedShotIds.delete(shotId);
-    }
-    for (const impactId of this.processedImpactIds) {
-      if (!retainedImpactIds.has(impactId)) this.processedImpactIds.delete(impactId);
-    }
-    for (const shotId of this.originByShotId.keys()) {
-      if (!retainedShotIds.has(shotId)) this.originByShotId.delete(shotId);
+    return true;
+  }
+
+  clear(): void {
+    this.ids.clear();
+    this.order.length = 0;
+  }
+}
+
+class BoundedMap<K, V> {
+  private readonly values = new Map<K, V>();
+
+  constructor(private readonly limit: number) {}
+
+  get(key: K): V | undefined {
+    return this.values.get(key);
+  }
+
+  set(key: K, value: V): void {
+    if (this.values.has(key)) this.values.delete(key);
+    this.values.set(key, value);
+    while (this.values.size > this.limit) {
+      const oldest = this.values.keys().next().value as K | undefined;
+      if (oldest === undefined) break;
+      this.values.delete(oldest);
     }
   }
+
+  clear(): void {
+    this.values.clear();
+  }
+}
+
+function recentTail<T>(values: readonly T[]): readonly T[] {
+  return values.length <= MAX_RECENT_SOURCE_ENTRIES
+    ? values
+    : values.slice(values.length - MAX_RECENT_SOURCE_ENTRIES);
+}
+
+function compactActiveEffects(effects: CombatVisualEffect[], nowMs: number): void {
+  let writeIndex = 0;
+  for (let readIndex = 0; readIndex < effects.length; readIndex += 1) {
+    const effect = effects[readIndex]!;
+    if (nowMs - effect.startedMs > effect.durationMs) continue;
+    effects[writeIndex] = effect;
+    writeIndex += 1;
+  }
+  effects.length = writeIndex;
 }
 
 function drawMuzzleFlash(graphics: Graphics, effect: MuzzleEffect, progress: number): void {
