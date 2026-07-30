@@ -5,10 +5,11 @@ const runner = await readFile('src/core/testing/combat-lab/experiment/CombatLabE
 assert.match(runner, /export function runCombatLabExperiment/);
 assert.match(runner, /restoreSimulationStateFromSceneSnapshot\(state, experiment\.sceneSnapshot\)/);
 assert.match(runner, /CombatLabScenarioExecutor\.create\(experiment, state\)/);
-const before = runner.indexOf('executor.beforeSimulationStep()');
+const before = runner.indexOf('beforeSimulationStepIgnoringBreakpoints(executor, experiment)');
 const tick = runner.indexOf('tickSimulation(state, COMBAT_LAB_FIXED_STEP_SECONDS)');
 const after = runner.indexOf('executor.afterSimulationStep()');
 assert.ok(before >= 0 && tick > before && after > tick, 'Headless runner must surround one production tick with executor hooks.');
+assert.match(runner, /function beforeSimulationStepIgnoringBreakpoints[\s\S]*executor\.beforeSimulationStep\(\)/);
 assert.match(runner, /createCombatLabMetricCollector/);
 assert.match(runner, /digestCombatLabExperiment/);
 assert.match(runner, /digestCombatLabEvents/);
