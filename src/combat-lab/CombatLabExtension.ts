@@ -41,25 +41,6 @@ import { CombatLabWorkspaceTabs } from './ui/CombatLabWorkspaceTabs';
 
 type ExperimentChangeSource = 'editor' | 'external';
 
-/*
- * Static Stage 10 compatibility markers retained while the shared source-contract
- * smoke still describes the removed nested layout:
- * Сцена · Программа · Текущий прогон · Серия прогонов
- * combat-lab-drawer · combat-lab-drawer-toggle · aria-expanded
- * onRequestBatch: () => { this.activateTab('metrics'); this.activateMetricsView('batch'); }
- * representative replay formerly followed by this.activateTab('stand').
- */
-interface LegacyStage10HostContract {
-  readonly toolbarHost: HTMLElement;
-  readonly runtimeStatusHost: HTMLElement;
-  readonly sceneHost: HTMLElement;
-  readonly programHost: HTMLElement;
-  readonly currentMetricsHost: HTMLElement;
-  readonly batchPanelHost: HTMLElement;
-  readonly batchResultsHost: HTMLElement;
-  readonly logHost: HTMLElement;
-}
-
 interface WorkspaceMountLayout {
   readonly templateSelect: HTMLSelectElement;
   readonly templateLoadButton: HTMLButtonElement;
@@ -107,7 +88,6 @@ export class CombatLabExtension implements GameApplicationExtension {
   private readonly batchResults: CombatLabBatchResultsView;
   private readonly sharedSimulationControls: SharedSimulationControls;
   private readonly currentMetrics: DisposableView;
-  private readonly labelLocalizer: DisposableView;
   private readonly removeMapInputGuard: () => void;
   private readonly listeners: Array<readonly [EventTarget, string, EventListener]> = [];
   private mapAuthoringController: CombatLabMapAuthoringController | null = null;
@@ -168,7 +148,6 @@ export class CombatLabExtension implements GameApplicationExtension {
       onSelectionChanged: (selection) => this.handleEditorSelection(selection),
       isMutationAllowed: () => !this.isStructuralEditingLocked(),
     });
-    this.labelLocalizer = installWorkspaceLabelLocalizer(this.workspace.root);
 
     this.runToolbar = CombatLabExperimentRunToolbar.create({
       host: this.workspace.toolbarHost,
@@ -261,7 +240,6 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.visualController.destroy();
     this.batchClient.destroy();
     this.currentMetrics.destroy();
-    this.labelLocalizer.destroy();
     this.sharedSimulationControls.destroy();
     this.renderer.clearAuthoringOverlay();
     this.renderer.destroy();
@@ -454,16 +432,7 @@ export class CombatLabExtension implements GameApplicationExtension {
 
   private readonly handleTabRequest = (event: Event): void => {
     const requested = (event as CustomEvent<unknown>).detail;
-    if (isCombatLabWorkspaceTab(requested)) {
-      this.activateTab(requested);
-      return;
-    }
-    const legacyAliases: Readonly<Record<string, CombatLabWorkspaceTab>> = {
-      stand: 'scene',
-      log: 'journal',
-      current: 'metrics',
-    };
-    if (typeof requested === 'string' && legacyAliases[requested]) this.activateTab(legacyAliases[requested]);
+    if (isCombatLabWorkspaceTab(requested)) this.activateTab(requested);
   };
 
   private readonly handleTogglePauseRequest = (): void => {
@@ -564,42 +533,6 @@ function installLegacyMetricsView(legacyLayout: CombatLabLayoutV1, host: HTMLEle
       host.replaceChildren();
     },
   };
-}
-
-function installWorkspaceLabelLocalizer(host: HTMLElement): DisposableView {
-  const replacements = new Map<string, string>([
-    ['Seed', 'Начальное число случайности'],
-    ['Workers', 'Параллельные обработчики'],
-    ['Breakpoint перед шагом', 'Точка остановки перед шагом'],
-    ['Breakpoint', 'Точка остановки'],
-    ['Timeout, с', 'Предельное время, с'],
-    ['Timeout', 'Предельное время'],
-    ['Production action', 'Игровое действие'],
-  ]);
-  const localize = (root: Node): void => {
-    if (root.nodeType === Node.TEXT_NODE) {
-      const textNode = root as Text;
-      let next = textNode.data;
-      for (const [source, target] of replacements) next = next.replaceAll(source, target);
-      if (next !== textNode.data) textNode.data = next;
-      return;
-    }
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    let current = walker.nextNode();
-    while (current) {
-      localize(current);
-      current = walker.nextNode();
-    }
-  };
-  localize(host);
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      if (mutation.type === 'characterData') localize(mutation.target);
-      for (const added of mutation.addedNodes) localize(added);
-    }
-  });
-  observer.observe(host, { childList: true, characterData: true, subtree: true });
-  return { destroy: () => observer.disconnect() };
 }
 
 function installMapInputGuard(context: GameApplicationContext, isLocked: () => boolean): () => void {

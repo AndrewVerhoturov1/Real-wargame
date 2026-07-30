@@ -13,7 +13,6 @@ import type { CombatLabExperimentIssueV1 } from '../../core/testing/combat-lab/e
 import { CombatLabBatchClient, defaultCombatLabWorkerCount } from '../runtime/CombatLabBatchClient';
 import { combatLabMetricLabelRu } from './CombatLabMetricLabels';
 
-// Legacy source-contract markers: Прогоны · Явный список Seed · Максимум времени · Workers.
 const MAX_UINT32 = 0xffff_ffff;
 let batchSequence = 0;
 

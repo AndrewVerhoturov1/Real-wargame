@@ -21,7 +21,7 @@ for (const [id, label, title] of expected) {
   assert.match(hosts, new RegExp(`'${title}'`));
 }
 assert.equal((hosts.match(/tabId:/g) ?? []).length, 6, 'Exactly six workspace tab definitions are required.');
-assert.doesNotMatch(hosts, /labelRu:\s*'Стенд'/);
+assert.doesNotMatch(hosts, /tabId:\s*'stand'|labelRu:\s*'Стенд'/);
 assert.match(tabs, /dock\.append\(header, toolbarHost, tabList, panelHost\)/, 'Run toolbar must sit outside switchable panels.');
 assert.match(tabs, /panel\.hidden\s*=\s*tabId !== normalized/);
 const activateBody = tabs.match(/activate\(tabId:[\s\S]*?\n  getActiveTab\(\)/)?.[0] ?? '';
@@ -33,4 +33,5 @@ assert.match(extension, /hosts\.batch/);
 assert.match(extension, /hosts\.parameters/);
 assert.match(extension, /hosts\.metrics/);
 assert.match(extension, /hosts\.journal/);
+assert.doesNotMatch(extension, /activateTab\('stand'\)|activateMetricsView\('batch'\)|LegacyStage10HostContract/);
 console.log('Combat Lab workspace tabs contract smoke passed.');
