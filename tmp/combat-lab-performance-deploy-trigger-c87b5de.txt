@@ -1,2 +1,3 @@
 Deploy exact product source:
 worker/20260730-combat-lab-performance @ c87b5dec3f821c84a536fdad9d133123108b654b
+retry: observable-result-1
