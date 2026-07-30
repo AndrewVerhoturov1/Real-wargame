@@ -1,0 +1,19 @@
+.combat-lab-participant-editor { display: grid; gap: 12px; }
+.combat-lab-participant-editor__header { display: grid; gap: 8px; }
+.combat-lab-participant-editor__list { display: grid; gap: 8px; }
+.combat-lab-participant-card { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--combat-lab-border, rgba(148, 163, 184, .35)); border-radius: 8px; background: rgba(15, 23, 42, .35); cursor: pointer; }
+.combat-lab-participant-card.is-selected { outline: 2px solid rgba(96, 165, 250, .65); }
+.combat-lab-participant-card__name { font-size: 14px; }
+.combat-lab-participant-card__id { opacity: .72; overflow-wrap: anywhere; }
+.combat-lab-participant-card__facts { display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 3px 8px; margin: 0; font-size: 12px; }
+.combat-lab-participant-card__facts dt { opacity: .7; }
+.combat-lab-participant-card__facts dd { margin: 0; }
+.combat-lab-participant-dialog { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; color: inherit; background: var(--combat-lab-panel, #111827); border: 1px solid rgba(148, 163, 184, .45); border-radius: 10px; }
+.combat-lab-participant-dialog::backdrop { background: rgba(0, 0, 0, .62); }
+.combat-lab-participant-dialog__section { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; padding: 12px; border: 1px solid rgba(148, 163, 184, .3); border-radius: 8px; }
+.combat-lab-participant-dialog__section legend { padding: 0 6px; font-weight: 700; }
+.combat-lab-participant-dialog__reserves, .combat-lab-participant-dialog__wounds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; grid-column: 1 / -1; }
+.combat-lab-participant-parameters { display: grid; gap: 8px; margin-top: 10px; }
+.combat-lab-participant-parameters__source { font-size: 12px; opacity: .78; }
+.combat-lab-participant-parameters__source.is-dirty::after { content: ' · есть несохранённые изменения'; color: #fbbf24; }
+@media (max-width: 720px) { .combat-lab-participant-dialog__section, .combat-lab-participant-dialog__reserves, .combat-lab-participant-dialog__wounds { grid-template-columns: 1fr; } }

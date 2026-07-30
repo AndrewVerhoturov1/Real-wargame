@@ -23,7 +23,6 @@ interface SliderControlV1 {
 
 export class CombatLabAccuracyControls {
   readonly root = element('div', 'combat-lab-accuracy-controls');
-
   private baseDispersionRadians = 0;
   private readonly dispersion = createSlider('Уровень разброса', 0.25, 4, 0.05, 1, (value) => {
     const mrad = this.baseDispersionRadians * value * 1000;
@@ -37,30 +36,17 @@ export class CombatLabAccuracyControls {
   private readonly perceptionThreshold = createSlider('Порог восприятия', 0, 100, 1, 50, (value) => `${value.toFixed(0)}% качества контакта`, () => this.changed());
   private readonly randomness = createSlider('Уровень случайности', 0, 200, 1, 100, (value) => `${value.toFixed(0)}% · ×${(value / 100).toFixed(2)}`, () => this.changed());
 
-  constructor(
-    private readonly onReset: () => void,
-    private readonly onChange: () => void,
-  ) {
+  constructor(private readonly onReset: () => void, private readonly onChange: () => void) {
     const heading = element('div', 'combat-lab-accuracy-heading');
     heading.append(
       element('strong', '', 'Лабораторные параметры точности'),
-      element('span', '', 'Одна производственная баллистика; меняются только явные test-overrides.'),
+      element('span', '', 'Одна производственная баллистика; меняются только явные лабораторные параметры.'),
     );
     const reset = document.createElement('button');
     reset.type = 'button';
     reset.textContent = 'Сбросить параметры';
     reset.addEventListener('click', () => this.onReset());
-    this.root.append(
-      heading,
-      this.dispersion.root,
-      this.aimTime.root,
-      this.aimThreshold.root,
-      this.shootingSkill.root,
-      this.proficiency.root,
-      this.perceptionThreshold.root,
-      this.randomness.root,
-      reset,
-    );
+    this.root.append(heading, this.dispersion.root, this.aimTime.root, this.aimThreshold.root, this.shootingSkill.root, this.proficiency.root, this.perceptionThreshold.root, this.randomness.root, reset);
     this.refreshOutputs();
   }
 
@@ -68,17 +54,8 @@ export class CombatLabAccuracyControls {
     const weapon = unit?.infantryCombatRuntime.primaryWeapon ?? null;
     this.baseDispersionRadians = weapon?.resolved.weapon.baseDispersionRadians ?? 0;
     if (!unit || !weapon) {
-      this.dispersion.write(1);
-      this.aimTime.write(1.8);
-      this.aimThreshold.write(50);
-      this.shootingSkill.write(50);
-      this.proficiency.write(50);
-      this.perceptionThreshold.write(50);
-      this.randomness.write(100);
-      this.refreshOutputs();
-      return;
+      this.dispersion.write(1); this.aimTime.write(1.8); this.aimThreshold.write(50); this.shootingSkill.write(50); this.proficiency.write(50); this.perceptionThreshold.write(50); this.randomness.write(100); this.refreshOutputs(); return;
     }
-
     const factors = resolveProductionAimFactors(state, unit, weapon);
     const proficiency = weapon.operatorProfile.proficiencyByWeaponClass[weapon.resolved.weapon.weaponClass];
     this.dispersion.write(1);
@@ -91,6 +68,18 @@ export class CombatLabAccuracyControls {
     this.refreshOutputs();
   }
 
+  loadForUnit(state: Pick<SimulationState, 'map'>, unit: UnitModel | null, saved: CombatLabAccuracyOverridesV1 | null): void {
+    this.resetForUnit(state, unit);
+    if (!saved) return;
+    this.dispersion.write(saved.dispersionMultiplier);
+    this.aimTime.write(saved.aimTimeSeconds);
+    this.aimThreshold.write((saved.physicalAimThreshold ?? 0.5) * 100);
+    this.shootingSkill.write(saved.shootingSkill * 100);
+    this.proficiency.write(sliderFromProficiency(saved.weaponProficiency));
+    this.randomness.write(saved.randomnessMultiplier * 100);
+    this.refreshOutputs();
+  }
+
   read(randomSeed: number): CombatLabAccuracyCommandValuesV1 {
     return {
       minimumSolutionQuality: clamp(this.aimThreshold.read() / 100, 0, 1),
@@ -99,6 +88,7 @@ export class CombatLabAccuracyControls {
         schemaVersion: 1,
         dispersionMultiplier: clamp(this.dispersion.read(), 0.25, 4),
         aimTimeSeconds: clamp(this.aimTime.read(), 0.1, 10),
+        physicalAimThreshold: clamp(this.aimThreshold.read() / 100, 0, 1),
         shootingSkill: clamp(this.shootingSkill.read() / 100, 0, 1),
         weaponProficiency: proficiencyFromSlider(this.proficiency.read()),
         randomnessMultiplier: clamp(this.randomness.read() / 100, 0, 2),
@@ -124,114 +114,32 @@ export class CombatLabAccuracyControls {
     };
   }
 
-  private changed(): void {
-    this.refreshOutputs();
-    this.onChange();
-  }
-
-  private refreshOutputs(): void {
-    for (const control of [
-      this.dispersion,
-      this.aimTime,
-      this.aimThreshold,
-      this.shootingSkill,
-      this.proficiency,
-      this.perceptionThreshold,
-      this.randomness,
-    ]) control.refresh();
-  }
+  private changed(): void { this.refreshOutputs(); this.onChange(); }
+  private refreshOutputs(): void { for (const control of [this.dispersion, this.aimTime, this.aimThreshold, this.shootingSkill, this.proficiency, this.perceptionThreshold, this.randomness]) control.refresh(); }
 }
 
-function createSlider(
-  labelText: string,
-  min: number,
-  max: number,
-  step: number,
-  initialValue: number,
-  format: (value: number) => string,
-  changed: () => void,
-): SliderControlV1 {
-  const root = document.createElement('label');
-  root.className = 'combat-lab-slider';
+function createSlider(labelText: string, min: number, max: number, step: number, initialValue: number, format: (value: number) => string, changed: () => void): SliderControlV1 {
+  const root = document.createElement('label'); root.className = 'combat-lab-slider';
   const label = element('span', 'combat-lab-slider-label', labelText);
   const controls = element('div', 'combat-lab-slider-controls');
-  const range = document.createElement('input');
-  range.type = 'range';
-  range.min = String(min);
-  range.max = String(max);
-  range.step = String(step);
-  const number = document.createElement('input');
-  number.type = 'number';
-  number.min = String(min);
-  number.max = String(max);
-  number.step = String(step);
-  const output = document.createElement('output');
-  output.className = 'combat-lab-slider-output';
-
-  const write = (rawValue: number): void => {
-    const value = clamp(Number.isFinite(rawValue) ? rawValue : initialValue, min, max);
-    const serialized = String(roundToStep(value, step));
-    range.value = serialized;
-    number.value = serialized;
-  };
+  const range = document.createElement('input'); range.type = 'range'; range.min = String(min); range.max = String(max); range.step = String(step);
+  const number = document.createElement('input'); number.type = 'number'; number.min = String(min); number.max = String(max); number.step = String(step);
+  const output = document.createElement('output'); output.className = 'combat-lab-slider-output';
+  const write = (rawValue: number): void => { const value = clamp(Number.isFinite(rawValue) ? rawValue : initialValue, min, max); const serialized = String(roundToStep(value, step)); range.value = serialized; number.value = serialized; };
   const read = (): number => clamp(finite(number.value, initialValue), min, max);
   const refresh = (): void => { output.textContent = format(read()); };
-  const syncFrom = (source: HTMLInputElement, target: HTMLInputElement): void => {
-    const value = clamp(finite(source.value, initialValue), min, max);
-    source.value = String(roundToStep(value, step));
-    target.value = source.value;
-    refresh();
-    changed();
-  };
-
+  const syncFrom = (source: HTMLInputElement, target: HTMLInputElement): void => { const value = clamp(finite(source.value, initialValue), min, max); source.value = String(roundToStep(value, step)); target.value = source.value; refresh(); changed(); };
   range.addEventListener('input', () => syncFrom(range, number));
   number.addEventListener('input', () => syncFrom(number, range));
-  write(initialValue);
-  controls.append(range, number);
-  root.append(label, controls, output);
+  write(initialValue); controls.append(range, number); root.append(label, controls, output);
   return { root, range, number, output, read, write, refresh };
 }
 
-function proficiencyFromSlider(value: number): WeaponProficiency {
-  if (value < 33) return 'untrained';
-  if (value < 75) return 'trained';
-  return 'specialist';
-}
-
-function sliderFromProficiency(value: WeaponProficiency): number {
-  return value === 'untrained' ? 0 : value === 'specialist' ? 100 : 50;
-}
-
-function proficiencyLabel(value: WeaponProficiency): string {
-  return value === 'untrained' ? 'не обучен' : value === 'specialist' ? 'специалист' : 'обучен';
-}
-
-function normalizeSeed(value: number): number {
-  if (!Number.isInteger(value) || value < 1 || value > 0xffff_ffff) return 1;
-  return value;
-}
-
-function roundToStep(value: number, step: number): number {
-  const decimals = Math.max(0, (String(step).split('.')[1] ?? '').length);
-  return Number((Math.round(value / step) * step).toFixed(decimals));
-}
-
-function finite(value: string, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.max(minimum, Math.min(maximum, value));
-}
-
-function element<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className = '',
-  text = '',
-): HTMLElementTagNameMap[K] {
-  const result = document.createElement(tag);
-  result.className = className;
-  result.textContent = text;
-  return result;
-}
+function proficiencyFromSlider(value: number): WeaponProficiency { if (value < 33) return 'untrained'; if (value < 75) return 'trained'; return 'specialist'; }
+function sliderFromProficiency(value: WeaponProficiency): number { return value === 'untrained' ? 0 : value === 'specialist' ? 100 : 50; }
+function proficiencyLabel(value: WeaponProficiency): string { return value === 'untrained' ? 'не обучен' : value === 'specialist' ? 'специалист' : 'обучен'; }
+function normalizeSeed(value: number): number { if (!Number.isInteger(value) || value < 1 || value > 0xffff_ffff) return 1; return value; }
+function roundToStep(value: number, step: number): number { const decimals = Math.max(0, (String(step).split('.')[1] ?? '').length); return Number((Math.round(value / step) * step).toFixed(decimals)); }
+function finite(value: string, fallback: number): number { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
+function clamp(value: number, minimum: number, maximum: number): number { return Math.max(minimum, Math.min(maximum, value)); }
+function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] { const result = document.createElement(tag); result.className = className; result.textContent = text; return result; }
