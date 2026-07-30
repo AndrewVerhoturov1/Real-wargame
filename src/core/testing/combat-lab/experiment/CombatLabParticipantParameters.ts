@@ -76,7 +76,9 @@ export function resolveCombatLabParticipantAccuracy(
 
 /**
  * Produces the single immutable experiment snapshot used by both visual and
- * headless execution. Array order never contributes to any step seed.
+ * headless execution. Step seeds depend only on stable identifiers, while the
+ * authored role, track and step order remains untouched because track order is
+ * part of command execution semantics.
  */
 export function prepareCombatLabExperimentForRun(
   experiment: CombatLabExperimentV1,
@@ -87,17 +89,15 @@ export function prepareCombatLabExperimentForRun(
     ...experiment,
     defaults: Object.freeze({ ...experiment.defaults, seed }),
   };
-  const roles = Object.freeze([...seeded.roles].sort((left, right) => compareText(left.roleId, right.roleId)));
-  const tracks = Object.freeze([...seeded.tracks]
-    .sort((left, right) => compareText(left.trackId, right.trackId))
-    .map((track) => Object.freeze({
-      ...track,
-      steps: Object.freeze(track.steps.map((step) => {
-        if (step.action.kind !== 'fire') return step;
-        const resolved = resolveCombatLabParticipantAccuracy(seeded, step.action.actorRoleId, step, seed);
-        return Object.freeze({ ...step, accuracyOverrides: resolved.accuracyOverrides });
-      })),
-    })));
+  const roles = Object.freeze([...seeded.roles]);
+  const tracks = Object.freeze(seeded.tracks.map((track) => Object.freeze({
+    ...track,
+    steps: Object.freeze(track.steps.map((step) => {
+      if (step.action.kind !== 'fire') return step;
+      const resolved = resolveCombatLabParticipantAccuracy(seeded, step.action.actorRoleId, step, seed);
+      return Object.freeze({ ...step, accuracyOverrides: resolved.accuracyOverrides });
+    })),
+  })));
   return Object.freeze({ ...seeded, roles, tracks });
 }
 
@@ -111,8 +111,6 @@ export function deriveCombatLabParticipantStepSeed(
   value = mix(value, stableTextHash(stepId));
   return value === 0 ? 1 : value;
 }
-
-function compareText(left: string, right: string): number { return left < right ? -1 : left > right ? 1 : 0; }
 
 function stableTextHash(value: string): number {
   let hash = 0x811c_9dc5;
