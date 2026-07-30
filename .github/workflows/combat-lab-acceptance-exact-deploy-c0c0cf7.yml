@@ -1,4 +1,4 @@
-name: Combat Lab Acceptance Exact Preview Deploy 0d3560d
+name: Combat Lab Acceptance Exact Preview Deploy 2511b5f
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: combat-lab-acceptance-exact-deploy-0d3560d7eb7eb5b7a895fb3d8b88ed03588956b8
+  group: combat-lab-acceptance-exact-deploy-2511b5feb2d954c963dfe121d31bf679b6a513c0
   cancel-in-progress: false
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 60
     env:
       PRODUCT_BRANCH: feature/20260730-combat-lab-user-acceptance-fixes
-      PRODUCT_SHA: 0d3560d7eb7eb5b7a895fb3d8b88ed03588956b8
+      PRODUCT_SHA: 2511b5feb2d954c963dfe121d31bf679b6a513c0
       EXPECTED_VERCEL_PROJECT_NAME: repo
     steps:
       - name: Checkout exact product source
@@ -41,6 +41,7 @@ jobs:
           test -z "$(git status --short)"
           echo "ref=$PRODUCT_BRANCH" >> "$GITHUB_OUTPUT"
           echo "sha=$actual_sha" >> "$GITHUB_OUTPUT"
+          echo "Verified deployment source: $PRODUCT_BRANCH @ $actual_sha"
 
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
