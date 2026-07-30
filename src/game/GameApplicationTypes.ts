@@ -1,6 +1,5 @@
 import type { Container, Ticker } from 'pixi.js';
 import type { SimulationState } from '../core/simulation/SimulationState';
-import type { MapInputOwnership } from '../input/MapInputOwnership';
 import type { PixiTacticalBoardApp } from '../rendering/PixiApp';
 
 export type GameApplicationMode = 'game' | 'combat-lab';
@@ -25,7 +24,6 @@ export interface GamePauseController {
 export interface GameApplicationContext {
   readonly state: SimulationState;
   readonly board: PixiTacticalBoardApp;
-  readonly mapInputOwnership: MapInputOwnership;
   readonly forceRender: () => void;
   readonly addTickerListener: (listener: (ticker: Ticker) => void) => () => void;
   readonly getWorldContainer: () => Container;
