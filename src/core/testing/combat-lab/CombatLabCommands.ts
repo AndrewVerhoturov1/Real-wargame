@@ -13,8 +13,13 @@ import {
   requestUndeployWeapon,
   setFireTaskTestOverrides,
 } from '../../infantry-combat/runtime';
+import {
+  cancelTacticalOrderForUnit,
+  issueTacticalOrderToSelectedUnits,
+} from '../../orders/RoutedMoveOrders';
+import { faceSelectedUnitsToward } from '../../orders/UnitFacingCommands';
 import type { PerceptionContactMemory } from '../../perception/PerceptionContact';
-import { issueMoveOrderToSelectedUnit, selectUnit, type SimulationState } from '../../simulation/SimulationState';
+import { selectUnit, type SimulationState } from '../../simulation/SimulationState';
 import type { UnitModel } from '../../units/UnitModel';
 import type { CombatLabCommandResultV1, CombatLabScriptCommandV1 } from './CombatLabContracts';
 
@@ -112,15 +117,37 @@ export function executeCombatLabCommand(
   if (command.kind === 'move') {
     const unit = findUnit(state, command.unitId);
     if (!unit) return missingUnit(command.unitId);
-    const previousSelectedUnitId = state.selectedUnitId;
-    const previousSelectedUnitIds = [...state.selectedUnitIds];
-    selectUnit(state, unit.id);
-    issueMoveOrderToSelectedUnit(state, command.targetGrid);
-    state.selectedUnitId = previousSelectedUnitId;
-    state.selectedUnitIds = previousSelectedUnitIds;
-    return unit.order
-      ? accepted('combat_lab_move_requested', 'Маршрут движения передан производственной системе.', ownerToken)
-      : rejected('combat_lab_move_rejected', unit.behaviorRuntime.reason || 'Производственная система не приняла движение.');
+    withExclusiveSelection(state, unit.id, () => {
+      issueTacticalOrderToSelectedUnits(
+        state,
+        command.targetGrid,
+        command.tacticalOrderPresetId ?? 'move',
+        command.finalFacingRadians ?? undefined,
+      );
+    });
+    return unit.playerCommand?.status === 'active' && unit.order
+      ? accepted('combat_lab_move_requested', 'Тактический приказ передан производственной системе.', ownerToken)
+      : rejected('combat_lab_move_rejected', unit.playerCommand?.reasonRu || unit.behaviorRuntime.reason || 'Производственная система не приняла движение.');
+  }
+
+  if (command.kind === 'face') {
+    const unit = findUnit(state, command.unitId);
+    if (!unit) return missingUnit(command.unitId);
+    const changed = withExclusiveSelection(state, unit.id, () => faceSelectedUnitsToward(state, command.targetGrid));
+    return changed
+      ? accepted('combat_lab_face_completed', 'Направление бойца изменено производственной командой.', ownerToken)
+      : rejected('combat_lab_face_rejected', 'Направление не изменилось: точка совпадает с положением бойца.');
+  }
+
+  if (command.kind === 'cancel_action') {
+    const unit = findUnit(state, command.unitId);
+    if (!unit) return missingUnit(command.unitId);
+    if (command.target === 'movement') {
+      return cancelTacticalOrderForUnit(unit)
+        ? accepted('combat_lab_movement_cancelled', 'Тактический приказ движения отменён.', ownerToken)
+        : rejected('combat_lab_movement_missing', 'У бойца нет активного приказа движения.');
+    }
+    return cancelCombatLabWeaponAction(state, unit.id, command.target);
   }
 
   if (command.kind === 'reload') {
@@ -162,9 +189,6 @@ export function executeCombatLabCommand(
     }), ownerToken);
   }
 
-  if (command.kind !== 'first_aid') {
-    return rejected('combat_lab_command_unsupported', `Команда ${command.kind} не поддерживается испытательным полигоном.`);
-  }
   const actor = findUnit(state, command.actorUnitId);
   const target = findUnit(state, command.targetUnitId);
   if (!actor) return missingUnit(command.actorUnitId);
@@ -232,22 +256,13 @@ export function calculateCombatLabPerceptionQuality(
   const freshnessSeconds = Math.max(contact.lastObservedSeconds, contact.lastUpdatedSeconds, 0);
   const contactAgeSeconds = Math.max(0, nowSeconds - freshnessSeconds);
   const observation = contact.observedNow ? 1 : contact.visibleNow ? 0.9 : 0.7;
-  return clamp(
-    confidence
-      * (1 / (1 + uncertaintyMetres / 2))
-      * (1 / (1 + contactAgeSeconds / 2))
-      * observation,
-    0,
-    1,
-  );
+  return clamp(confidence * (1 / (1 + uncertaintyMetres / 2)) * (1 / (1 + contactAgeSeconds / 2)) * observation, 0, 1);
 }
 
 function contactAimPointMetres(state: SimulationState, contact: PerceptionContactMemory) {
   return {
     xMetres: contact.lastKnownPosition.x * state.map.metersPerCell,
     yMetres: contact.lastKnownPosition.y * state.map.metersPerCell,
-    // Use only what the production contact observed. Reports/sounds without a visual
-    // height retain the neutral centre fallback and never read the target unit's true posture.
     zMetres: clamp(contact.lastKnownTargetHeightMeters ?? 1.1, 0.2, 1.1),
   };
 }
@@ -265,6 +280,18 @@ function resolveProductionContact(shooter: UnitModel, targetUnitId: string): Per
   return matching[0] ?? null;
 }
 
+function withExclusiveSelection<T>(state: SimulationState, unitId: string, action: () => T): T {
+  const previousSelectedUnitId = state.selectedUnitId;
+  const previousSelectedUnitIds = [...state.selectedUnitIds];
+  selectUnit(state, unitId);
+  try {
+    return action();
+  } finally {
+    state.selectedUnitId = previousSelectedUnitId;
+    state.selectedUnitIds = previousSelectedUnitIds;
+  }
+}
+
 function normalizeProductionResult(value: unknown, ownerToken: string | null): CombatLabCommandResultV1 {
   const record = isRecord(value) ? value : {};
   const status = text(record.status, 'unknown');
@@ -278,24 +305,10 @@ function normalizeProductionResult(value: unknown, ownerToken: string | null): C
   };
 }
 
-function findUnit(state: SimulationState, unitId: string): UnitModel | null {
-  return state.units.find((unit) => unit.id === unitId) ?? null;
-}
-function missingUnit(unitId: string): CombatLabCommandResultV1 {
-  return rejected('combat_lab_unit_missing', `Боец ${unitId} не найден в текущем стенде.`);
-}
-function accepted(reasonCode: string, reasonRu: string, ownerToken: string | null): CombatLabCommandResultV1 {
-  return { accepted: true, reasonCode, reasonRu, ownerToken };
-}
-function rejected(reasonCode: string, reasonRu: string): CombatLabCommandResultV1 {
-  return { accepted: false, reasonCode, reasonRu, ownerToken: null };
-}
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-function text(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
-}
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.max(minimum, Math.min(maximum, Number.isFinite(value) ? value : minimum));
-}
+function findUnit(state: SimulationState, unitId: string): UnitModel | null { return state.units.find((unit) => unit.id === unitId) ?? null; }
+function missingUnit(unitId: string): CombatLabCommandResultV1 { return rejected('combat_lab_unit_missing', `Боец ${unitId} не найден в текущем стенде.`); }
+function accepted(reasonCode: string, reasonRu: string, ownerToken: string | null): CombatLabCommandResultV1 { return { accepted: true, reasonCode, reasonRu, ownerToken }; }
+function rejected(reasonCode: string, reasonRu: string): CombatLabCommandResultV1 { return { accepted: false, reasonCode, reasonRu, ownerToken: null }; }
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
+function text(value: unknown, fallback: string): string { return typeof value === 'string' && value.trim() ? value.trim() : fallback; }
+function clamp(value: number, minimum: number, maximum: number): number { return Math.max(minimum, Math.min(maximum, Number.isFinite(value) ? value : minimum)); }
