@@ -231,6 +231,7 @@ export class PerformanceMonitor {
   }
 
   recordSimulationUpdate(durationMs: number): void {
+    this.beginFrame();
     this.pendingSimulationUpdateMs = Math.max(0, durationMs);
   }
 
