@@ -1,4 +1,5 @@
 import '../game/GameStyles';
+import './ui/combat-lab-ui-tokens.css';
 import './combat-lab.css';
 import './combat-lab-workspace.css';
 import './combat-lab-ui-polish.css';
@@ -9,7 +10,7 @@ import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
 import { collectGameApplicationElements, GameApplication } from '../game/GameApplication';
 import type { GameApplicationContext, GamePauseController } from '../game/GameApplicationTypes';
 import { installAppShellMenu } from '../shared/AppShellMenu';
-import { CombatLabExtension } from './CombatLabExtension';
+import { createCombatLabFoundationExtension } from './CombatLabFoundationBridge';
 import { CombatLabVisualSession } from './runtime/CombatLabVisualSession';
 
 let application: GameApplication | null = null;
@@ -31,7 +32,7 @@ async function startCombatLab(): Promise<void> {
       state: session.state,
       elements: collectGameApplicationElements(),
       pauseController: createSessionPauseController(session, extensionRoot),
-      installExtension: (context) => CombatLabExtension.create(
+      installExtension: (context: GameApplicationContext) => createCombatLabFoundationExtension(
         extensionRoot,
         session,
         createCombatLabRenderContext(context),
