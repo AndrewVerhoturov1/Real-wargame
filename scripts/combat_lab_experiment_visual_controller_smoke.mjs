@@ -47,22 +47,24 @@ assert.match(runState, /Object\.freeze\(\{[\s\S]*journal:/);
 assert.doesNotMatch(controller + session, /new\s+Ticker|addTickerListener|setInterval/);
 assert.doesNotMatch(controller, /executeCombatLabCommand|tickSimulation/);
 
-// Performance regression: many fixed steps in one browser frame must collapse
-// to one presentation publication, while terminal/user actions remain immediate.
+// Performance regression: fixed steps update gameplay immediately while the
+// expensive editor/status publication is capped at ten updates per second.
+assert.match(controller, /RUNTIME_PUBLICATION_INTERVAL_MS = 100/);
 assert.match(controller, /private pendingCoreSnapshot:/);
-assert.match(controller, /private publicationFrame = 0/);
+assert.match(controller, /private publicationTimer = 0/);
 assert.match(controller, /private schedulePublication\(/);
 assert.match(controller, /private publishImmediate\(/);
 assert.match(controller, /flushPendingPublication\(\): void/);
-assert.match(controller, /window\.requestAnimationFrame/);
-assert.match(controller, /window\.cancelAnimationFrame/);
+assert.match(controller, /window\.setTimeout/);
+assert.match(controller, /window\.clearTimeout/);
 assert.match(controller, /this\.schedulePublication\(next\)/);
 assert.match(controller, /this\.publishImmediate\(next\)/);
 
-// Performance regression: routine Combat Lab renders retain the immutable map
-// cache and let map revisions trigger a rebuild only when map data changes.
+// Performance regression: the automatic Pixi ticker is the only Combat Lab
+// frame owner. UI callers cannot trigger duplicate renderFrame passes.
 assert.match(main, /createCombatLabRenderContext/);
-assert.match(main, /forceRender:\s*\(\)\s*=>\s*context\.board\.renderNow\(\)/);
+assert.match(main, /forceRender:\s*\(\)\s*=>\s*\{\}/);
+assert.doesNotMatch(main, /context\.board\.renderNow\(\)/);
 
 // Performance regression: unchanged step presentation must not destroy and
 // recreate the complete scenario editor DOM tree.
@@ -73,7 +75,7 @@ assert.match(editor, /function buildRuntimePresentationKey/);
 
 // Performance regression: the effects renderer may inspect only a bounded
 // recent tail when production event ledgers change and must do O(1) work when
-// their array identities remain unchanged.
+// their identities and tails remain unchanged.
 assert.match(effects, /MAX_RECENT_SOURCE_ENTRIES = 256/);
 assert.match(effects, /MAX_PROCESSED_IDS = 512/);
 assert.match(effects, /sourceChanged\(projectiles\.committedShots\.length/);
