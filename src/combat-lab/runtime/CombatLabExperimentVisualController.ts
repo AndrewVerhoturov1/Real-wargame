@@ -34,6 +34,8 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
   private blockedBeforeTick = false;
   private representative: CombatLabRepresentativeReplayContextV1 | null = null;
   private publishedSnapshot: CombatLabExperimentVisualRuntimeSnapshotV1 | null = null;
+  private pendingCoreSnapshot: CombatLabScenarioRuntimeSnapshotV1 | null = null;
+  private publicationFrame = 0;
   private destroyed = false;
 
   private constructor(private readonly options: CombatLabExperimentVisualControllerOptions) {}
@@ -62,7 +64,7 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
     this.representative = null;
     this.journal.clear();
     const core = executor.getSnapshot();
-    this.publish(core);
+    this.publishImmediate(core);
   }
 
   start(): void {
@@ -73,7 +75,7 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
     this.blockedBeforeTick = false;
     this.visualStatus = 'running';
     this.options.session.setPaused(false);
-    this.publish(snapshot);
+    this.publishImmediate(snapshot);
   }
 
   pause(): void {
@@ -83,7 +85,7 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
     if (isTerminal(snapshot)) return;
     this.options.session.setPaused(true);
     this.visualStatus = snapshot.status === 'idle' ? 'ready' : 'paused';
-    this.publish(snapshot);
+    this.publishImmediate(snapshot);
   }
 
   stop(): void {
@@ -98,7 +100,7 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
     this.options.session.setPaused(true);
     this.blockedBeforeTick = true;
     this.visualStatus = 'stopped';
-    this.publish(next);
+    this.publishImmediate(next);
   }
 
   stepOnce(): void {
@@ -116,7 +118,8 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
     const next = this.requireExecutor().getSnapshot();
     this.options.session.setPaused(true);
     if (!isTerminal(next)) this.visualStatus = 'paused';
-    if (!advanced && !isTerminal(next)) this.publish(next);
+    if (!advanced && !isTerminal(next)) this.publishImmediate(next);
+    else this.flushPendingPublication();
   }
 
   beforeSimulationStep(): void {
@@ -136,14 +139,16 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
       this.blockedBeforeTick = true;
       this.options.session.setPaused(true);
       this.visualStatus = 'paused';
+      this.publishImmediate(next);
     } else if (isTerminal(next)) {
       this.blockedBeforeTick = true;
       this.options.session.setPaused(true);
       this.visualStatus = statusFromCore(next);
+      this.publishImmediate(next);
     } else {
       this.visualStatus = 'running';
+      this.schedulePublication(next);
     }
-    this.publish(next);
   }
 
   shouldAdvanceSimulationStep(): boolean {
@@ -159,12 +164,14 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
     if (isTerminal(next)) {
       this.options.session.setPaused(true);
       this.visualStatus = statusFromCore(next);
+      this.publishImmediate(next);
     } else if (this.options.session.isPaused()) {
       this.visualStatus = 'paused';
+      this.publishImmediate(next);
     } else {
       this.visualStatus = 'running';
+      this.schedulePublication(next);
     }
-    this.publish(next);
   }
 
   getSnapshot(): CombatLabScenarioRuntimeSnapshotV1 {
@@ -176,7 +183,7 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
   setSpeed(value: number): void {
     this.assertAlive();
     this.options.session.setSpeed(value);
-    this.publish(this.requireExecutor().getSnapshot());
+    this.publishImmediate(this.requireExecutor().getSnapshot());
   }
 
   getSpeed(): number {
@@ -190,7 +197,18 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
   setRepresentativeContext(context: CombatLabRepresentativeReplayContextV1 | null): void {
     this.assertAlive();
     this.representative = context ? Object.freeze({ ...context }) : null;
-    this.publish(this.requireExecutor().getSnapshot());
+    this.publishImmediate(this.requireExecutor().getSnapshot());
+  }
+
+  flushPendingPublication(): void {
+    if (this.destroyed) return;
+    if (this.publicationFrame !== 0 && typeof window !== 'undefined') {
+      window.cancelAnimationFrame(this.publicationFrame);
+      this.publicationFrame = 0;
+    }
+    const core = this.pendingCoreSnapshot;
+    this.pendingCoreSnapshot = null;
+    if (core) this.publishNow(core);
   }
 
   destroy(): void {
@@ -198,6 +216,11 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
     this.cancelCurrentExperimentActions();
     this.options.session.setPaused(true);
     this.options.session.clearStepHooks(this);
+    if (this.publicationFrame !== 0 && typeof window !== 'undefined') {
+      window.cancelAnimationFrame(this.publicationFrame);
+    }
+    this.publicationFrame = 0;
+    this.pendingCoreSnapshot = null;
     this.destroyed = true;
     this.executor = null;
     this.experiment = null;
@@ -215,7 +238,32 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
     }
   }
 
-  private publish(core: CombatLabScenarioRuntimeSnapshotV1): void {
+  private schedulePublication(core: CombatLabScenarioRuntimeSnapshotV1): void {
+    this.pendingCoreSnapshot = core;
+    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+      this.flushPendingPublication();
+      return;
+    }
+    if (this.publicationFrame !== 0) return;
+    this.publicationFrame = window.requestAnimationFrame(() => {
+      this.publicationFrame = 0;
+      if (this.destroyed) return;
+      const pending = this.pendingCoreSnapshot;
+      this.pendingCoreSnapshot = null;
+      if (pending) this.publishNow(pending);
+    });
+  }
+
+  private publishImmediate(core: CombatLabScenarioRuntimeSnapshotV1): void {
+    if (this.publicationFrame !== 0 && typeof window !== 'undefined') {
+      window.cancelAnimationFrame(this.publicationFrame);
+      this.publicationFrame = 0;
+    }
+    this.pendingCoreSnapshot = null;
+    this.publishNow(core);
+  }
+
+  private publishNow(core: CombatLabScenarioRuntimeSnapshotV1): void {
     const snapshot = buildCombatLabExperimentVisualSnapshot({
       core,
       experiment: this.requireExperiment(),
