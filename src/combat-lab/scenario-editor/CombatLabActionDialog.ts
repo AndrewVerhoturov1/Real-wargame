@@ -84,7 +84,7 @@ export class CombatLabActionDialog {
       this.catalogHost.replaceChildren(note('Действие больше не существует.'));
       return;
     }
-    const { experiment, action } = resolved;
+    const { experiment, action, actorRoleId } = resolved;
     const descriptor = findCombatLabActionDescriptorForAction(action);
     const type = document.createElement('select');
     for (const candidate of listCombatLabActionDescriptors()) {
@@ -95,7 +95,7 @@ export class CombatLabActionDialog {
     }
     type.value = descriptor.id;
     type.addEventListener('change', () => {
-      const next = createCombatLabActionFromCatalog(experiment, actorRoleFor(action), type.value, preservedOptions(action));
+      const next = createCombatLabActionFromCatalog(experiment, actorRoleId, type.value, preservedOptions(action));
       this.updateAction(next);
     });
 
@@ -111,11 +111,11 @@ export class CombatLabActionDialog {
     this.catalogHost.replaceChildren(...controls);
   }
 
-  private resolve(): { experiment: ReturnType<CombatLabExperimentDraft['getExperiment']>; action: CombatLabActionV1 } | null {
+  private resolve(): { experiment: ReturnType<CombatLabExperimentDraft['getExperiment']>; action: CombatLabActionV1; actorRoleId: string } | null {
     const experiment = this.options.draft.getExperiment();
     const track = experiment.tracks.find((candidate) => candidate.trackId === this.options.trackId);
     const step = track?.steps.find((candidate) => candidate.stepId === this.options.stepId);
-    return step ? { experiment, action: step.action } : null;
+    return track && step ? { experiment, action: step.action, actorRoleId: track.actorRoleId } : null;
   }
 
   private updateAction(action: CombatLabActionV1): void {
@@ -126,10 +126,6 @@ export class CombatLabActionDialog {
       this.options.onError(error instanceof Error ? error.message : 'Не удалось изменить действие.');
     }
   }
-}
-
-function actorRoleFor(action: CombatLabActionV1): string {
-  return action.kind === 'transfer' ? action.sourceRoleId : action.kind === 'wait' ? '' : action.actorRoleId;
 }
 
 function preservedOptions(action: CombatLabActionV1) {
