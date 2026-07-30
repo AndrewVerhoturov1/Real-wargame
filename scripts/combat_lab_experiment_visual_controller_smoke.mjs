@@ -72,10 +72,10 @@ assert.match(editor, /function buildRuntimePresentationKey/);
 // their array identities remain unchanged.
 assert.match(effects, /MAX_RECENT_SOURCE_ENTRIES = 256/);
 assert.match(effects, /MAX_PROCESSED_IDS = 512/);
-assert.match(effects, /projectiles\.committedShots !== this\.previousCommittedShots/);
-assert.match(effects, /projectiles\.impacts !== this\.previousImpacts/);
-assert.match(effects, /history !== this\.previousHistory/);
-assert.match(effects, /recentTail\(/);
+assert.match(effects, /sourceChanged\(projectiles\.committedShots\.length/);
+assert.match(effects, /sourceChanged\(projectiles\.impacts\.length/);
+assert.match(effects, /sourceChanged\(history\.length/);
+assert.match(effects, /function recentStart/);
 assert.match(effects, /class BoundedIdWindow/);
 assert.doesNotMatch(effects, /pruneProcessedHistory/);
 assert.doesNotMatch(effects, /history\.map\(/);
