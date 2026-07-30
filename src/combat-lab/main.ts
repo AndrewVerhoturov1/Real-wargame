@@ -55,10 +55,11 @@ window.addEventListener('beforeunload', () => {
 function createCombatLabRenderContext(context: GameApplicationContext): GameApplicationContext {
   return {
     ...context,
-    // Combat Lab changes simulation and overlays continuously. Map revisions
-    // already invalidate the static map cache precisely, so routine UI updates
-    // must render dynamic layers without forcing an unchanged map rebuild.
-    forceRender: () => context.board.renderNow(),
+    // The Pixi ticker already renders every frame. Combat Lab callers only need
+    // to mutate renderer state; the next automatic frame publishes it. Keeping
+    // forceRender as a no-op prevents duplicate renderFrame passes and preserves
+    // the revision-owned static map cache.
+    forceRender: () => {},
   };
 }
 
