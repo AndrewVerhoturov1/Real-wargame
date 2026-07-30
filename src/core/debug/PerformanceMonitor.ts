@@ -190,7 +190,7 @@ type PerformanceScenarioWindow = Window & {
   __realWargamePerformanceScenario?: string | null;
 };
 
-const MAX_SAMPLES = 3600;
+const MAX_SAMPLES = 9000;
 const MAX_LONG_TASKS = 200;
 const MAX_LONG_ANIMATION_FRAMES = 200;
 const PHASE_MEASURE_PREFIX = 'real-wargame.phase.';
@@ -363,6 +363,7 @@ export class PerformanceMonitor {
         selectedUnitId: state.selectedUnitId,
       },
       computation: {
+        diagnosticsScope: 'runtime-cumulative; reload the page before an isolated comparison',
         aiScheduler: getAiSchedulerPerformanceDiagnostics(),
         threatRelativeCover: getThreatRelativeCoverFieldDiagnostics(state.map),
         directionalTactical: getDirectionalTacticalFieldDiagnostics(state.map),
