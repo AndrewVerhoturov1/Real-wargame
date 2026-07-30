@@ -14,14 +14,13 @@ concurrency:
 
 jobs:
   screenshot:
-    name: Verify live Preview in Chromium 1440x900
+    name: Verify public Preview in Chromium 1440x900
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       PRODUCT_BRANCH: feature/20260730-combat-lab-user-acceptance-fixes
       PRODUCT_SHA: 222cbd901029751396c6891fa63c1633eb408f31
-      BASE_URL: https://repo-foqlr0dj9-111s-projects-807221af.vercel.app
-      SHARE_URL: https://repo-foqlr0dj9-111s-projects-807221af.vercel.app/?_vercel_share=4Z4BW1lnOV5NcCyg2rxF1LEvr21ssegM
+      BASE_URL: https://combat-lab-acceptance-222cbd9.vercel.app
     steps:
       - name: Checkout exact source identity
         uses: actions/checkout@v4
@@ -51,7 +50,7 @@ jobs:
           npm install --no-audit --no-fund playwright@1.54.1
           npx playwright install --with-deps chromium
 
-      - name: Capture and verify live Preview
+      - name: Capture and verify public Preview
         shell: bash
         run: |
           set -euo pipefail
@@ -62,20 +61,16 @@ jobs:
           import { chromium } from 'playwright';
 
           const baseUrl = process.env.BASE_URL;
-          const shareUrl = process.env.SHARE_URL;
           const expectedSha = process.env.PRODUCT_SHA;
-          const shareToken = new URL(shareUrl).searchParams.get('_vercel_share');
           const out = `${process.env.RUNNER_TEMP}/combat-lab-qa/screenshots`;
           const report = {
             expectedSha,
             baseUrl,
             viewport: { width: 1440, height: 900 },
             pages: {},
-            navigation: [],
-            console: [],
+            consoleErrors: [],
             pageErrors: [],
             requestFailures: [],
-            cookies: [],
             failure: null,
           };
 
@@ -83,13 +78,11 @@ jobs:
             headless: true,
             args: ['--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'],
           });
-          const context = await browser.newContext({
-            viewport: { width: 1440, height: 900 },
-            deviceScaleFactor: 1,
-            ignoreHTTPSErrors: false,
-          });
+          const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
           const page = await context.newPage();
-          page.on('console', (message) => report.console.push({ type: message.type(), text: message.text() }));
+          page.on('console', (message) => {
+            if (message.type() === 'error') report.consoleErrors.push(message.text());
+          });
           page.on('pageerror', (error) => report.pageErrors.push(String(error)));
           page.on('requestfailed', (request) => report.requestFailures.push({
             url: request.url(),
@@ -97,113 +90,51 @@ jobs:
             error: request.failure()?.errorText ?? 'unknown',
           }));
 
-          function protectedUrl(path) {
-            const url = new URL(path, baseUrl);
-            if (shareToken) url.searchParams.set('_vercel_share', shareToken);
-            return url.toString();
-          }
-
-          async function snapshotState(label, screenshotName) {
+          async function capture(path, selector, key, screenshotName) {
+            const response = await page.goto(`${baseUrl}${path}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+            if (!response || response.status() >= 400) throw new Error(`${path} returned ${response?.status() ?? 'no response'}`);
+            await page.waitForSelector(selector, { state: 'attached', timeout: 120_000 });
+            await page.waitForTimeout(5000);
             const state = await page.evaluate(() => ({
               title: document.title,
               url: location.href,
-              host: location.host,
-              readyState: document.readyState,
               viewportWidth: document.documentElement.clientWidth,
               viewportHeight: document.documentElement.clientHeight,
               scrollWidth: document.documentElement.scrollWidth,
               scrollHeight: document.documentElement.scrollHeight,
-              appChildren: document.querySelector('#app')?.childElementCount ?? null,
               canvasCount: document.querySelectorAll('canvas').length,
-              bodyText: document.body?.innerText?.slice(0, 2500) ?? '',
-              htmlSnippet: document.documentElement?.outerHTML?.slice(0, 5000) ?? '',
+              bodyText: document.body?.innerText?.slice(0, 2000) ?? '',
             }));
-            report.navigation.push({ label, ...state });
+            if (/Application error|Internal Server Error|404: NOT_FOUND|Log in to Vercel|Sign in to Vercel/i.test(state.bodyText)) {
+              throw new Error(`${path} rendered an error/authentication page`);
+            }
             await page.screenshot({ path: `${out}/${screenshotName}`, fullPage: false });
+            report.pages[key] = state;
             return state;
           }
 
-          async function navigate(path, options) {
-            const url = protectedUrl(path);
-            const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120_000 });
-            await page.waitForTimeout(options.initialWaitMs ?? 5000);
-            const initial = await snapshotState(`${options.label}-initial`, options.initialScreenshot);
-            if (!response || response.status() >= 400) {
-              throw new Error(`${path} returned ${response?.status() ?? 'no response'}`);
-            }
-            if (initial.host === 'vercel.com' || /Log in to Vercel|Sign in to Vercel/i.test(initial.bodyText)) {
-              throw new Error(`${path} remained on Vercel authentication page: ${initial.url}`);
-            }
-            if (options.selector) {
-              await page.waitForSelector(options.selector, { state: 'attached', timeout: options.timeoutMs ?? 60_000 });
-            }
-            await page.waitForTimeout(options.settleMs ?? 3000);
-            const finalState = await snapshotState(options.label, options.screenshot);
-            if (/Application error|Internal Server Error|404: NOT_FOUND/i.test(finalState.bodyText)) {
-              throw new Error(`${path} rendered an error page`);
-            }
-            report.pages[options.key] = finalState;
-            return finalState;
-          }
-
           try {
-            const authResponse = await page.goto(shareUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
-            await page.waitForTimeout(8000);
-            const authState = await snapshotState('share-authorization', '00-share-authorization.png');
-            report.authStatus = authResponse?.status() ?? null;
-            report.authState = authState;
-            report.cookies = (await context.cookies()).map(({ name, domain, path, expires, httpOnly, secure, sameSite }) => ({
-              name, domain, path, expires, httpOnly, secure, sameSite,
-            }));
+            const game = await capture('/', '#app canvas', 'game', '01-game.png');
+            if (game.canvasCount < 1) throw new Error('Game page has no canvas.');
 
-            await navigate('/', {
-              key: 'game',
-              label: 'game',
-              selector: '#app',
-              initialScreenshot: '01-game-initial.png',
-              screenshot: '02-game.png',
-              initialWaitMs: 7000,
-              settleMs: 5000,
-            });
-            const gameCanvasCount = await page.locator('canvas').count();
-            if (gameCanvasCount < 1) throw new Error(`Game page has no canvas after load. URL: ${page.url()}`);
-
-            await navigate('/combat-lab.html', {
-              key: 'scene',
-              label: 'combat-lab-scene',
-              selector: '#combat-lab-extension-root, [data-combat-lab-extension="active"]',
-              initialScreenshot: '03-combat-lab-initial.png',
-              screenshot: '04-combat-lab-scene.png',
-              initialWaitMs: 7000,
-              settleMs: 5000,
-              timeoutMs: 90_000,
-            });
+            await capture('/combat-lab.html', '#combat-lab-extension-root', 'scene', '02-combat-lab-scene.png');
 
             const programTab = page.locator('[data-combat-lab-tab="program"]');
             await programTab.click();
-            await page.waitForTimeout(2000);
-            report.pages.program = await snapshotState('combat-lab-program', '05-combat-lab-program.png');
+            await page.waitForTimeout(2500);
+            await page.screenshot({ path: `${out}/03-combat-lab-program.png`, fullPage: false });
+            report.pages.program = await page.evaluate(() => ({ title: document.title, url: location.href, bodyText: document.body.innerText.slice(0, 2000) }));
 
             const parametersTab = page.locator('[data-combat-lab-tab="parameters"]');
             await parametersTab.click();
-            await page.waitForTimeout(2000);
-            report.pages.parameters = await snapshotState('combat-lab-parameters', '06-combat-lab-parameters.png');
+            await page.waitForTimeout(2500);
+            await page.screenshot({ path: `${out}/04-combat-lab-parameters.png`, fullPage: false });
+            report.pages.parameters = await page.evaluate(() => ({ title: document.title, url: location.href, bodyText: document.body.innerText.slice(0, 2000) }));
 
-            await navigate('/ai-node-editor.html', {
-              key: 'aiEditor',
-              label: 'ai-node-editor',
-              selector: 'body',
-              initialScreenshot: '07-ai-node-editor-initial.png',
-              screenshot: '08-ai-node-editor.png',
-              initialWaitMs: 7000,
-              settleMs: 3000,
-            });
+            await capture('/ai-node-editor.html', 'body', 'aiEditor', '05-ai-node-editor.png');
 
-            const sourceResponse = await context.request.get(protectedUrl('/deployment-source.json'));
-            report.deploymentSourceStatus = sourceResponse.status();
-            if (sourceResponse.status() !== 200) {
-              throw new Error(`deployment-source.json returned ${sourceResponse.status()}`);
-            }
+            const sourceResponse = await context.request.get(`${baseUrl}/deployment-source.json`);
+            if (sourceResponse.status() !== 200) throw new Error(`deployment-source.json returned ${sourceResponse.status()}`);
             const source = await sourceResponse.json();
             if (source.sourceSha !== expectedSha || source.verificationStatus !== 'passed') {
               throw new Error(`Deployment identity mismatch: ${JSON.stringify(source)}`);
@@ -211,12 +142,8 @@ jobs:
             report.deploymentSource = source;
           } catch (error) {
             report.failure = error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : String(error);
-            try { await snapshotState('failure', '99-failure.png'); } catch {}
+            try { await page.screenshot({ path: `${out}/99-failure.png`, fullPage: false }); } catch {}
           } finally {
-            report.finalUrl = page.url();
-            report.finalCookies = (await context.cookies()).map(({ name, domain, path, expires, httpOnly, secure, sameSite }) => ({
-              name, domain, path, expires, httpOnly, secure, sameSite,
-            }));
             await writeFile(`${out}/qa-report.json`, `${JSON.stringify(report, null, 2)}\n`);
             await browser.close();
           }
@@ -225,7 +152,7 @@ jobs:
             console.error(JSON.stringify(report.failure, null, 2));
             process.exit(1);
           }
-          console.log(`Chromium live Preview verification passed for ${expectedSha}.`);
+          console.log(`Chromium public Preview verification passed for ${expectedSha}.`);
           NODE
           cd "$qa"
           node qa.mjs
@@ -234,7 +161,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: combat-lab-live-screenshots-222cbd9
+          name: combat-lab-public-screenshots-222cbd9
           path: ${{ runner.temp }}/combat-lab-qa/screenshots
           if-no-files-found: error
           retention-days: 7
