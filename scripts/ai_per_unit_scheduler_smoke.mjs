@@ -38,16 +38,12 @@ function adaptForPhysicalPosture(source) {
     "import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';\nimport { isPostureTransitionRunning, postureTransitionDurationSeconds } from '../src/core/actions/PostureTransition';",
   );
   result = replaceOnce(result,
-    "import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';",
-    "import { createInitialState as createInitialStateBase, type SimulationState } from '../src/core/simulation/SimulationState';",
-  );
-  result = replaceOnce(result,
     "import { tickSimulation } from '../src/core/simulation/SimulationTick';",
     "import { tickSimulation } from '../src/core/simulation/SimulationTick';\nimport { clearStaticTacticalPositionService } from '../src/core/tactical/static/StaticTacticalPositionService';",
   );
   result = replaceOnce(result,
-    "const storage = new Map<string, string>();",
-    "const storage = new Map<string, string>();\nconst createdStates = new Set<SimulationState>();",
+    "let activeGraph: AiGraph | null = null;",
+    "let activeGraph: AiGraph | null = null;\nconst createdStates = new Set<SimulationState>();",
   );
   result = replaceOnce(result,
     "  const workspaceSource = readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8');",
@@ -86,8 +82,8 @@ function adaptForPhysicalPosture(source) {
     "  assert.equal(threatened.behaviorRuntime.posture, 'standing', 'unselected graph must not bypass physical posture timing');\n  assert.equal(threatened.behaviorRuntime.physicalAction?.targetPosture, 'prone', 'unselected graph must react defensively on its first step');\n  tickSimulation(state, postureTransitionDurationSeconds('standing', 'prone'));\n  assert.equal(threatened.behaviorRuntime.posture, 'prone');",
   );
   result = replaceOnce(result,
-    "function findUnit(state: SimulationState, id: string): UnitModel {",
-    "function createInitialState(...args: Parameters<typeof createInitialStateBase>): SimulationState {\n  const state = createInitialStateBase(...args);\n  createdStates.add(state);\n  return state;\n}\n\nfunction findUnit(state: SimulationState, id: string): UnitModel {",
+    "  return state;\n}\n\nfunction runTicks(state: SimulationState, count: number, deltaSeconds: number): void {",
+    "  createdStates.add(state);\n  return state;\n}\n\nfunction runTicks(state: SimulationState, count: number, deltaSeconds: number): void {",
   );
   return result;
 }
