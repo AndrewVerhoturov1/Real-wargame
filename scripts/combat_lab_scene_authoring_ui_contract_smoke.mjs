@@ -27,7 +27,7 @@ assert.match(dialog, /CombatLabParticipantDialogController\.open/);
 assert.match(dialog, /getOnlyCombatLabWorkspaceRoot/);
 assert.doesNotMatch(dialog, /querySelectorAll/);
 assert.match(controller, /createCombatLabParticipant/);
-assert.match(controller, /updateCombatLabParticipantInitialState/);
+assert.match(controller, /participantMutations\.update/);
 assert.match(controller, /loadoutRef/);
 assert.match(files, /\.combat-lab\.json/);
 assert.match(files, /errors\.length > 0 \? null : result\.experiment/);
