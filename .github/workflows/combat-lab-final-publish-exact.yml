@@ -25,12 +25,12 @@ jobs:
           fetch-depth: 0
           path: product
 
-      - name: Apply and publish exact reviewed patch
+      - name: Apply and publish exact reviewed product patch
         shell: bash
         working-directory: product
         env:
           EXPECTED_PARENT: aab878113abb876f066745debd6d04fe3246fd94
-          EXPECTED_TREE: 4e6803fa99c7fe6caab9f358293c6d1ccf25ac69
+          EXPECTED_TREE: 22504f2c1e388740aa244655934648d3d436d1da
           TARGET_BRANCH: integration/20260731-combat-lab-final-assembly-visual-qa
         run: |
           set -euo pipefail
@@ -39,15 +39,18 @@ jobs:
           test "$remote_sha" = "$EXPECTED_PARENT"
 
           base64 --decode ../harness/ci/final-product.patch.gz.b64 | gunzip > "$RUNNER_TEMP/final-product.patch"
+          git apply --check "$RUNNER_TEMP/final-product.patch"
+          git apply "$RUNNER_TEMP/final-product.patch"
+          git diff --check
+          git add -A
           git config user.name 'OpenAI Combat Lab Integrator'
           git config user.email 'actions@users.noreply.github.com'
-          git am --committer-date-is-author-date "$RUNNER_TEMP/final-product.patch"
+          git commit -m 'Integrate Combat Lab authoring and final assembly contracts'
 
           actual_tree="$(git rev-parse HEAD^{tree})"
           echo "Expected tree: $EXPECTED_TREE"
           echo "Actual tree:   $actual_tree"
           test "$actual_tree" = "$EXPECTED_TREE"
-          git diff --check "$EXPECTED_PARENT..HEAD"
           git push origin "HEAD:refs/heads/$TARGET_BRANCH"
 
       - name: Record published identity
@@ -55,9 +58,10 @@ jobs:
         working-directory: product
         run: |
           {
-            echo '## Exact final integration publication'
+            echo '## Exact final integration product publication'
             echo
             echo "- commit: $(git rev-parse HEAD)"
             echo "- tree: $(git rev-parse HEAD^{tree})"
+            echo '- workflow update: intentionally separate'
             echo '- target: integration/20260731-combat-lab-final-assembly-visual-qa'
           } >> "$GITHUB_STEP_SUMMARY"
