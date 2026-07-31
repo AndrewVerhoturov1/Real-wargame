@@ -1,0 +1,51 @@
+name: External deployed UI audit
+
+on:
+  pull_request:
+    branches:
+      - ci/ui-audit-base-20260731t160500z-6220ba65
+
+permissions:
+  contents: read
+
+jobs:
+  browser-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TARGET_ORIGIN: https://repo-hba09463a-111s-projects-807221af.vercel.app
+      EXPECTED_PRODUCT_SHA: 6220ba65de584239612600ae2ec025363137e09f
+      CANONICAL_FEATURE_BRANCH: feature/20260731-combat-lab-user-acceptance-fixes
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright
+        run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Audit deployed editor and Combat Lab
+        run: npx playwright test --config=ci/playwright.ui-audit.config.ts
+
+      - name: Upload UI audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-ui-audit-${{ github.run_id }}
+          path: |
+            artifacts/vercel-ui-audit/**
+            test-results/vercel-ui-audit/**
+            playwright-report-ui-audit/**
+          if-no-files-found: warn
+          retention-days: 14
