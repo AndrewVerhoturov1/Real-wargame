@@ -14,10 +14,13 @@ const [productionEditor, workbench, adapter, inspector, participantEditor, scene
 
 assert.match(productionEditor, /createProductionUnitEditorSection/);
 assert.match(productionEditor, /ProductionUnitEditorAdapterV1/);
+assert.match(productionEditor, /createProductionUnitEditorPositionScale/);
 assert.match(workbench, /createProductionUnitEditorSection/);
 assert.match(workbench, /createGameWorkbenchUnitAdapter/);
+assert.match(workbench, /positionScale:\s*createProductionUnitEditorPositionScale\(state\.map\.metersPerCell\)/);
 assert.match(adapter, /mode = 'experiment_draft'/);
 assert.match(adapter, /participantMutations\.update/);
+assert.match(adapter, /sceneSnapshot\.map\.metersPerCell/);
 assert.doesNotMatch(adapter, /restoreSimulationStateFromSceneSnapshot|replaceSceneAtRuntimeResolution|buildExportedScene/);
 assert.match(inspector, /services\.selection\.subscribe/);
 assert.match(inspector, /CombatLabSceneEditorAdapter/);
