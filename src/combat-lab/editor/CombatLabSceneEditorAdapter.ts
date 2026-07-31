@@ -1,12 +1,16 @@
-import { listAvailableAiGraphCatalogEntries } from '../../core/ai/AiGraphCatalog';
+import {
+  listMergedAiGraphCatalogEntries,
+  readAiGraphCatalogFromScene,
+} from '../../core/ai/AiGraphCatalog';
 import { createDefaultCombatCatalogRegistry } from '../../core/infantry-combat/catalogs/CombatCatalogRegistry';
 import type { CombatLabParticipantScenePatchV1 } from '../../core/testing/combat-lab/experiment';
-import type {
-  ProductionUnitEditorAdapterV1,
-  ProductionUnitEditorGraphOptionV1,
-  ProductionUnitEditorLoadoutOptionV1,
-  ProductionUnitEditorPatchV1,
-  ProductionUnitEditorSnapshotV1,
+import {
+  createProductionUnitEditorPositionScale,
+  type ProductionUnitEditorAdapterV1,
+  type ProductionUnitEditorGraphOptionV1,
+  type ProductionUnitEditorLoadoutOptionV1,
+  type ProductionUnitEditorPatchV1,
+  type ProductionUnitEditorSnapshotV1,
 } from '../../ui/ProductionUnitEditor';
 import type { CombatLabWorkspaceServices } from '../CombatLabWorkspaceServices';
 import type { CombatLabParticipantMapInteractionController } from './CombatLabParticipantMapInteractionController';
@@ -23,6 +27,12 @@ export class CombatLabSceneEditorAdapter implements ProductionUnitEditorAdapterV
   private readonly catalogRegistry = createDefaultCombatCatalogRegistry();
 
   constructor(private readonly options: CombatLabSceneEditorAdapterOptionsV1) {}
+
+  get positionScale() {
+    return createProductionUnitEditorPositionScale(
+      this.options.services.draft.get().sceneSnapshot.map.metersPerCell,
+    );
+  }
 
   read(): ProductionUnitEditorSnapshotV1 | null {
     const context = this.options.services.participantMutations.get(this.options.roleId);
@@ -62,7 +72,10 @@ export class CombatLabSceneEditorAdapter implements ProductionUnitEditorAdapterV
   }
 
   listGraphOptions(): readonly ProductionUnitEditorGraphOptionV1[] {
-    return listAvailableAiGraphCatalogEntries().map((entry) => Object.freeze({
+    const sceneCatalog = readAiGraphCatalogFromScene(
+      this.options.services.draft.get().sceneSnapshot,
+    );
+    return listMergedAiGraphCatalogEntries(sceneCatalog).map((entry) => Object.freeze({
       graphId: entry.graphId,
       titleRu: entry.titleRu,
       graph: entry.graph,
