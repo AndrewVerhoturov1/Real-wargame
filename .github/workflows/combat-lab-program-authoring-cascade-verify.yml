@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - worker/20260731-combat-lab-program-authoring
+  pull_request:
+    branches:
+      - worker/20260731-combat-lab-unified-editor
   workflow_dispatch:
 
 permissions:
