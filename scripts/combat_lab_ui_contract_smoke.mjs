@@ -9,6 +9,7 @@ await import('./combat_lab_foundation_composition_behavior_smoke.mjs');
 await import('./combat_lab_quick_parameter_registry_smoke.mjs');
 await import('./combat_lab_quick_parameter_preferences_smoke.mjs');
 await import('./combat_lab_quick_parameters_panel_behavior_smoke.mjs');
+await import('./combat_lab_quick_parameters_rerun_behavior_smoke.mjs');
 await import('./combat_lab_tuning_ab_behavior_smoke.mjs');
 
 const [
@@ -26,6 +27,8 @@ const [
   menu,
   labMain,
   quickParametersInstaller,
+  quickParametersPanel,
+  resetAndStart,
   statePlanCss,
   commandRouteCss,
   compactRouteCss,
@@ -47,6 +50,8 @@ const [
   readFile('src/shared/AppShellMenu.ts', 'utf8'),
   readFile('src/combat-lab/main.ts', 'utf8'),
   readFile('src/combat-lab/parameters/installCombatLabQuickParameters.ts', 'utf8'),
+  readFile('src/combat-lab/ui/CombatLabQuickParametersPanel.ts', 'utf8'),
+  readFile('src/combat-lab/runtime/CombatLabResetAndStart.ts', 'utf8'),
   readFile('src/ai-state-plan-panel.css', 'utf8'),
   readFile('src/command-plan-route-overlay.css', 'utf8'),
   readFile('src/tactical-workspace-compact-route.css', 'utf8'),
@@ -97,6 +102,8 @@ assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 6, 'Combat Lab must
 assert.doesNotMatch(workspaceHosts, /labelRu:\s*'Стенд'/, 'The removed Stand tab must not return.');
 assert.match(extension, /installSharedSimulationControls/);
 assert.match(extension, /data-action="fire-contact"/);
+assert.match(extension, /COMBAT_LAB_RESET_AND_START_EVENT/);
+assert.match(extension, /executeCombatLabResetAndStart\(/);
 assert.doesNotMatch(extension, /adoptSimulationSidebar/);
 assert.doesNotMatch(extension, /['"]fighter['"]/);
 assert.doesNotMatch(extension, /Static Stage 10 compatibility markers|LegacyStage10HostContract/);
@@ -137,7 +144,16 @@ assert.match(labMain, /installAppShellMenu\(\{ mode: 'combat-lab' \}\)/);
 assert.match(labMain, /installCombatLabQuickParameters\(extensionRoot, session\)/);
 assert.match(quickParametersInstaller, /getCombatLabWorkspaceServices\(workspaceRoot\)/);
 assert.match(quickParametersInstaller, /data-combat-lab-parameters-host="selected-unit"/);
+assert.match(quickParametersInstaller, /requestCombatLabResetAndStart\(extensionRoot, seed\)/);
+assert.doesNotMatch(quickParametersInstaller, /combat-lab:set-paused/);
 assert.doesNotMatch(quickParametersInstaller, /CombatLabExperimentDraft|CombatLabScenarioExecutor|CombatLabBatchClient/);
+assert.match(resetAndStart, /controller\.reset\(normalizeCombatLabResetAndStartSeed\(request\.seed\)\);\s*controller\.start\(\);/s);
+assert.match(quickParametersPanel, /applyCombatLabQuickParametersAndRerun/);
+const quickParameterHeader = quickParametersPanel.match(/private renderHeader[\s\S]*?\n  private renderNotice/)?.[0] ?? '';
+assert.match(quickParameterHeader, /state\.titleRu/);
+assert.match(quickParameterHeader, /state\.sideRu/);
+assert.doesNotMatch(quickParameterHeader, /роль \$\{state\.roleId\}|unit \$\{state\.unitId|state\.unitId/);
+assert.doesNotMatch(quickParameterHeader, /type\s*=\s*['"]text['"]/);
 assert.match(menu, /modeLink\('\/', 'game', 'Игра', mode\)/);
 assert.match(menu, /modeLink\('\/ai-node-editor\.html', 'editor', 'Редактор ИИ', mode\)/);
 assert.match(menu, /modeLink\('\/combat-lab\.html', 'combat-lab', 'Испытательный полигон', mode\)/);
