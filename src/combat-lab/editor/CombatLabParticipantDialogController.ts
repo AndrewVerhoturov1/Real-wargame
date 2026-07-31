@@ -1,4 +1,7 @@
-import { listAvailableAiGraphCatalogEntries } from '../../core/ai/AiGraphCatalog';
+import {
+  listMergedAiGraphCatalogEntries,
+  readAiGraphCatalogFromScene,
+} from '../../core/ai/AiGraphCatalog';
 import { SOLDIER_PARAMETERS_BY_PROFILE } from '../../core/behavior/BehaviorModel';
 import { createDefaultCombatCatalogRegistry } from '../../core/infantry-combat/catalogs/CombatCatalogRegistry';
 import {
@@ -7,12 +10,13 @@ import {
   type CombatLabParticipantInitialDraftV1,
   type CombatLabParticipantScenePatchV1,
 } from '../../core/testing/combat-lab/experiment';
-import type {
-  ProductionUnitEditorAdapterV1,
-  ProductionUnitEditorGraphOptionV1,
-  ProductionUnitEditorLoadoutOptionV1,
-  ProductionUnitEditorPatchV1,
-  ProductionUnitEditorSnapshotV1,
+import {
+  createProductionUnitEditorPositionScale,
+  type ProductionUnitEditorAdapterV1,
+  type ProductionUnitEditorGraphOptionV1,
+  type ProductionUnitEditorLoadoutOptionV1,
+  type ProductionUnitEditorPatchV1,
+  type ProductionUnitEditorSnapshotV1,
 } from '../../ui/ProductionUnitEditor';
 import type { CombatLabWorkspaceServices } from '../CombatLabWorkspaceServices';
 import type { CombatLabExperimentDraft } from '../scenario-editor/CombatLabExperimentDraft';
@@ -43,6 +47,11 @@ export class CombatLabParticipantDialogController {
       : createDefaultSnapshot();
     this.adapter = {
       mode: 'local_dialog_draft',
+      get positionScale() {
+        return createProductionUnitEditorPositionScale(
+          options.draft.getExperiment().sceneSnapshot.map.metersPerCell,
+        );
+      },
       read: () => this.localDraft,
       update: (patch) => this.updateLocalDraft(patch),
       listGraphOptions: () => this.listGraphOptions(),
@@ -72,7 +81,7 @@ export class CombatLabParticipantDialogController {
     try {
       if (this.options.roleId) {
         const next = this.options.services.participantMutations.update(this.options.roleId, (context) => ({
-          scenePatch: snapshotToPatch(this.localDraft, context.initial),
+          scenePatch: snapshotToPatch(this.localDraft, context.initial, this.listGraphOptions()),
         }));
         this.options.onSaved(next, this.options.roleId);
         this.close();
@@ -186,7 +195,10 @@ export class CombatLabParticipantDialogController {
   }
 
   private listGraphOptions(): readonly ProductionUnitEditorGraphOptionV1[] {
-    return listAvailableAiGraphCatalogEntries().map((entry) => Object.freeze({
+    const sceneCatalog = readAiGraphCatalogFromScene(
+      this.options.draft.getExperiment().sceneSnapshot,
+    );
+    return listMergedAiGraphCatalogEntries(sceneCatalog).map((entry) => Object.freeze({
       graphId: entry.graphId,
       titleRu: entry.titleRu,
       graph: entry.graph,
@@ -268,6 +280,7 @@ function createDefaultSnapshot(): ProductionUnitEditorSnapshotV1 {
 function snapshotToPatch(
   snapshot: ProductionUnitEditorSnapshotV1,
   initial: CombatLabParticipantInitialDraftV1,
+  graphOptions: readonly ProductionUnitEditorGraphOptionV1[],
 ): CombatLabParticipantScenePatchV1 {
   return {
     titleRu: snapshot.titleRu,
@@ -296,7 +309,7 @@ function snapshotToPatch(
     },
     aiBrain: snapshot.aiBrain,
     aiGraphDefinition: snapshot.aiBrain.kind === 'graph'
-      ? listAvailableAiGraphCatalogEntries().find((entry) => entry.graphId === snapshot.aiBrain.graphId)?.graph
+      ? graphOptions.find((entry) => entry.graphId === snapshot.aiBrain.graphId)?.graph
       : undefined,
   };
 }
