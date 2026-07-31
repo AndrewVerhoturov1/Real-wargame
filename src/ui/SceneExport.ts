@@ -1,14 +1,29 @@
 import { saveMovementProfileRegistry } from '../ai-node-editor/MovementProfileBrowserStorage';
 import {
+  getInstalledAiGraphCatalog,
+  installAiGraphCatalog,
+  readAiGraphCatalogFromScene,
+  writeAiGraphCatalogToScene,
+  type AiGraphCatalogV1,
+} from '../core/ai/AiGraphCatalog';
+import {
   buildSceneSnapshot,
   restoreSimulationStateFromSceneSnapshot,
-  type ExportedSceneData,
+  type ExportedSceneData as CoreExportedSceneData,
 } from '../core/simulation/SceneSnapshot';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { buildStaticTacticalPositionArtifactForExport } from '../core/tactical/static/StaticTacticalPositionService';
+import {
+  installUnitAiBrainBindingFromData,
+  serializeUnitAiBrainBinding,
+} from '../core/units/UnitAiBrainBinding';
+import type { UnitData } from '../core/units/UnitModel';
 import { getEnvironmentProfileRegistry, saveEnvironmentProfileRegistry } from './EnvironmentProfileStorage';
 
-export type { ExportedSceneData } from '../core/simulation/SceneSnapshot';
+export type ExportedSceneData = CoreExportedSceneData & {
+  readonly aiGraphCatalog?: AiGraphCatalogV1;
+};
+
 export {
   normalizeSceneSnapshot as normalizeImportedScene,
   restoreSceneSnapshotCombatState as restoreImportedInfantryCombatState,
@@ -26,6 +41,7 @@ export async function loadSceneJsonFromFile(state: SimulationState, file: File):
   const restored = restoreSimulationStateFromSceneSnapshot(state, parsed, {
     fallbackEnvironmentProfiles: getEnvironmentProfileRegistry().toData(),
   });
+  installSceneBrainData(state, parsed);
   saveEnvironmentProfileRegistry(restored.environmentProfileRegistry);
   saveMovementProfileRegistry(restored.movementProfileRegistry);
 
@@ -60,11 +76,38 @@ export function downloadCurrentSceneJson(state: SimulationState): void {
 }
 
 export function buildExportedScene(state: SimulationState): ExportedSceneData {
-  return buildSceneSnapshot(state, {
+  const core = buildSceneSnapshot(state, {
     exportedAt: new Date().toISOString(),
     environmentProfiles: getEnvironmentProfileRegistry().toData(),
     staticTacticalPositionArtifact: buildStaticTacticalPositionArtifactForExport(state),
   });
+  const unitsById = new Map(state.units.map((unit) => [unit.id, unit] as const));
+  const withBrains: CoreExportedSceneData = {
+    ...core,
+    units: core.units.map((record) => {
+      const id = typeof record.id === 'string' ? record.id : '';
+      const unit = unitsById.get(id);
+      return unit ? { ...record, aiBrain: serializeUnitAiBrainBinding(unit.aiBrain) } : record;
+    }),
+  };
+  return writeAiGraphCatalogToScene(
+    withBrains as unknown as Record<string, unknown>,
+    getInstalledAiGraphCatalog(state),
+  ) as unknown as ExportedSceneData;
+}
+
+export function installSceneBrainData(state: SimulationState, payload: unknown): void {
+  installAiGraphCatalog(state, readAiGraphCatalogFromScene(payload));
+  if (!isRecord(payload) || !Array.isArray(payload.units)) return;
+  const dataById = new Map<string, UnitData>();
+  for (const value of payload.units) {
+    if (!isRecord(value) || typeof value.id !== 'string') continue;
+    dataById.set(value.id, value as unknown as UnitData);
+  }
+  for (const unit of state.units) {
+    const data = dataById.get(unit.id);
+    if (data) installUnitAiBrainBindingFromData(unit, data);
+  }
 }
 
 function buildTimestampForFileName(): string {
@@ -80,4 +123,8 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} Б`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 102.4) / 10} КБ`;
   return `${Math.round(bytes / 1024 / 102.4) / 10} МБ`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
