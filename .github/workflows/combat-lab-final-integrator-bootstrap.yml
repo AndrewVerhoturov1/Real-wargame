@@ -1,0 +1,101 @@
+name: Combat Lab Final Integrator Bootstrap
+
+on:
+  pull_request:
+    branches:
+      - ci/combat-lab-final-integrator-base-20260731t105600z-a841e29
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact acceptance source
+        uses: actions/checkout@v4
+        with:
+          ref: a841e29a751b51f1cb583075ce2a41c94c2d561c
+          fetch-depth: 0
+
+      - name: Verify exact inputs and fetch accepted commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          acceptance_ref='feature/20260730-combat-lab-user-acceptance-fixes'
+          acceptance_sha='a841e29a751b51f1cb583075ce2a41c94c2d561c'
+          executor_2='3057082a1b1f11b0b9cb1ae2a52ae9073612fc19'
+          executor_4='2186cabd453c5720a2679f831c93513de8cbfe1e'
+
+          observed="$(git ls-remote origin "refs/heads/$acceptance_ref" | awk '{print $1}')"
+          test "$observed" = "$acceptance_sha"
+          test "$(git rev-parse HEAD)" = "$acceptance_sha"
+
+          git fetch --no-tags origin \
+            "$executor_2:refs/remotes/origin/accepted-executor-2" \
+            "$executor_4:refs/remotes/origin/accepted-executor-4"
+          git cat-file -e "$executor_2^{commit}"
+          git cat-file -e "$executor_4^{commit}"
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Record merge diagnostics
+        shell: bash
+        run: |
+          set -u
+          mkdir -p remote-workspace
+          base='a841e29a751b51f1cb583075ce2a41c94c2d561c'
+          executor_2='3057082a1b1f11b0b9cb1ae2a52ae9073612fc19'
+          executor_4='2186cabd453c5720a2679f831c93513de8cbfe1e'
+
+          {
+            echo '=== acceptance -> executor 2 ==='
+            git diff --stat "$base...$executor_2"
+            echo
+            echo '=== acceptance -> executor 4 ==='
+            git diff --stat "$base...$executor_4"
+            echo
+            echo '=== executor 2 vs executor 4 changed-path intersection ==='
+            comm -12 \
+              <(git diff --name-only "$base...$executor_2" | sort) \
+              <(git diff --name-only "$base...$executor_4" | sort)
+            echo
+            echo '=== actual first merge conflict paths ==='
+          } > remote-workspace/merge-diagnostics.txt
+
+          git config user.name 'Combat Lab Integrator Bootstrap'
+          git config user.email 'actions@users.noreply.github.com'
+          git switch --detach "$base"
+          if git merge --no-ff --no-commit "$executor_2"; then
+            echo 'none' >> remote-workspace/merge-diagnostics.txt
+          else
+            git diff --name-only --diff-filter=U | tee -a remote-workspace/merge-diagnostics.txt
+          fi
+          git merge --abort 2>/dev/null || true
+          git switch --detach "$base"
+
+      - name: Pack reusable workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p remote-workspace
+          git bundle create remote-workspace/repository.bundle --all
+          tar --exclude='./.git' --exclude='./remote-workspace' -czf remote-workspace/workspace-with-dependencies.tar.gz .
+          sha256sum remote-workspace/* > remote-workspace/SHA256SUMS
+          du -h remote-workspace/*
+
+      - name: Upload reusable workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-final-integrator-workspace-${{ github.run_id }}
+          path: remote-workspace/
+          if-no-files-found: error
+          retention-days: 3
