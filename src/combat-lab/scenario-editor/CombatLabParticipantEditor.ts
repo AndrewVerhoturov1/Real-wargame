@@ -18,6 +18,7 @@ export interface CombatLabParticipantEditorOptions {
   readonly parametersHost?: HTMLElement;
   readonly draft: CombatLabExperimentDraft;
   readonly getSelectedUnitId?: () => string | null;
+  readonly onSelectRole?: (roleId: string) => void;
   readonly onExperimentChanged: (experiment: CombatLabExperimentV1) => void;
   readonly onError: (messageRu: string) => void;
 }
@@ -100,6 +101,7 @@ export class CombatLabParticipantEditor {
     card.addEventListener('click', (event) => {
       if ((event.target as HTMLElement).closest('button')) return;
       this.selectedRoleId = role.roleId;
+      this.options.onSelectRole?.(role.roleId);
       this.refresh();
     });
     return card;
