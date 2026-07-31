@@ -1,6 +1,9 @@
 import type { CombatLabExperimentV1, CombatLabMarkerV1 } from '../../core/testing/combat-lab/experiment';
 import type { CombatLabMapToolCoordinator } from '../map-tools/CombatLabMapToolCoordinator';
-import type { CombatLabMapToolPointerV1 } from '../map-tools/CombatLabMapToolTypes';
+import type {
+  CombatLabMapToolPointerV1,
+  CombatLabMapToolTransactionV1,
+} from '../map-tools/CombatLabMapToolTypes';
 import type { CombatLabSelectionControllerV1 } from '../selection/CombatLabSelectionController';
 import type { CombatLabExperimentDraft } from './CombatLabExperimentDraft';
 import {
@@ -14,6 +17,13 @@ export interface CombatLabMarkerEditTransactionCallbacksV1 {
   readonly onPreview: (marker: CombatLabMarkerV1) => void;
   readonly onCommit: (marker: CombatLabMarkerV1) => void;
   readonly onClearPreview: () => void;
+}
+
+export interface CombatLabMarkerUpdateV1 {
+  readonly titleRu: string;
+  readonly xMetres: number;
+  readonly yMetres: number;
+  readonly radiusMetres?: number;
 }
 
 export class CombatLabMarkerEditTransaction {
@@ -68,11 +78,11 @@ export class CombatLabMarkerManager {
   private constructor(private readonly options: CombatLabMarkerManagerOptionsV1) {
     this.unregisterMove = options.mapTools.registerContributor<{ readonly markerId: string }>({
       mode: 'move_marker',
-      createTransaction: ({ markerId }) => this.createTransaction(markerId, moveMarker),
+      createTransaction: ({ markerId }) => this.createTransaction('move_marker', markerId, moveMarker),
     });
     this.unregisterResize = options.mapTools.registerContributor<{ readonly markerId: string }>({
       mode: 'resize_circle_marker',
-      createTransaction: ({ markerId }) => this.createTransaction(markerId, resizeCircleMarker),
+      createTransaction: ({ markerId }) => this.createTransaction('resize_circle_marker', markerId, resizeCircleMarker),
     });
   }
 
@@ -95,19 +105,45 @@ export class CombatLabMarkerManager {
     this.options.selection.select({ kind: 'marker', markerId });
   }
 
+  update(markerId: string, value: CombatLabMarkerUpdateV1): void {
+    const marker = this.requireMarker(markerId);
+    const titleRu = value.titleRu.trim();
+    if (!titleRu) throw new Error('Название метки не может быть пустым.');
+    const next: CombatLabMarkerV1 = marker.kind === 'circle'
+      ? {
+          ...marker,
+          titleRu,
+          xMetres: finite(value.xMetres),
+          yMetres: finite(value.yMetres),
+          radiusMetres: Math.max(0.1, finite(value.radiusMetres ?? marker.radiusMetres)),
+        }
+      : {
+          ...marker,
+          titleRu,
+          xMetres: finite(value.xMetres),
+          yMetres: finite(value.yMetres),
+        };
+    this.commitMarker(next);
+  }
+
   rename(markerId: string, titleRu: string): void {
     const marker = this.requireMarker(markerId);
-    const normalized = titleRu.trim();
-    if (!normalized) throw new Error('Название метки не может быть пустым.');
-    this.commitMarker({ ...marker, titleRu: normalized });
+    this.update(markerId, {
+      titleRu,
+      xMetres: marker.xMetres,
+      yMetres: marker.yMetres,
+      radiusMetres: marker.kind === 'circle' ? marker.radiusMetres : undefined,
+    });
   }
 
   updateCoordinates(markerId: string, xMetres: number, yMetres: number, radiusMetres?: number): void {
     const marker = this.requireMarker(markerId);
-    const next = marker.kind === 'circle'
-      ? { ...marker, xMetres: finite(xMetres), yMetres: finite(yMetres), radiusMetres: Math.max(0.1, finite(radiusMetres ?? marker.radiusMetres)) }
-      : { ...marker, xMetres: finite(xMetres), yMetres: finite(yMetres) };
-    this.commitMarker(next);
+    this.update(markerId, {
+      titleRu: marker.titleRu,
+      xMetres,
+      yMetres,
+      radiusMetres,
+    });
   }
 
   duplicate(markerId: string): string {
@@ -171,12 +207,12 @@ export class CombatLabMarkerManager {
     this.options.onPreviewChanged?.(null);
   }
 
-  private createTransaction(
+  private createTransaction<TMode extends 'move_marker' | 'resize_circle_marker'>(
+    mode: TMode,
     markerId: string,
     transform: (original: CombatLabMarkerV1, pointer: CombatLabMapToolPointerV1) => CombatLabMarkerV1,
-  ): { readonly mode: 'move_marker' | 'resize_circle_marker'; preview(pointer: CombatLabMapToolPointerV1): void; confirm(): void; cancel(): void } {
+  ): CombatLabMapToolTransactionV1 & { readonly mode: TMode } {
     const marker = this.requireMarker(markerId);
-    const mode = transform === resizeCircleMarker ? 'resize_circle_marker' : 'move_marker';
     const transaction = new CombatLabMarkerEditTransaction(marker, {
       onPreview: (preview) => this.options.onPreviewChanged?.(preview),
       onClearPreview: () => this.options.onPreviewChanged?.(null),
