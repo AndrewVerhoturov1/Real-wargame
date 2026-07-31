@@ -47,6 +47,9 @@ jobs:
           node scripts/combat_lab_participant_parameters_smoke.mjs
           node scripts/combat_lab_participant_editor_ui_contract_smoke.mjs
 
+      - name: Production Graph v2 selection behavior
+        run: node scripts/production_unit_editor_graph_selection_behavior_smoke.mjs
+
       - name: Unified fighter editor contracts
         run: |
           node scripts/unit_ai_brain_binding_roundtrip_smoke.mjs
