@@ -60,7 +60,7 @@ export class CombatLabBatchProgressView {
 
   setCancelled(completedRuns: number, totalRuns: number): void {
     this.root.dataset.state = 'cancelled';
-    this.status.textContent = 'Серия отменена.';
+    this.status.textContent = 'Серия отменена. Частичный результат не принят как итоговый.';
     this.progress.max = Math.max(1, totalRuns);
     this.progress.value = Math.min(completedRuns, totalRuns);
     this.detail.textContent = `Выполнено до отмены: ${completedRuns} из ${totalRuns}.`;
