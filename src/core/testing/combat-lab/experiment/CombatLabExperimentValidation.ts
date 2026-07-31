@@ -1,4 +1,9 @@
 import {
+  readAiGraphCatalogFromScene,
+  validateUnitAiBrainBindingAgainstCatalog,
+} from '../../../ai/AiGraphCatalog';
+import { normalizeUnitAiBrainBinding } from '../../../units/UnitAiBrainBinding';
+import {
   COMBAT_LAB_EXPERIMENT_LIMITS_V1,
   type CombatLabExperimentRoleV1,
   type CombatLabExperimentV1,
@@ -105,6 +110,7 @@ export function validateCombatLabExperiment(
       issues.push(error('combat_lab_role_unit_missing', `Боец участника «${role.roleId}» отсутствует в снимке сцены.`, `$.roles[${index}].unitId`));
     }
   });
+  validateParticipantBrains(experiment, roles, sceneUnits, issues);
 
   validateMarkers(experiment, issues);
   validateSeed(experiment.defaults?.seed, '$.defaults.seed', issues);
@@ -136,6 +142,38 @@ export function validateCombatLabExperiment(
   detectDependencyCycles(stepLocations, issues);
 
   return issues;
+}
+
+function validateParticipantBrains(
+  experiment: CombatLabExperimentV1,
+  roles: readonly CombatLabExperimentRoleV1[],
+  sceneUnits: readonly Record<string, unknown>[],
+  issues: CombatLabExperimentIssueV1[],
+): void {
+  const catalog = readAiGraphCatalogFromScene(experiment.sceneSnapshot);
+  const unitsById = new Map(sceneUnits.map((unit) => [String(unit.id), unit] as const));
+  roles.forEach((role, index) => {
+    const unit = unitsById.get(role.unitId);
+    if (!unit) return;
+    let binding;
+    try {
+      binding = normalizeUnitAiBrainBinding(unit.aiBrain, typeof unit.aiControl === 'string' ? unit.aiControl : undefined);
+    } catch (cause) {
+      issues.push(error(
+        'combat_lab_participant_brain_invalid',
+        cause instanceof Error ? cause.message : 'Некорректная привязка мозга бойца.',
+        `$.sceneSnapshot.units[${index}].aiBrain`,
+      ));
+      return;
+    }
+    const reason = validateUnitAiBrainBindingAgainstCatalog(binding, catalog);
+    if (!reason) return;
+    issues.push(error(
+      'combat_lab_participant_graph_missing',
+      reason,
+      `$.sceneSnapshot.units[${index}].aiBrain.graphId`,
+    ));
+  });
 }
 
 function validateParticipantRecords(
