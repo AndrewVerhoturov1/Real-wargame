@@ -86,7 +86,11 @@ export function createCombatLabMarkerCascadeResult<T extends Pick<
 >>(experiment: T, markerId: string): T {
   const removedByTrack = new Map<string, Set<string>>();
   for (const track of experiment.tracks) {
-    const removed = new Set(track.steps.filter((step) => actionReferencesMarker(step, markerId)).map((step) => step.stepId));
+    const removed = new Set(
+      track.steps
+        .filter((step) => stepDirectlyReferencesMarker(step, markerId))
+        .map((step) => step.stepId),
+    );
     if (removed.size > 0) removedByTrack.set(track.trackId, removed);
   }
 
@@ -110,15 +114,19 @@ export function createCombatLabMarkerCascadeResult<T extends Pick<
     ...track,
     steps: track.steps.filter((step) => !removedByTrack.get(track.trackId)?.has(step.stepId)),
   }));
-  const successCondition = conditionDependsOnRemovedStep(experiment.successCondition, removedByTrack)
+  const successCondition = objectReferencesMarker(experiment.successCondition, markerId)
+    || conditionDependsOnRemovedStep(experiment.successCondition, removedByTrack)
     ? { kind: 'always' as const }
     : experiment.successCondition;
   const stopCondition = experiment.stopCondition.kind === 'condition'
-    && conditionDependsOnRemovedStep(experiment.stopCondition.condition, removedByTrack)
+    && (
+      objectReferencesMarker(experiment.stopCondition.condition, markerId)
+      || conditionDependsOnRemovedStep(experiment.stopCondition.condition, removedByTrack)
+    )
     ? { kind: 'program_complete' as const, maximumSimulationSeconds: experiment.stopCondition.maximumSimulationSeconds }
     : experiment.stopCondition;
 
-  return {
+  const result = {
     ...experiment,
     revision: experiment.revision + 1,
     markers: experiment.markers.filter((marker) => marker.markerId !== markerId),
@@ -126,6 +134,8 @@ export function createCombatLabMarkerCascadeResult<T extends Pick<
     successCondition,
     stopCondition,
   } as T;
+  assertMarkerCascadeCleared(result, markerId);
+  return result;
 }
 
 export function nextCombatLabMarkerId(markers: readonly Pick<CombatLabMarkerV1, 'markerId'>[], prefix = 'marker'): string {
@@ -151,6 +161,13 @@ function reference(
     stepTitleRu: step.titleRu,
     descriptionRu,
   };
+}
+
+function stepDirectlyReferencesMarker(step: CombatLabScenarioStepV1, markerId: string): boolean {
+  if (actionReferencesMarker(step, markerId)) return true;
+  if (objectReferencesMarker(step.startCondition, markerId)) return true;
+  if (step.completion.kind === 'condition' && objectReferencesMarker(step.completion.condition, markerId)) return true;
+  return step.repeat.kind === 'until_condition' && objectReferencesMarker(step.repeat.condition, markerId);
 }
 
 function actionReferencesMarker(step: Pick<CombatLabScenarioStepV1, 'action'>, markerId: string): boolean {
@@ -183,4 +200,24 @@ function conditionDependsOnRemovedStep(
 ): boolean {
   return condition.kind === 'step_state'
     && removedByTrack.get(condition.trackId)?.has(condition.stepId) === true;
+}
+
+function assertMarkerCascadeCleared(
+  experiment: Pick<CombatLabExperimentV1, 'tracks' | 'successCondition' | 'stopCondition'>,
+  markerId: string,
+): void {
+  for (const track of experiment.tracks) {
+    for (const step of track.steps) {
+      if (stepDirectlyReferencesMarker(step, markerId)) {
+        throw new Error(`Каскадное удаление оставило ссылку на метку ${markerId} в шаге ${track.trackId}/${step.stepId}.`);
+      }
+    }
+  }
+  if (objectReferencesMarker(experiment.successCondition, markerId)) {
+    throw new Error(`Каскадное удаление оставило ссылку на метку ${markerId} в условии успеха.`);
+  }
+  if (experiment.stopCondition.kind === 'condition'
+    && objectReferencesMarker(experiment.stopCondition.condition, markerId)) {
+    throw new Error(`Каскадное удаление оставило ссылку на метку ${markerId} в условии остановки.`);
+  }
 }
