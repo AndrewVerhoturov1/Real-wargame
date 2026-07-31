@@ -100,6 +100,7 @@ export class CombatLabExtension implements GameApplicationExtension {
   private readonly workspaceServices: CombatLabWorkspaceServices;
   private readonly unregisterWorkspaceServices: () => void;
   private readonly removeSelectionTickerListener: () => void;
+  private readonly removeRendererSelectionListener: () => void;
   private readonly listeners: Array<readonly [EventTarget, string, EventListener]> = [];
   private mapAuthoringController: CombatLabMapAuthoringController | null = null;
   private validationIssues: readonly CombatLabExperimentIssueV1[];
@@ -142,6 +143,11 @@ export class CombatLabExtension implements GameApplicationExtension {
     );
 
     this.renderer = CombatLabRenderer.create(context, session, this.handleFrame);
+    this.removeRendererSelectionListener = this.workspaceServices.selection.subscribe((selection) => {
+      this.renderer.setMarkerSelection(selection.kind === 'marker' ? selection.markerId : null);
+    });
+    const initialSelection = this.workspaceServices.selection.get();
+    this.renderer.setMarkerSelection(initialSelection.kind === 'marker' ? initialSelection.markerId : null);
     this.visualController = CombatLabExperimentVisualController.create({
       session,
       getExperiment: () => this.draft.getExperiment(),
@@ -170,6 +176,8 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.editorPanel = CombatLabScenarioEditorPanel.create({
       host: this.layout.programHost,
       draft: this.draft,
+      mapTools: this.workspaceServices.mapTools,
+      selection: this.workspaceServices.selection,
       onExperimentChanged: (experiment) => this.handleExperimentChanged(experiment, 'editor'),
       onRequestMapPick: (request) => this.mapAuthoringController?.requestPick(request),
       onSelectRole: (roleId) => this.selectRoleUnit(roleId),
@@ -218,6 +226,10 @@ export class CombatLabExtension implements GameApplicationExtension {
       context,
       state: session.state,
       draft: this.draft,
+      mapTools: this.workspaceServices.mapTools,
+      selection: this.workspaceServices.selection,
+      markerHost: this.editorPanel.getMarkerHost(),
+      onMarkerPreviewChanged: (marker) => this.renderer.setMarkerPreview(marker),
       getMode: () => this.effectiveMapMode(),
       getSelectedActorRoleId: () => this.editorPanel.getSelectedActorRoleId(),
       onExperimentChanged: (experiment) => this.handleExperimentChanged(experiment, 'external'),
@@ -392,6 +404,7 @@ export class CombatLabExtension implements GameApplicationExtension {
 
   private teardownFoundationServices(): void {
     runTeardownStep('temporary map transaction', () => this.workspaceServices.mapTools.cancel());
+    runTeardownStep('renderer selection relay', this.removeRendererSelectionListener);
     runTeardownStep('selection ticker', this.removeSelectionTickerListener);
     runTeardownStep('workspace services registry', this.unregisterWorkspaceServices);
     runTeardownStep('workspace services', () => this.workspaceServices.destroy());

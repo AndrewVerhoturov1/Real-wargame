@@ -9,7 +9,6 @@ import type {
 } from '../../core/testing/combat-lab/experiment';
 import type { GameApplicationContext } from '../../game/GameApplicationTypes';
 import type { CameraController } from '../../input/CameraController';
-import { getCombatLabWorkspaceServices } from '../CombatLabWorkspaceServices';
 import type { CombatLabMapToolCoordinator } from '../map-tools/CombatLabMapToolCoordinator';
 import type { CombatLabSelectionControllerV1 } from '../selection/CombatLabSelectionController';
 import type { CombatLabActionDescriptorV1 } from './CombatLabActionCatalog';
@@ -34,23 +33,16 @@ export interface CombatLabMapAuthoringControllerOptions {
   readonly context: GameApplicationContext;
   readonly state: SimulationState;
   readonly draft: CombatLabExperimentDraft;
-  readonly mapTools?: CombatLabMapToolCoordinator;
-  readonly selection?: CombatLabSelectionControllerV1;
+  readonly mapTools: CombatLabMapToolCoordinator;
+  readonly selection: CombatLabSelectionControllerV1;
+  readonly markerHost: HTMLElement;
   readonly getMode: () => CombatLabProgramMapModeV1;
   readonly getSelectedActorRoleId: () => string | null;
   readonly onExperimentChanged: (experiment: CombatLabExperimentV1) => void;
   readonly onMessage?: (messageRu: string, error: boolean) => void;
   readonly onSelectHelperRole?: (roleId: string) => void;
-  readonly onMarkerPreviewChanged?: (marker: CombatLabMarkerV1 | null) => void;
+  readonly onMarkerPreviewChanged: (marker: CombatLabMarkerV1 | null) => void;
 }
-
-type ResolvedCombatLabMapAuthoringControllerOptions = Omit<
-  CombatLabMapAuthoringControllerOptions,
-  'mapTools' | 'selection'
-> & {
-  readonly mapTools: CombatLabMapToolCoordinator;
-  readonly selection: CombatLabSelectionControllerV1;
-};
 
 interface CombatLabBoardAuthoringInternals {
   readonly app: { readonly canvas: HTMLCanvasElement };
@@ -65,12 +57,12 @@ interface AuthoredPoint {
 }
 
 export class CombatLabMapAuthoringController {
-  private readonly options: ResolvedCombatLabMapAuthoringControllerOptions;
+  private readonly options: CombatLabMapAuthoringControllerOptions;
   private readonly canvas: HTMLCanvasElement;
   private readonly camera: CameraController;
   private readonly menu = new CombatLabMapContextMenu();
   private readonly markerManager: CombatLabMarkerManager;
-  private readonly markerInspector: CombatLabMarkerInspector | null;
+  private readonly markerInspector: CombatLabMarkerInspector;
   private pendingPick: CombatLabMapPickRequestV1 | null = null;
   private destroyed = false;
 
@@ -79,36 +71,26 @@ export class CombatLabMapAuthoringController {
     if (!internals.app?.canvas || typeof internals.camera?.screenToWorld !== 'function') {
       throw new Error('Карта не предоставляет штатное преобразование координат.');
     }
-    const workspaceRoot = document.querySelector<HTMLElement>('.combat-lab-workspace');
-    const services = workspaceRoot ? getCombatLabWorkspaceServices(workspaceRoot) : null;
-    const mapTools = options.mapTools ?? services?.mapTools;
-    const selection = options.selection ?? services?.selection;
-    if (!mapTools || !selection) throw new Error('Общие службы Combat Lab ещё не подключены.');
-
-    this.options = { ...options, mapTools, selection };
+    this.options = options;
     this.canvas = internals.app.canvas;
     this.camera = internals.camera;
     this.markerManager = CombatLabMarkerManager.create({
       draft: options.draft,
-      mapTools,
-      selection,
+      mapTools: options.mapTools,
+      selection: options.selection,
       onExperimentChanged: options.onExperimentChanged,
       onPreviewChanged: (marker) => {
-        options.onMarkerPreviewChanged?.(marker);
-        this.canvas.dispatchEvent(new CustomEvent('combat-lab:marker-preview', { detail: marker }));
+        options.onMarkerPreviewChanged(marker);
         options.context.forceRender();
       },
       onMessage: (messageRu, error) => this.message(messageRu, error),
     });
-    const markerHost = workspaceRoot?.querySelector<HTMLElement>('.combat-lab-editor-marker-host') ?? null;
-    this.markerInspector = markerHost
-      ? new CombatLabMarkerInspector({
-          host: markerHost,
-          draft: options.draft,
-          manager: this.markerManager,
-          selection,
-        })
-      : null;
+    this.markerInspector = new CombatLabMarkerInspector({
+      host: options.markerHost,
+      draft: options.draft,
+      manager: this.markerManager,
+      selection: options.selection,
+    });
     this.canvas.addEventListener('contextmenu', this.handleContextMenu, true);
     this.canvas.addEventListener('pointerdown', this.handlePointerDown, true);
     this.canvas.addEventListener('pointermove', this.handlePointerMove, true);
@@ -155,12 +137,13 @@ export class CombatLabMapAuthoringController {
     this.canvas.removeEventListener('pointerup', this.handlePointerUp, true);
     this.canvas.removeEventListener('pointercancel', this.handlePointerCancel, true);
     window.removeEventListener('keydown', this.handleKeyDown, true);
-    this.markerInspector?.destroy();
+    this.markerInspector.destroy();
     this.markerManager.destroy();
     this.menu.destroy();
   }
 
   private readonly handleContextMenu = (event: MouseEvent): void => {
+    if (this.isParticipantTemporaryMode()) return;
     if (this.options.getMode() !== 'program_authoring') {
       this.cancelActiveAuthoring(false);
       return;
@@ -170,6 +153,7 @@ export class CombatLabMapAuthoringController {
   };
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
+    if (this.isParticipantTemporaryMode()) return;
     const temporaryMode = this.options.mapTools.getMode();
     if ((temporaryMode === 'move_marker' || temporaryMode === 'resize_circle_marker') && event.button === 0) {
       event.preventDefault();
@@ -198,6 +182,7 @@ export class CombatLabMapAuthoringController {
   };
 
   private readonly handlePointerMove = (event: PointerEvent): void => {
+    if (this.isParticipantTemporaryMode()) return;
     const mode = this.options.mapTools.getMode();
     if (mode !== 'move_marker' && mode !== 'resize_circle_marker') return;
     event.preventDefault();
@@ -206,6 +191,7 @@ export class CombatLabMapAuthoringController {
   };
 
   private readonly handlePointerUp = (event: PointerEvent): void => {
+    if (this.isParticipantTemporaryMode()) return;
     const temporaryMode = this.options.mapTools.getMode();
     if ((temporaryMode === 'move_marker' || temporaryMode === 'resize_circle_marker') && event.button === 0) {
       event.preventDefault();
@@ -220,6 +206,7 @@ export class CombatLabMapAuthoringController {
   };
 
   private readonly handlePointerCancel = (event: PointerEvent): void => {
+    if (this.isParticipantTemporaryMode()) return;
     const mode = this.options.mapTools.getMode();
     if (mode !== 'move_marker' && mode !== 'resize_circle_marker') return;
     event.preventDefault();
@@ -227,12 +214,19 @@ export class CombatLabMapAuthoringController {
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (this.isParticipantTemporaryMode()) return;
     if (event.key !== 'Escape') return;
     if (!this.pendingPick && this.menu.root.hidden) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     this.cancelActiveAuthoring(true);
   };
+
+
+  private isParticipantTemporaryMode(): boolean {
+    const mode = this.options.mapTools.getMode();
+    return mode === 'place_participant' || mode === 'rotate_participant';
+  }
 
   private previewMapTool(event: { readonly clientX: number; readonly clientY: number }): void {
     const point = this.resolvePoint(event);

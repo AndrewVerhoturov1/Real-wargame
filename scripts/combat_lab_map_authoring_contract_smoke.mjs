@@ -10,7 +10,15 @@ const [controller, manager, menu, overlay] = await Promise.all([
 
 assert.match(controller, /getMode: \(\) => CombatLabProgramMapModeV1/);
 assert.match(controller, /if \(this\.options\.getMode\(\) !== 'program_authoring'\) \{/);
-assert.match(controller, /getCombatLabWorkspaceServices/);
+assert.match(controller, /readonly mapTools: CombatLabMapToolCoordinator/);
+assert.match(controller, /readonly selection: CombatLabSelectionControllerV1/);
+assert.match(controller, /readonly markerHost: HTMLElement/);
+assert.match(controller, /readonly onMarkerPreviewChanged:/);
+assert.match(controller, /options\.onMarkerPreviewChanged\(marker\)/);
+assert.doesNotMatch(controller, /getCombatLabWorkspaceServices/);
+assert.doesNotMatch(controller, /document\.querySelector<HTMLElement>\('\.combat-lab-workspace'\)/);
+assert.doesNotMatch(controller, /combat-lab:marker-preview/);
+assert.match(controller, /isParticipantTemporaryMode/);
 assert.match(controller, /addEventListener\('pointerdown'.*true\)/);
 assert.match(controller, /stopImmediatePropagation\(\)/);
 assert.match(controller, /camera\.screenToWorld/);

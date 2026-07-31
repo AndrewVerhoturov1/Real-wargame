@@ -156,6 +156,7 @@ export class CombatLabScenarioEditorPanel {
     this.trackList.render();
   }
 
+  getMarkerHost(): HTMLElement { return this.markerHost; }
   getMapMode(): CombatLabMapInteractionModeV1 { return this.mapMode; }
   getSelectedActorRoleId(): string | null { return this.selectedActorRoleId; }
   getSelectedStep(): CombatLabSelectedStepV1 | null { return this.selectedStep ? { ...this.selectedStep } : null; }
