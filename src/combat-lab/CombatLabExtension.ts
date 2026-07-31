@@ -153,7 +153,6 @@ export class CombatLabExtension implements GameApplicationExtension {
       state: session.state,
       draft: this.draft,
       host: this.layout.scenePanelHost,
-      parametersHost: this.layout.parametersPanelHost,
       getSelectedUnitId: () => session.state.selectedUnitId,
       onSelectRole: (roleId) => this.selectRoleUnit(roleId),
       onExperimentChanged: (experiment) => this.handleExperimentChanged(experiment, 'external'),
@@ -430,125 +429,112 @@ export class CombatLabExtension implements GameApplicationExtension {
       this.runtimeStatus?.refresh(snapshot);
       this.legacyShell?.refreshLive(true);
     }
-    if (this.workspace.isActive('batch')) {
-      this.batchPanel?.refresh();
-      if (this.latestBatchResult) this.batchResults?.render(this.latestBatchResult);
-    }
     if (this.workspace.isActive('journal')) this.renderRuntimeJournal();
   }
 
   private renderRuntimeJournal(): void {
-    const snapshot = this.runtimeSnapshot;
-    const eventCount = this.session.state.events.length;
-    const identity = `${snapshot?.status ?? 'none'}:${snapshot?.activeTrackCount ?? 0}:${snapshot?.completedTrackCount ?? 0}:${eventCount}`;
+    const entries = this.session.getSnapshot().eventJournal.slice(-80).reverse();
+    const identity = entries.join('\u0000');
     if (identity === this.lastJournalIdentity) return;
     this.lastJournalIdentity = identity;
-    const entries: HTMLElement[] = [];
-    if (snapshot) {
-      entries.push(node('div', 'combat-lab-journal-entry', `Статус: ${snapshot.status}. Дорожки: активных ${snapshot.activeTrackCount}, завершено ${snapshot.completedTrackCount}.`));
-      const failed = snapshot.steps.filter((step) => step.state === 'failed').slice(0, 6);
-      for (const step of failed) entries.push(node('div', 'combat-lab-journal-entry is-error', `${step.reasonRu ?? 'Шаг завершился ошибкой.'} · ${step.trackId}/${step.stepId}`));
-    }
-    for (const event of this.session.state.events.slice(-12).reverse()) {
-      entries.push(node('div', 'combat-lab-journal-entry', `${event.time.toFixed(2)} с · ${event.message}`));
-    }
-    this.layout.runtimeJournalHost.replaceChildren(...(entries.length > 0 ? entries : [node('div', 'combat-lab-editor-empty', 'Журнал пока пуст.') ]));
+    this.layout.runtimeJournalHost.replaceChildren(
+      ...entries.map((entry) => node('div', 'combat-lab-journal-entry', entry)),
+    );
   }
 
   private updateCompactStatus(): void {
-    if (!this.runtimeSnapshot) return;
-    const visualSnapshot = asCombatLabExperimentVisualSnapshot(this.runtimeSnapshot);
-    const statusLabel = visualSnapshot?.visualStatus === 'running'
-      ? 'Идёт прогон'
-      : visualSnapshot?.visualStatus === 'paused'
-        ? 'Пауза'
-        : visualSnapshot?.visualStatus === 'stopped'
-          ? 'Остановлено'
-          : visualSnapshot?.visualStatus === 'completed'
-            ? 'Завершено'
-            : visualSnapshot?.visualStatus === 'failed'
-              ? 'Ошибка'
-              : 'Готово';
-    const seed = visualSnapshot?.visualSeed ?? this.session.seed;
-    this.workspace.setStatus(`${statusLabel} · seed ${seed}`);
+    const snapshot = this.runtimeSnapshot;
+    if (!snapshot) return;
+    const visual = asCombatLabExperimentVisualSnapshot(snapshot);
+    const status = visual?.visualStatus ?? snapshot.status;
+    this.workspace.status.textContent = `${snapshot.simulatedSeconds.toFixed(1)} с · ${status} · ×${this.session.getSpeed()}`;
+  }
+
+  private listen(target: EventTarget, type: string, callback: EventListenerOrEventListenerObject | (() => void)): void {
+    const listener: EventListener = typeof callback === 'function'
+      ? (event) => (callback as (event: Event) => void)(event)
+      : (event) => callback.handleEvent(event);
+    target.addEventListener(type, listener);
+    this.listeners.push([target, type, listener]);
   }
 
   private readonly handleToggle = (): void => {
-    document.body.classList.toggle('combat-lab-dock-collapsed', this.workspace.isCollapsed());
-    this.context.forceRender();
+    const collapsed = this.workspace.root.classList.contains('collapsed');
+    document.body.classList.toggle('combat-lab-dock-collapsed', collapsed);
+    document.body.classList.toggle('combat-lab-dock-open', !collapsed);
+    window.requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
   };
 
-  private readonly handleWorkspaceTabChanged = (event: CustomEvent<CombatLabWorkspaceTab>): void => {
-    if (!isCombatLabWorkspaceTab(event.detail)) return;
+  private readonly handleWorkspaceTabChanged = (): void => {
     this.syncVisibleWorkspace();
-    this.context.forceRender();
   };
 
-  private readonly handleTabRequest = (event: CustomEvent<CombatLabWorkspaceTab>): void => {
-    if (!isCombatLabWorkspaceTab(event.detail)) return;
-    this.activateTab(event.detail);
+  private readonly handleTabRequest = (event: Event): void => {
+    const requested = (event as CustomEvent<unknown>).detail;
+    if (isCombatLabWorkspaceTab(requested)) this.activateTab(requested);
   };
 
   private readonly handleTogglePauseRequest = (): void => {
-    if (!this.visualController) return;
-    const snapshot = this.visualController.getSnapshot();
-    const visual = asCombatLabExperimentVisualSnapshot(snapshot);
-    if (visual?.visualStatus === 'running') this.visualController.pause();
-    else if (visual?.visualStatus === 'paused') this.visualController.resume();
+    if (this.session.isPaused()) {
+      if (!this.hasValidationErrors()) this.visualController.start();
+    } else {
+      this.visualController.pause();
+    }
   };
 
-  private readonly handleSetPausedRequest = (event: CustomEvent<boolean>): void => {
-    if (!this.visualController) return;
-    const shouldPause = event.detail === true;
-    const visual = asCombatLabExperimentVisualSnapshot(this.visualController.getSnapshot());
-    if (shouldPause && visual?.visualStatus === 'running') this.visualController.pause();
-    if (!shouldPause && visual?.visualStatus === 'paused') this.visualController.resume();
+  private readonly handleSetPausedRequest = (event: Event): void => {
+    const paused = Boolean((event as CustomEvent<boolean>).detail);
+    if (paused) this.visualController.pause();
+    else if (!this.hasValidationErrors()) this.visualController.start();
   };
+}
 
-  private listen(target: EventTarget, type: string, listener: EventListenerOrEventListenerObject): void {
-    target.addEventListener(type, listener);
-    this.listeners.push([target, type, listener as EventListener]);
+function runTeardownStep(label: string, step: () => void): void {
+  try {
+    step();
+  } catch (error) {
+    console.error(`Combat Lab teardown failed for ${label}.`, error);
   }
 }
 
 function createWorkspaceMountLayout(hosts: CombatLabWorkspaceHosts): WorkspaceMountLayout {
+  const templatePanel = node('section', 'combat-lab-panel combat-lab-template-panel');
+  templatePanel.append(node('h3', 'combat-lab-section-title', 'Шаблон начальной сцены'));
   const templateSelect = document.createElement('select');
-  templateSelect.append(option('', 'Текущий черновик'));
-  const templateLoadButton = button('Загрузить шаблон');
-  const validationHost = node('div', 'combat-lab-validation-host');
-  const scenePanelHost = node('div', 'combat-lab-scene-panel-host');
-  hosts.scene.append(
-    buildSection('Источник эксперимента', templateSelect, templateLoadButton),
-    validationHost,
-    scenePanelHost,
-  );
+  templateSelect.setAttribute('aria-label', 'Встроенный шаблон эксперимента');
+  const templateLoadButton = createButton('Загрузить шаблон', 'primary');
+  templatePanel.append(field('Шаблон', templateSelect), templateLoadButton);
+  const validationHost = node('div', 'combat-lab-stage10-validation-host');
+  const scenePanelHost = node('div', 'combat-lab-stage10-scene-host');
+  hosts.scene.append(templatePanel, validationHost, scenePanelHost);
 
-  const programHost = node('div', 'combat-lab-program-host');
-  const mapModeStatus = node('div', 'combat-lab-map-mode-status');
-  mapModeStatus.dataset.combatLabMapModeStatus = 'true';
-  hosts.program.append(mapModeStatus, programHost);
+  const programHost = node('div', 'combat-lab-stage10-program-host');
+  const mapModeStatus = node('div', 'combat-lab-editor-status');
+  hosts.program.append(programHost, mapModeStatus);
 
-  const parametersPanelHost = node('div', 'combat-lab-parameters-panel-host');
-  parametersPanelHost.dataset.combatLabParametersHost = 'selected-unit';
-  hosts.parameters.append(parametersPanelHost);
-
-  const manualHost = node('div', 'combat-lab-manual-host');
-  hosts.manual.append(manualHost);
-
-  const runtimeStatusHost = node('div', 'combat-lab-runtime-status-host');
-  const currentMetricsHost = node('div', 'combat-lab-current-metrics-host');
-  hosts.metrics.append(runtimeStatusHost, currentMetricsHost);
-
-  const batchPanelHost = node('div', 'combat-lab-batch-panel-host');
-  const batchResultsHost = node('div', 'combat-lab-batch-results-host');
+  const batchPanelHost = node('div', 'combat-lab-stage10-batch-panel-host');
+  const batchResultsHost = node('div', 'combat-lab-stage10-batch-results-host');
   hosts.batch.append(batchPanelHost, batchResultsHost);
 
-  const runtimeJournalHost = node('div', 'combat-lab-runtime-journal-host');
-  const authoringLogHost = node('div', 'combat-lab-authoring-log-host');
-  hosts.journal.append(
-    buildSection('События прогона', runtimeJournalHost),
-    buildSection('Сообщения редактора', authoringLogHost),
+  const parametersPanelHost = node('div', 'combat-lab-selected-unit-parameters-host');
+  parametersPanelHost.dataset.combatLabParametersHost = 'selected-unit';
+  parametersPanelHost.append(node('div', 'combat-lab-empty-tab', 'Выберите бойца, чтобы открыть его параметры.'));
+  const manualHost = node('div', 'combat-lab-stage10-manual-host');
+  hosts.parameters.append(
+    node('h3', 'combat-lab-workspace-subheading', 'Параметры выбранного бойца'),
+    parametersPanelHost,
+    node('div', 'combat-lab-workspace-divider'),
+    node('h3', 'combat-lab-workspace-subheading', 'Ручные действия'),
+    manualHost,
   );
+
+  const runtimeStatusHost = node('div', 'combat-lab-stage10-runtime-status-host');
+  const currentMetricsHost = node('div', 'combat-lab-stage10-current-metrics-host');
+  hosts.metrics.append(runtimeStatusHost, currentMetricsHost);
+
+  const authoringLogHost = node('div', 'combat-lab-authoring-log');
+  const runtimeJournalHost = node('div', 'combat-lab-journal combat-lab-runtime-journal');
+  hosts.journal.append(authoringLogHost, runtimeJournalHost);
 
   return {
     templateSelect,
@@ -568,115 +554,183 @@ function createWorkspaceMountLayout(hosts: CombatLabWorkspaceHosts): WorkspaceMo
   };
 }
 
-function buildSection(title: string, ...children: HTMLElement[]): HTMLElement {
-  const section = node('section', 'combat-lab-panel');
-  section.append(node('h3', 'combat-lab-section-title', title), ...children);
-  return section;
+function installLegacyMetricsView(legacyLayout: CombatLabLayoutV1, host: HTMLElement): DisposableView {
+  const diagnostics = legacyLayout.right.querySelector<HTMLElement>('.combat-lab-diagnostics');
+  const title = legacyLayout.right.querySelector<HTMLElement>('.combat-lab-section-title:last-of-type');
+  const layerList = legacyLayout.left.querySelector<HTMLElement>('.combat-lab-layer-list');
+  if (!diagnostics) {
+    host.append(node('div', 'combat-lab-empty-tab', 'Диагностика появится после запуска эксперимента.'));
+    return { destroy: () => host.replaceChildren() };
+  }
+  title?.remove();
+  const grid = node('div', 'combat-lab-metric-grid');
+  const details = document.createElement('details');
+  details.className = 'combat-lab-details combat-lab-raw-diagnostics';
+  details.append(node('summary', '', 'Подробная диагностика'));
+  if (layerList) details.append(layerList);
+  details.append(diagnostics);
+  host.append(grid, details);
+  const render = () => renderMetricCards(grid, diagnostics.textContent ?? '');
+  const observer = new MutationObserver(render);
+  observer.observe(diagnostics, { childList: true, characterData: true, subtree: true });
+  render();
+  return {
+    destroy(): void {
+      observer.disconnect();
+      host.replaceChildren();
+    },
+  };
+}
+
+function installMapInputGuard(context: GameApplicationContext, isLocked: () => boolean): () => void {
+  const internals = context.board as unknown as BoardCanvasInternals;
+  const canvas = internals.app?.canvas;
+  if (!canvas) return () => undefined;
+  const block = (event: Event): void => {
+    if (!isLocked()) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  for (const type of ['contextmenu', 'pointerdown', 'pointerup'] as const) canvas.addEventListener(type, block, true);
+  return () => {
+    for (const type of ['contextmenu', 'pointerdown', 'pointerup'] as const) canvas.removeEventListener(type, block, true);
+  };
 }
 
 function installSharedSimulationControls(
   controller: CombatLabExperimentVisualController,
   session: CombatLabVisualSession,
-  canStart: () => boolean,
+  canRun: () => boolean,
   forceRender: () => void,
 ): SharedSimulationControls {
-  const button = document.querySelector<HTMLButtonElement>('#pause-button');
-  const listener = () => {
-    const snapshot = controller.getSnapshot();
-    const visual = asCombatLabExperimentVisualSnapshot(snapshot);
-    if (!visual) return;
-    if (visual.visualStatus === 'running') controller.pause();
-    else if (visual.visualStatus === 'paused') controller.resume();
-    else if (canStart()) controller.start();
+  const pauseButton = document.querySelector<HTMLButtonElement>('.simulation-controls [data-action="pause"]');
+  const stepButton = document.querySelector<HTMLButtonElement>('.simulation-controls [data-action="step"]');
+  const speedButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.unit-bar-speed-group [data-speed]'));
+  const legacyFireButton = document.querySelector<HTMLButtonElement>('.simulation-controls [data-action="fire-contact"]');
+  const firePermissionButton = document.querySelector<HTMLButtonElement>('.simulation-controls [data-action="toggle-fire-permission"]');
+  const originalPauseHandler = pauseButton?.onclick ?? null;
+  const originalStepHandler = stepButton?.onclick ?? null;
+  const originalSpeedHandlers = speedButtons.map((buttonElement) => buttonElement.onclick);
+  const originalLegacyFireState = legacyFireButton ? { hidden: legacyFireButton.hidden, disabled: legacyFireButton.disabled } : null;
+  const originalFirePermissionState = firePermissionButton ? { hidden: firePermissionButton.hidden, disabled: firePermissionButton.disabled } : null;
+
+  const sync = (): void => {
+    keepProductionTickerPaused(session);
+    setFireAllowed(session.state, true);
+    if (pauseButton) {
+      pauseButton.textContent = session.isPaused() ? 'Продолжить' : 'Пауза';
+      pauseButton.classList.toggle('active', session.isPaused());
+      pauseButton.setAttribute('aria-pressed', String(session.isPaused()));
+    }
+    for (const buttonElement of speedButtons) {
+      const active = Number(buttonElement.dataset.speed) === controller.getSpeed();
+      buttonElement.classList.toggle('active', active);
+      buttonElement.setAttribute('aria-pressed', String(active));
+    }
+  };
+  if (pauseButton) pauseButton.onclick = () => {
+    if (session.isPaused()) {
+      if (canRun()) controller.start();
+    } else controller.pause();
+    sync();
     forceRender();
   };
-  button?.addEventListener('click', listener, true);
-  const sync = () => syncGamePauseControl(session, controller.getSnapshot());
+  if (stepButton) stepButton.onclick = () => {
+    if (canRun()) controller.stepOnce();
+    sync();
+    forceRender();
+  };
+  speedButtons.forEach((buttonElement) => {
+    buttonElement.onclick = () => {
+      controller.setSpeed(Number(buttonElement.dataset.speed));
+      sync();
+    };
+  });
+  for (const buttonElement of [legacyFireButton, firePermissionButton]) {
+    if (!buttonElement) continue;
+    buttonElement.hidden = true;
+    buttonElement.disabled = true;
+  }
   sync();
   return {
     sync,
-    destroy: () => button?.removeEventListener('click', listener, true),
+    destroy(): void {
+      if (pauseButton) pauseButton.onclick = originalPauseHandler;
+      if (stepButton) stepButton.onclick = originalStepHandler;
+      speedButtons.forEach((buttonElement, index) => { buttonElement.onclick = originalSpeedHandlers[index] ?? null; });
+      if (legacyFireButton && originalLegacyFireState) {
+        legacyFireButton.hidden = originalLegacyFireState.hidden;
+        legacyFireButton.disabled = originalLegacyFireState.disabled;
+      }
+      if (firePermissionButton && originalFirePermissionState) {
+        firePermissionButton.hidden = originalFirePermissionState.hidden;
+        firePermissionButton.disabled = originalFirePermissionState.disabled;
+      }
+    },
   };
 }
 
-function syncGamePauseControl(
-  session: CombatLabVisualSession,
-  snapshot?: CombatLabScenarioRuntimeSnapshotV1 | null,
-): void {
-  const button = document.querySelector<HTMLButtonElement>('#pause-button');
-  if (!button) return;
-  const visual = asCombatLabExperimentVisualSnapshot(snapshot ?? null);
-  const status = visual?.visualStatus;
-  button.disabled = status === 'completed' || status === 'failed' || status === 'stopped';
-  button.textContent = status === 'running'
-    ? 'Пауза'
-    : status === 'paused'
-      ? 'Продолжить'
-      : session.state.paused
-        ? 'Продолжить'
-        : 'Пауза';
-}
-
-function installLegacyMetricsView(layout: CombatLabLayoutV1, host: HTMLElement): DisposableView {
-  const section = node('section', 'combat-lab-panel');
-  const heading = node('h3', 'combat-lab-section-title', 'Текущие метрики');
-  section.append(heading, layout.metrics);
-  host.append(section);
-  return {
-    destroy: () => section.remove(),
-  };
-}
-
-function installMapInputGuard(
-  context: GameApplicationContext,
-  isLocked: () => boolean,
-): () => void {
-  const canvas = (context.board as unknown as BoardCanvasInternals).app.canvas;
-  const block = (event: Event) => {
-    if (!isLocked()) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  };
-  canvas.addEventListener('pointerdown', block, true);
-  canvas.addEventListener('pointermove', block, true);
-  canvas.addEventListener('pointerup', block, true);
-  return () => {
-    canvas.removeEventListener('pointerdown', block, true);
-    canvas.removeEventListener('pointermove', block, true);
-    canvas.removeEventListener('pointerup', block, true);
-  };
-}
-
-function runTeardownStep(label: string, action: () => void): void {
+function renderMetricCards(host: HTMLElement, json: string): void {
+  let metrics: Record<string, unknown> = {};
   try {
-    action();
-  } catch (error) {
-    console.error(`[Combat Lab] teardown failed: ${label}`, error);
+    const parsed = JSON.parse(json) as { metrics?: Record<string, unknown> };
+    metrics = parsed.metrics ?? {};
+  } catch {
+    return;
   }
+  const entries = Object.entries(metrics).slice(0, 20);
+  host.replaceChildren(...entries.map(([key, value]) => {
+    const card = node('div', 'combat-lab-metric-card');
+    card.append(node('span', '', combatLabMetricLabelRu(key)), node('strong', '', formatMetric(value)));
+    return card;
+  }));
+  if (entries.length === 0) host.append(node('div', 'combat-lab-empty-tab', 'Метрики появятся после прогона.'));
 }
 
-function button(label: string, className = ''): HTMLButtonElement {
+function createButton(label: string, className = ''): HTMLButtonElement {
   const control = document.createElement('button');
   control.type = 'button';
   control.textContent = label;
-  control.className = className;
+  if (className) control.className = className;
   return control;
 }
 
-function option(value: string, label: string): HTMLOptionElement {
-  const entry = document.createElement('option');
-  entry.value = value;
-  entry.textContent = label;
-  return entry;
+function field(label: string, control: HTMLElement): HTMLElement {
+  const root = node('label', 'combat-lab-field');
+  root.append(node('span', '', label), control);
+  return root;
 }
 
-function node<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className = '',
-  textContent = '',
-): HTMLElementTagNameMap[K] {
+function option(value: string, label: string): HTMLOptionElement {
+  const result = document.createElement('option');
+  result.value = value;
+  result.textContent = label;
+  return result;
+}
+
+function keepProductionTickerPaused(session: CombatLabVisualSession): void {
+  (session.state as typeof session.state & { paused?: boolean }).paused = true;
+}
+
+function syncGamePauseControl(session: CombatLabVisualSession): void {
+  const buttonElement = document.querySelector<HTMLButtonElement>('#pause-toggle');
+  if (!buttonElement) return;
+  const paused = session.isPaused();
+  const label = paused ? 'Пауза: вкл' : 'Пауза: выкл';
+  if (buttonElement.textContent !== label) buttonElement.textContent = label;
+  if (buttonElement.getAttribute('aria-pressed') !== String(paused)) buttonElement.setAttribute('aria-pressed', String(paused));
+  buttonElement.classList.toggle('hud-toggle-off', !paused);
+}
+
+function formatMetric(value: unknown): string {
+  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(3);
+  if (typeof value === 'string' || typeof value === 'boolean') return String(value);
+  return value == null ? '—' : (JSON.stringify(value) ?? String(value));
+}
+
+function node<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
   const element = document.createElement(tag);
-  element.className = className;
-  element.textContent = textContent;
+  if (className) element.className = className;
+  if (text) element.textContent = text;
   return element;
 }

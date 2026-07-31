@@ -6,6 +6,7 @@ import {
   type CombatLabWorkspaceServices,
 } from '../CombatLabWorkspaceServices';
 import { CombatLabUnifiedInspectorHost } from '../editor/CombatLabUnifiedInspectorHost';
+import { getCombatLabWorkspaceHosts } from '../ui/CombatLabWorkspaceTabs';
 import type { CombatLabExperimentDraft } from './CombatLabExperimentDraft';
 import { CombatLabParticipantEditor } from './CombatLabParticipantEditor';
 
@@ -28,15 +29,10 @@ export class CombatLabRoleEditor {
   readonly root: HTMLElement;
   private readonly participants: CombatLabParticipantEditor;
   private readonly inspector: CombatLabUnifiedInspectorHost;
-  private readonly fallbackParametersHost: HTMLElement | null;
 
   constructor(options: CombatLabRoleEditorOptions) {
-    const parametersHost = options.parametersHost ?? document.createElement('div');
-    this.fallbackParametersHost = options.parametersHost ? null : parametersHost;
-    if (this.fallbackParametersHost) {
-      this.fallbackParametersHost.dataset.combatLabParametersHost = 'selected-unit-fallback';
-      options.host.append(this.fallbackParametersHost);
-    }
+    const located = locateWorkspaceServices(options.host);
+    const parametersHost = options.parametersHost ?? getCombatLabWorkspaceHosts(located.root).parameters;
     this.participants = new CombatLabParticipantEditor({
       host: options.host,
       draft: options.draft,
@@ -46,7 +42,6 @@ export class CombatLabRoleEditor {
       onError: options.onError,
     });
     this.root = this.participants.root;
-    const located = locateWorkspaceServices(options.host);
     this.inspector = new CombatLabUnifiedInspectorHost({
       root: located.root,
       host: parametersHost,
@@ -68,7 +63,6 @@ export class CombatLabRoleEditor {
   destroy(): void {
     this.inspector.destroy();
     this.participants.destroy();
-    this.fallbackParametersHost?.remove();
   }
 }
 

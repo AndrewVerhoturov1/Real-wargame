@@ -34,6 +34,7 @@ export interface CombatLabMapToolTransactionV1 {
 
 export interface CombatLabMapToolContributorV1<TRequest = unknown> {
   readonly mode: CombatLabTemporaryMapToolModeV1;
+  readonly statusRu?: string;
   createTransaction(request: TRequest): CombatLabMapToolTransactionV1;
 }
 

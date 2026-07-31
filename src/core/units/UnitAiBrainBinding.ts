@@ -4,12 +4,12 @@ export const UNIT_AI_BRAIN_BINDING_SCHEMA_VERSION = 1 as const;
 export const DEFAULT_UNIT_AI_GRAPH_ID = 'soldier_clean_workspace_graph';
 
 export type UnitAiBrainBindingV1 =
-  | { readonly schemaVersion: 1; readonly kind: 'manual' }
+  | { readonly schemaVersion: 1; readonly kind: 'manual'; readonly graphId?: never }
   | { readonly schemaVersion: 1; readonly kind: 'graph'; readonly graphId: string };
 
 /** Serialized compatibility input. The schemaVersion is optional only while importing old scenes. */
 export type UnitAiBrainBindingInputV1 =
-  | { readonly schemaVersion?: 1; readonly kind: 'manual' }
+  | { readonly schemaVersion?: 1; readonly kind: 'manual'; readonly graphId?: never }
   | { readonly schemaVersion?: 1; readonly kind: 'graph'; readonly graphId: string };
 
 declare module './UnitModel' {

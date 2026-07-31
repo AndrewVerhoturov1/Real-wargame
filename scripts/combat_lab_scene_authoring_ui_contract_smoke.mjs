@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 
-const [scene, roles, participants, dialog, files, store] = await Promise.all([
+const [scene, roles, participants, dialog, controller, files, store] = await Promise.all([
   readFile('src/combat-lab/scenario-editor/CombatLabScenePanel.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabRoleEditor.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabParticipantEditor.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabParticipantDialog.ts', 'utf8'),
+  readFile('src/combat-lab/editor/CombatLabParticipantDialogController.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabExperimentFileActions.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabExperimentLocalStore.ts', 'utf8'),
 ]);
@@ -16,14 +17,18 @@ assert.match(scene, /buildExportedScene\(state\)/);
 assert.match(scene, /revision:\s*current\.revision \+ 1/);
 assert.match(roles, /parametersHost\?/);
 assert.match(roles, /CombatLabParticipantEditor/);
-assert.match(roles, /selected-unit-fallback/);
+assert.match(roles, /getCombatLabWorkspaceHosts/);
+assert.doesNotMatch(roles, /selected-unit-fallback/);
 assert.match(participants, /Создать бойца/);
 assert.match(participants, /duplicateCombatLabParticipant/);
 assert.match(participants, /removeCombatLabParticipant/);
 assert.match(participants, /readCombatLabParticipantInitialSummaries/);
-assert.match(dialog, /createCombatLabParticipant/);
-assert.match(dialog, /updateCombatLabParticipantInitialState/);
-assert.match(dialog, /Без комплекта/);
+assert.match(dialog, /CombatLabParticipantDialogController\.open/);
+assert.match(dialog, /getOnlyCombatLabWorkspaceRoot/);
+assert.doesNotMatch(dialog, /querySelectorAll/);
+assert.match(controller, /createCombatLabParticipant/);
+assert.match(controller, /updateCombatLabParticipantInitialState/);
+assert.match(controller, /loadoutRef/);
 assert.match(files, /\.combat-lab\.json/);
 assert.match(files, /errors\.length > 0 \? null : result\.experiment/);
 assert.match(files, /Текущий эксперимент сохранён/);

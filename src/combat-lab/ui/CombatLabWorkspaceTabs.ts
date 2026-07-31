@@ -6,6 +6,8 @@ import {
 } from './CombatLabWorkspaceHosts';
 
 const ACTIVE_TAB_STORAGE_KEY = 'real-wargame.combat-lab.workspace-tab.v1';
+const workspaceHostsByRoot = new WeakMap<HTMLElement, CombatLabWorkspaceHosts>();
+const registeredWorkspaceRoots = new Set<HTMLElement>();
 
 export interface CombatLabWorkspaceTabsOptions {
   readonly host: HTMLElement;
@@ -83,6 +85,8 @@ export class CombatLabWorkspaceTabs {
     }
 
     this.hosts = Object.freeze(hosts) as CombatLabWorkspaceHosts;
+    workspaceHostsByRoot.set(this.root, this.hosts);
+    registeredWorkspaceRoots.add(this.root);
     dock.append(header, toolbarHost, tabList, panelHost);
     options.host.append(dock);
     this.listen(this.toggle, 'click', () => this.setCollapsed(!this.collapsed));
@@ -106,7 +110,7 @@ export class CombatLabWorkspaceTabs {
       buttonElement.setAttribute('aria-selected', String(active));
       buttonElement.tabIndex = active ? 0 : -1;
     }
-    for (const [tabId, panel] of this.panels) panel.hidden = tabId !== normalized;
+    for (const [value, panel] of this.panels) panel.hidden = value !== normalized;
     if (persist) writeStoredTab(this.storage, normalized);
     this.root.dispatchEvent(new CustomEvent<CombatLabWorkspaceTab>('combat-lab-workspace-tab-change', {
       bubbles: true,
@@ -135,6 +139,8 @@ export class CombatLabWorkspaceTabs {
     this.destroyed = true;
     for (const [target, type, listener] of this.listeners) target.removeEventListener(type, listener);
     this.listeners.length = 0;
+    if (workspaceHostsByRoot.get(this.root) === this.hosts) workspaceHostsByRoot.delete(this.root);
+    registeredWorkspaceRoots.delete(this.root);
     this.options.host.replaceChildren();
   }
 
@@ -143,6 +149,19 @@ export class CombatLabWorkspaceTabs {
     target.addEventListener(type, listener);
     this.listeners.push([target, type, listener]);
   }
+}
+
+export function getCombatLabWorkspaceHosts(root: HTMLElement): CombatLabWorkspaceHosts {
+  const hosts = workspaceHostsByRoot.get(root);
+  if (!hosts) throw new Error('Хосты рабочего пространства Combat Lab ещё не зарегистрированы.');
+  return hosts;
+}
+
+export function getOnlyCombatLabWorkspaceRoot(): HTMLElement {
+  if (registeredWorkspaceRoots.size !== 1) {
+    throw new Error('Невозможно однозначно выбрать рабочее пространство Combat Lab.');
+  }
+  return [...registeredWorkspaceRoots][0]!;
 }
 
 function safeSessionStorage(): Storage | null {

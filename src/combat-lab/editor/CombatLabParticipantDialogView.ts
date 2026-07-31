@@ -101,7 +101,9 @@ export class CombatLabParticipantDialogView {
 
   restoreFocus(): void {
     if (this.destroyed) return;
-    const escaped = globalThis.CSS?.escape ? CSS.escape(this.focusKey) : this.focusKey.replaceAll('"', '\\"');
+    const escaped = typeof globalThis.CSS === 'undefined'
+      ? this.focusKey.replaceAll('"', '\\"')
+      : globalThis.CSS.escape(this.focusKey);
     const candidate = this.focusKey
       ? this.dialog.querySelector<HTMLElement>(`[data-dialog-focus-key="${escaped}"], [name="${escaped}"]`)
       : null;

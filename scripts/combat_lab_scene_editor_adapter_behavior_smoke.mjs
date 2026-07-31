@@ -1,14 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [productionEditor, workbench, adapter, inspector, participantEditor, scenePanel, extension] = await Promise.all([
+const [productionEditor, workbench, adapter, inspector, participantEditor, scenePanel, roleEditor, workspaceTabs] = await Promise.all([
   readFile('src/ui/ProductionUnitEditor.ts', 'utf8'),
   readFile('src/ui/GameEditorWorkbench.ts', 'utf8'),
   readFile('src/combat-lab/editor/CombatLabSceneEditorAdapter.ts', 'utf8'),
   readFile('src/combat-lab/editor/CombatLabUnifiedInspectorHost.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabParticipantEditor.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabScenePanel.ts', 'utf8'),
-  readFile('src/combat-lab/CombatLabExtension.ts', 'utf8'),
+  readFile('src/combat-lab/scenario-editor/CombatLabRoleEditor.ts', 'utf8'),
+  readFile('src/combat-lab/ui/CombatLabWorkspaceTabs.ts', 'utf8'),
 ]);
 
 assert.match(productionEditor, /createProductionUnitEditorSection/);
@@ -21,7 +22,9 @@ assert.doesNotMatch(adapter, /restoreSimulationStateFromSceneSnapshot|replaceSce
 assert.match(inspector, /services\.selection\.subscribe/);
 assert.match(inspector, /CombatLabSceneEditorAdapter/);
 assert.match(scenePanel, /parametersHost:\s*options\.parametersHost/);
-assert.match(extension, /parametersHost:\s*this\.layout\.parametersPanelHost/);
+assert.match(roleEditor, /getCombatLabWorkspaceHosts\(located\.root\)\.parameters/);
+assert.match(workspaceTabs, /workspaceHostsByRoot/);
+assert.match(workspaceTabs, /getCombatLabWorkspaceHosts/);
 assert.doesNotMatch(participantEditor, /CombatLabParticipantParametersPanel/);
 assert.doesNotMatch(participantEditor, /parametersHost/);
 
