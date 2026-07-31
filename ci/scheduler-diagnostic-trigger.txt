@@ -1,0 +1,1 @@
+Trigger scheduler diagnostic matrix after base workflow creation.
