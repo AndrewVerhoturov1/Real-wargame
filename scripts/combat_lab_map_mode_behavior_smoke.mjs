@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 
-const source = stripImports(await readFile('src/combat-lab/scenario-editor/CombatLabProgramMapMode.ts', 'utf8'));
+const modeSource = await readFile('src/combat-lab/scenario-editor/CombatLabProgramMapMode.ts', 'utf8');
+const source = stripImports(modeSource);
 const js = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
 }).outputText;
@@ -41,7 +42,7 @@ const [panel, controller] = await Promise.all([
 assert.doesNotMatch(panel, /sharedMapInputOwnership/);
 assert.match(panel, /aria-pressed/);
 assert.match(controller, /program_authoring/);
-assert.match(controller, /manual_control/);
+assert.match(`${modeSource}\n${panel}`, /manual_control/);
 assert.match(controller, /stopImmediatePropagation/);
 
 console.log('Combat Lab map mode behavior smoke passed.');
