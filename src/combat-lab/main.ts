@@ -20,7 +20,7 @@ import { CombatLabVisualSession } from './runtime/CombatLabVisualSession';
 let application: GameApplication | null = null;
 let quickParametersInstallation: CombatLabQuickParametersInstallationV1 | null = null;
 
-installAppShellMenu({ mode: 'combat-lab' });
+const shellMenuInstallation = installAppShellMenu({ mode: 'combat-lab' });
 void startCombatLab();
 
 async function startCombatLab(): Promise<void> {
@@ -59,6 +59,7 @@ async function startCombatLab(): Promise<void> {
 }
 
 window.addEventListener('beforeunload', () => {
+  shellMenuInstallation.destroy();
   quickParametersInstallation?.destroy();
   quickParametersInstallation = null;
   application?.destroy();
