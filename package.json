@@ -19,6 +19,7 @@
     "vercel-project-link:smoke": "node scripts/verify_vercel_project_link_smoke.mjs",
     "deployment-source:smoke": "node scripts/write_deployment_source_smoke.mjs",
     "manual-vercel-preview-workflow:smoke": "node scripts/manual_vercel_preview_workflow_smoke.mjs",
+    "app-shell-overlay:smoke": "node scripts/app_shell_overlay_smoke.mjs",
     "validate:ai-graph": "node scripts/validate_ai_graph.mjs",
     "engine:dev": "node scripts/local_ai_engine.mjs",
     "engine:smoke": "node scripts/local_ai_engine_smoke.mjs",
