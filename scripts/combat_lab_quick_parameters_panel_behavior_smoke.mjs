@@ -55,11 +55,17 @@ assert.ok(snapshot.pinnedIds.length >= 4,'Default set must be initialized on fir
 model.setValue('accuracy.shooting_skill',80);
 assert.deepEqual(model.snapshot().dirtyIds,['accuracy.shooting_skill']);
 const beforeB = experiment.roles[1];
-model.apply();
+const changedResult = model.apply();
+assert.equal(changedResult.changed,true,'Apply result must report an actual experiment revision.');
+assert.equal(changedResult.experiment,experiment);
 assert.equal(mutationCount,1,'Panel Apply must make one participant mutation.');
 assert.equal(experiment.revision,9);
 assert.equal(experiment.roles[0].parameters.accuracy.shootingSkill,0.8);
 assert.equal(experiment.roles[1],beforeB,'Panel must not change another fighter.');
+const unchangedResult = model.apply();
+assert.equal(unchangedResult.changed,false,'No-dirty Apply must report no mutation.');
+assert.equal(unchangedResult.experiment,experiment);
+assert.equal(mutationCount,1,'No-dirty Apply must not call the participant mutation port.');
 selection = {kind:'participant',roleId:'b',unitId:'u-b'};
 model.select(selection);
 snapshot = model.snapshot();
@@ -67,7 +73,8 @@ assert.deepEqual(snapshot.pinnedIds,['accuracy.weapon_proficiency','accuracy.dis
 model.setLocked(true);
 model.setValue('accuracy.dispersion_multiplier',0.4);
 assert.equal(model.snapshot().dirtyIds.length,0,'Locked panel must reject tuning edits.');
-model.apply();
+const lockedResult = model.apply();
+assert.equal(lockedResult,null,'Locked Apply must not produce a result.');
 assert.equal(mutationCount,1,'Locked Apply must not call the mutation port.');
 model.setLocked(false);
 model.removePinned('accuracy.weapon_proficiency');
