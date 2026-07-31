@@ -1,0 +1,144 @@
+:root { --combat-lab-program-width: 360px; }
+
+.combat-lab-scenario-editor {
+  width: min(100%, var(--combat-lab-program-width));
+  min-width: 340px;
+  max-width: 380px;
+  align-content: start;
+  overflow-x: hidden;
+}
+
+.combat-lab-scenario-editor.is-inactive { contain: layout style; }
+
+.combat-lab-create-track-button {
+  width: 100%;
+  min-height: 34px;
+  font-weight: 800;
+}
+
+.combat-lab-track.is-selected { border-color: #7d7446; }
+.combat-lab-track-header { align-items: center; }
+.combat-lab-track-header__copy { min-width: 0; display: grid; gap: 1px; }
+.combat-lab-track-title,
+.combat-lab-track-actor,
+.combat-lab-track-count {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.combat-lab-track-count { max-width: none !important; }
+
+.combat-lab-step-card {
+  display: grid;
+  gap: 4px;
+  padding: 5px;
+  overflow: hidden;
+}
+
+.combat-lab-step-name-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 24px 22px minmax(0, 1fr);
+  gap: 4px;
+  align-items: center;
+}
+.combat-lab-step-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.combat-lab-step-relation-row,
+.combat-lab-step-condition-row,
+.combat-lab-step-runtime-row {
+  min-width: 0;
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  padding-inline: 4px;
+  overflow-wrap: anywhere;
+  font-size: 9px;
+}
+.combat-lab-step-relation-row > *,
+.combat-lab-step-condition-row > *,
+.combat-lab-step-runtime-row > * { min-width: 0; }
+.combat-lab-step-actor { color: #d4ddcf; font-weight: 700; }
+.combat-lab-step-arrow,
+.combat-lab-step-row-label { color: #7f8c7f; flex: 0 0 auto; }
+.combat-lab-step-target,
+.combat-lab-step-schedule,
+.combat-lab-step-reason {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.combat-lab-step-target,
+.combat-lab-step-schedule { color: #9da89b; }
+.combat-lab-step-runtime-row { justify-content: space-between; }
+.combat-lab-step-runtime-row .combat-lab-step-reason { color: #ffcfc5; text-align: right; }
+
+.combat-lab-step-card-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+}
+.combat-lab-step-card-actions button {
+  min-width: 0;
+  min-height: 25px !important;
+  padding: 3px 4px !important;
+  overflow: hidden;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.combat-lab-dialog {
+  width: min(720px, calc(100vw - 28px));
+  max-height: calc(100vh - 28px);
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid #596659;
+  border-radius: 10px;
+  color: #eef2e8;
+  background: #111712;
+}
+.combat-lab-dialog::backdrop { background: rgba(0, 0, 0, 0.64); }
+.combat-lab-dialog form { display: grid; gap: 10px; }
+.combat-lab-dialog h2 { margin: 0; font-size: 18px; }
+.combat-lab-dialog p { margin: 0; color: #aeb8ab; }
+.combat-lab-dialog-error { min-height: 18px; color: #ffcfc5; overflow-wrap: anywhere; }
+.combat-lab-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; position: sticky; bottom: -14px; padding-block: 10px 2px; background: #111712; }
+.combat-lab-dialog-actions button.primary { border-color: #fff0a1; color: #171b13; background: #fff0a1; font-weight: 800; }
+
+.combat-lab-track-dialog { width: min(460px, calc(100vw - 28px)); }
+.combat-lab-step-dialog { width: min(760px, calc(100vw - 28px)); }
+.combat-lab-step-dialog__header { display: grid; gap: 5px; }
+.combat-lab-step-dialog__sentence { color: #eadf9d !important; font-size: 12px; font-weight: 700; }
+.combat-lab-step-dialog__section-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.combat-lab-step-dialog__section-list span { padding: 3px 6px; border-radius: 999px; color: #aeb8ab; background: #222b23; font-size: 9px; }
+.combat-lab-step-dialog__catalog,
+.combat-lab-step-dialog__editor { min-width: 0; display: grid; gap: 8px; }
+.combat-lab-step-dialog__technical code { display: block; padding: 8px; overflow-wrap: anywhere; color: #95a093; }
+
+.combat-lab-editor-marker-host:empty { display: none; }
+.combat-lab-marker-inspector { min-width: 0; display: grid; gap: 6px; }
+.combat-lab-marker-inspector__heading h3 { margin: 0; font-size: 11px; }
+.combat-lab-marker-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.combat-lab-marker-list button { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+.combat-lab-marker-list button.active { border-color: #fff0a1; }
+.combat-lab-marker-form { min-width: 0; display: grid; gap: 6px; padding: 7px; border: 1px solid #354035; border-radius: 8px; background: #141b15; }
+.combat-lab-marker-kind { color: #eadf9d; font-size: 10px; font-weight: 700; }
+.combat-lab-marker-inline-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.combat-lab-marker-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.combat-lab-marker-actions button { min-width: 0; flex: 1 1 120px; }
+.combat-lab-marker-reference-summary pre { max-height: 160px; margin: 0; padding: 7px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #e2d8b1; background: #201d14; }
+.is-technical { color: #95a093; font-family: ui-monospace, monospace; }
+
+@media (max-width: 420px) {
+  .combat-lab-scenario-editor { width: 100%; min-width: 0; max-width: none; }
+  .combat-lab-step-card-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .combat-lab-marker-inline-fields { grid-template-columns: 1fr; }
+}
