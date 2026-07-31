@@ -11,9 +11,14 @@ import { collectGameApplicationElements, GameApplication } from '../game/GameApp
 import type { GameApplicationContext, GamePauseController } from '../game/GameApplicationTypes';
 import { installAppShellMenu } from '../shared/AppShellMenu';
 import { CombatLabExtension } from './CombatLabExtension';
+import {
+  installCombatLabQuickParameters,
+  type CombatLabQuickParametersInstallationV1,
+} from './parameters/installCombatLabQuickParameters';
 import { CombatLabVisualSession } from './runtime/CombatLabVisualSession';
 
 let application: GameApplication | null = null;
+let quickParametersInstallation: CombatLabQuickParametersInstallationV1 | null = null;
 
 installAppShellMenu({ mode: 'combat-lab' });
 void startCombatLab();
@@ -38,7 +43,12 @@ async function startCombatLab(): Promise<void> {
         createCombatLabRenderContext(context),
       ),
     });
+    quickParametersInstallation = installCombatLabQuickParameters(extensionRoot, session);
   } catch (error) {
+    quickParametersInstallation?.destroy();
+    quickParametersInstallation = null;
+    application?.destroy();
+    application = null;
     console.error(error);
     extensionRoot.replaceChildren();
     const message = document.createElement('div');
@@ -49,6 +59,8 @@ async function startCombatLab(): Promise<void> {
 }
 
 window.addEventListener('beforeunload', () => {
+  quickParametersInstallation?.destroy();
+  quickParametersInstallation = null;
   application?.destroy();
   application = null;
 });

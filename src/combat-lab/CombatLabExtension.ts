@@ -23,6 +23,11 @@ import {
 import { CombatLabBatchClient } from './runtime/CombatLabBatchClient';
 import { CombatLabExperimentVisualController } from './runtime/CombatLabExperimentVisualController';
 import { asCombatLabExperimentVisualSnapshot } from './runtime/CombatLabExperimentRunState';
+import {
+  COMBAT_LAB_RESET_AND_START_EVENT,
+  executeCombatLabResetAndStart,
+  readCombatLabResetAndStartRequest,
+} from './runtime/CombatLabResetAndStart';
 import { replayCombatLabRepresentativeRun } from './runtime/CombatLabRepresentativeRunReplay';
 import type { CombatLabVisualSession } from './runtime/CombatLabVisualSession';
 import { CombatLabBatchPanel } from './ui/CombatLabBatchPanel';
@@ -237,6 +242,7 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.listen(this.root, 'combat-lab:activate-tab', this.handleTabRequest as EventListener);
     this.listen(this.root, 'combat-lab:toggle-pause', this.handleTogglePauseRequest);
     this.listen(this.root, 'combat-lab:set-paused', this.handleSetPausedRequest as EventListener);
+    this.listen(this.root, COMBAT_LAB_RESET_AND_START_EVENT, this.handleResetAndStartRequest as EventListener);
 
     this.root.dataset.combatLabExtension = 'active';
     document.body.classList.add('combat-lab-dock-open');
@@ -486,6 +492,16 @@ export class CombatLabExtension implements GameApplicationExtension {
     const paused = Boolean((event as CustomEvent<boolean>).detail);
     if (paused) this.visualController.pause();
     else if (!this.hasValidationErrors()) this.visualController.start();
+  };
+
+  private readonly handleResetAndStartRequest = (event: Event): void => {
+    const request = readCombatLabResetAndStartRequest(event);
+    if (!request) return;
+    executeCombatLabResetAndStart(
+      this.visualController,
+      request,
+      () => !this.hasValidationErrors() && !this.isStructuralEditingLocked(),
+    );
   };
 }
 
