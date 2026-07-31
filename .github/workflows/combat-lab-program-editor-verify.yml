@@ -56,6 +56,13 @@ jobs:
           node scripts/combat_lab_participant_placement_behavior_smoke.mjs
           node scripts/combat_lab_participant_facing_behavior_smoke.mjs
 
+      - name: Unified editor continuation regressions
+        run: |
+          node scripts/combat_lab_participant_meter_coordinates_behavior_smoke.mjs
+          node scripts/combat_lab_participant_technical_details_dom_smoke.mjs
+          node scripts/combat_lab_participant_map_action_bar_behavior_smoke.mjs
+          node scripts/combat_lab_scene_graph_editor_roundtrip_behavior_smoke.mjs
+
       - name: Combined editor and runtime regression
         run: node scripts/combat_lab_unified_runtime_combined_behavior_smoke.mjs
 
