@@ -10,6 +10,7 @@ export interface CombatLabRoleEditorOptions {
   readonly state: SimulationState;
   readonly draft: CombatLabExperimentDraft;
   readonly getSelectedUnitId: () => string | null;
+  readonly onSelectRole?: (roleId: string) => void;
   readonly onExperimentChanged: (experiment: CombatLabExperimentV1) => void;
   readonly onError: (messageRu: string) => void;
 }
@@ -36,6 +37,7 @@ export class CombatLabRoleEditor {
       parametersHost,
       draft: options.draft,
       getSelectedUnitId: options.getSelectedUnitId,
+      onSelectRole: options.onSelectRole,
       onExperimentChanged: options.onExperimentChanged,
       onError: options.onError,
     });
