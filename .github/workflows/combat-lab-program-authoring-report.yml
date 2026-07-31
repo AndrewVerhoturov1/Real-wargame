@@ -1,0 +1,23 @@
+name: Combat Lab Program Authoring Commit Report
+
+on:
+  push:
+    branches:
+      - verification/20260731-combat-lab-program-authoring-base
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout worker branch
+        uses: actions/checkout@v4
+        with:
+          ref: worker/20260731-combat-lab-program-authoring
+          fetch-depth: 0
+      - name: Print commit list
+        run: |
+          echo "COUNT=$(git rev-list --count fa0c59e8a5b9b06a14c965bfc4d9e4e0edc651fd..HEAD)"
+          git log --reverse --format='%H %s' fa0c59e8a5b9b06a14c965bfc4d9e4e0edc651fd..HEAD
