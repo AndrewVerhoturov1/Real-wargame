@@ -1,4 +1,8 @@
-import { listAvailableAiGraphCatalogEntries, addGraphToInstalledCatalog } from '../core/ai/AiGraphCatalog';
+import {
+  addGraphToInstalledCatalog,
+  getInstalledAiGraphCatalog,
+  listMergedAiGraphCatalogEntries,
+} from '../core/ai/AiGraphCatalog';
 import {
   createBehaviorSettings,
   createSoldierParameters,
@@ -273,7 +277,9 @@ function createGameWorkbenchUnitAdapter(
       syncLegacyEditorFields(state);
       onChanged();
     },
-    listGraphOptions: () => listAvailableAiGraphCatalogEntries().map((entry) => ({
+    listGraphOptions: () => listMergedAiGraphCatalogEntries(
+      getInstalledAiGraphCatalog(state),
+    ).map((entry) => ({
       graphId: entry.graphId,
       titleRu: entry.titleRu,
       graph: entry.graph,
