@@ -37,17 +37,29 @@ function locateWorkspace(start: HTMLElement): {
   services: CombatLabWorkspaceServices;
   mapInteraction: CombatLabParticipantMapInteractionController | null;
 } {
-  let current: HTMLElement | null = start;
-  while (current) {
+  for (const candidate of ancestorCandidates(start)) {
     try {
       return {
-        root: current,
-        services: getCombatLabWorkspaceServices(current),
-        mapInteraction: getCombatLabParticipantMapInteractionController(current),
+        root: candidate,
+        services: getCombatLabWorkspaceServices(candidate),
+        mapInteraction: getCombatLabParticipantMapInteractionController(candidate),
       };
     } catch {
-      current = current.parentElement;
+      // Try the next exact registered root.
     }
   }
   throw new Error('Не найдено рабочее пространство Combat Lab для редактора бойца.');
+}
+
+function ancestorCandidates(start: HTMLElement): readonly HTMLElement[] {
+  const result: HTMLElement[] = [];
+  let current: HTMLElement | null = start;
+  while (current) {
+    result.push(current);
+    current = current.parentElement;
+  }
+  for (const workspace of document.querySelectorAll<HTMLElement>('.combat-lab-workspace')) {
+    if (!result.includes(workspace)) result.push(workspace);
+  }
+  return result;
 }
