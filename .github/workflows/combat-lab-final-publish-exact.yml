@@ -31,6 +31,7 @@ jobs:
         env:
           EXPECTED_PARENT: aab878113abb876f066745debd6d04fe3246fd94
           EXPECTED_TREE: 22504f2c1e388740aa244655934648d3d436d1da
+          PATCH_B64_SHA256: ee7843d018f5a8cc15cbe40c0e98bd303b26a927aa5dc9c81eb2ceca2974ca8a
           TARGET_BRANCH: integration/20260731-combat-lab-final-assembly-visual-qa
         run: |
           set -euo pipefail
@@ -38,7 +39,9 @@ jobs:
           remote_sha="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
           test "$remote_sha" = "$EXPECTED_PARENT"
 
-          base64 --decode ../harness/ci/final-product.patch.gz.b64 | gunzip > "$RUNNER_TEMP/final-product.patch"
+          cat ../harness/ci/final-product-chunks/chunk-* > "$RUNNER_TEMP/final-product.patch.gz.b64"
+          printf '%s  %s\n' "$PATCH_B64_SHA256" "$RUNNER_TEMP/final-product.patch.gz.b64" | sha256sum -c -
+          base64 --decode "$RUNNER_TEMP/final-product.patch.gz.b64" | gunzip > "$RUNNER_TEMP/final-product.patch"
           git apply --check "$RUNNER_TEMP/final-product.patch"
           git apply "$RUNNER_TEMP/final-product.patch"
           git diff --check
