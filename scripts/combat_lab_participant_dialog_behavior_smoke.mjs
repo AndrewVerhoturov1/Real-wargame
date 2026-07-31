@@ -11,7 +11,7 @@ const [controller, view, productionEditor, legacy, css] = await Promise.all([
 
 for (const section of [
   'Основное', 'Размещение', 'Вооружение и боезапас', 'Навыки и восприятие',
-  'Здоровье и помощь', 'Тактика', 'Мозг', 'Технические данные',
+  'Здоровье и помощь', 'Тактика', 'Мозг', 'Технические сведения',
 ]) assert.match(productionEditor, new RegExp(section));
 
 assert.match(controller, /localDraft/);
@@ -25,6 +25,8 @@ assert.match(productionEditor, /readOnly\s*=\s*true/);
 assert.match(productionEditor, /Без оружия/);
 assert.match(productionEditor, /Ручное управление/);
 assert.match(productionEditor, /Graph v2/);
+assert.match(productionEditor, /createTechnicalDetails/);
+assert.match(productionEditor, /details\.open\s*=\s*false/);
 assert.match(view, /restoreFocus/);
 assert.match(view, /scrollTop/);
 assert.match(view, /event\.key !== 'Escape'/);
