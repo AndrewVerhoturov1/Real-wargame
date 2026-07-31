@@ -13,7 +13,10 @@ import {
   recordAiSchedulerUnitPass,
   recordAiSchedulerUnitPassDuration,
 } from './AiSchedulerPerformanceDiagnostics';
-import { resolveRuntimeGraphSnapshot } from './AiGameBridge';
+import {
+  resolveRuntimeGraphCatalogSnapshot,
+  resolveRuntimeGraphSnapshotForUnit,
+} from './AiGraphCatalog';
 import { withAiSimulationExecutionContext } from './AiSimulationExecutionContext';
 import { tickStatefulMoveBridgeForTrustedUnit } from './AiStatefulMoveGameBridge';
 
@@ -54,9 +57,9 @@ export interface AiSimulationSchedulerResult {
 /**
  * Canonical gameplay entry point for node-graph AI.
  *
- * One stable O(n) traversal owns the cycle. The graph snapshot is resolved once
- * and shared immutably by every eligible unit. Trusted bridge functions do not
- * rescan state.units for membership.
+ * One stable O(n) traversal owns the cycle. The graph catalog is resolved once;
+ * each eligible unit then receives the exact immutable graph named by its own
+ * versioned brain binding. Trusted bridge functions do not rescan state.units.
  */
 export function tickAiSimulationScheduler(
   state: SimulationState,
@@ -67,9 +70,9 @@ export function tickAiSimulationScheduler(
   const cycleEndMs = Math.max(0, options.cycleEndMs ?? simulationTimeMs);
   const cycleStartMs = Math.max(0, Math.min(cycleEndMs, options.cycleStartMs ?? cycleEndMs));
   const graphResolutionStartedAt = performance.now();
-  const graphSnapshot = measurePerformancePhase(
+  const graphCatalogSnapshot = measurePerformancePhase(
     'simulation.ai-scheduler.graph-resolution',
-    resolveRuntimeGraphSnapshot,
+    () => resolveRuntimeGraphCatalogSnapshot(state),
   );
   const graphResolutionMs = performance.now() - graphResolutionStartedAt;
   const eligibleUnits: UnitModel[] = [];
@@ -117,6 +120,7 @@ export function tickAiSimulationScheduler(
     const reactiveWakeBefore = unit.behaviorRuntime.aiReactiveWakeCount;
     const activeBefore = unit.behaviorRuntime.aiRuntimeSession?.executionState;
     const unitStartedAt = performance.now();
+    const graphSnapshot = resolveRuntimeGraphSnapshotForUnit(state, unit, graphCatalogSnapshot);
     const result = withPerformancePhaseContext(
       {
         unitId: unit.id,
@@ -224,8 +228,9 @@ export function tickAiSimulationScheduler(
     trustedBridgeCalls,
     membershipScans: 0,
     graphResolutionCount: 1,
-    graphSourceRevision: graphSnapshot.sourceRevision,
-    graphSnapshotFrozen: Object.isFrozen(graphSnapshot) && Object.isFrozen(graphSnapshot.graph),
+    graphSourceRevision: graphCatalogSnapshot.sourceRevision,
+    graphSnapshotFrozen: Object.isFrozen(graphCatalogSnapshot)
+      && graphCatalogSnapshot.catalog.graphs.every((graph) => Object.isFrozen(graph)),
     schedulerDurationMs: roundTwo(schedulerDurationMs),
     graphResolutionDurationMs: roundTwo(graphResolutionMs),
     unitPassDurationMs: roundTwo(unitPassDurationMs),
