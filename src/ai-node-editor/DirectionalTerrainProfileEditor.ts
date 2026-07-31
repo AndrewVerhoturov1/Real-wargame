@@ -1,3 +1,4 @@
+import type { GameEditorInstallation, GameEditorMountContext } from '../game-editors/GameEditorTypes';
 import type {
   NavigationDirectionalTerrainWeights,
   NavigationProfile,
@@ -8,67 +9,68 @@ import {
   subscribeNavigationProfileRegistry,
 } from '../core/navigation/NavigationProfileStorage';
 
-const TAB_ID = 'directionalTerrain';
-const navigation = document.querySelector<HTMLElement>('.navigation-profile-tabs');
-const mainTabs = navigation?.querySelector<HTMLElement>('.navigation-profile-main-tabs') ?? null;
-const workbench = document.querySelector<HTMLElement>('.navigation-profile-workbench');
-
-if (navigation && mainTabs && workbench) installDirectionalTerrainEditor(navigation, mainTabs, workbench);
-
-function installDirectionalTerrainEditor(
-  navigationElement: HTMLElement,
-  mainTabsElement: HTMLElement,
-  panelElement: HTMLElement,
-): void {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.dataset.navigationTab = TAB_ID;
-  button.textContent = 'Направленный рельеф';
-  mainTabsElement.append(button);
-
+export function mountDirectionalTerrainProfileEditor(context: GameEditorMountContext): GameEditorInstallation {
+  const panel = context.host;
   let registry = getNavigationProfileRegistry();
-  let selectedProfileId = registry.hasProfile('stealth') ? 'stealth' : 'normal';
+  let selectedProfileId = context.request.profileId && registry.hasProfile(context.request.profileId)
+    ? context.request.profileId
+    : registry.hasProfile('stealth') ? 'stealth' : 'normal';
   let draft = cloneWeights(registry.getProfile(selectedProfileId).directionalTerrain);
-  let active = false;
+  let baseline = serialize(draft);
+  let destroyed = false;
 
-  navigationElement.addEventListener('click', (event) => {
-    const target = event.target instanceof Element
-      ? event.target.closest<HTMLButtonElement>('[data-navigation-tab]')
-      : null;
-    active = target?.dataset.navigationTab === TAB_ID;
-    if (active) queueMicrotask(render);
-  });
-
-  subscribeNavigationProfileRegistry((nextRegistry) => {
+  const unsubscribe = subscribeNavigationProfileRegistry((nextRegistry) => {
+    if (destroyed) return;
+    const dirty = isDirty();
     registry = nextRegistry;
     if (!registry.hasProfile(selectedProfileId)) selectedProfileId = 'normal';
-    draft = cloneWeights(registry.getProfile(selectedProfileId).directionalTerrain);
-    if (active) render();
+    if (!dirty) resetDraft();
+    render();
   });
+
+  render();
+
+  return {
+    beforeClose(): boolean {
+      if (!isDirty()) return true;
+      return window.confirm('Отменить несохранённые изменения направленного рельефа и закрыть редактор?');
+    },
+    destroy(): void {
+      if (destroyed) return;
+      destroyed = true;
+      unsubscribe();
+      panel.replaceChildren();
+      delete panel.dataset.directionalTerrainEditor;
+    },
+  };
+
+  function isDirty(): boolean {
+    return serialize(draft) !== baseline;
+  }
+
+  function resetDraft(): void {
+    draft = cloneWeights(registry.getProfile(selectedProfileId).directionalTerrain);
+    baseline = serialize(draft);
+  }
 
   function render(): void {
     const profile = registry.getProfile(selectedProfileId);
-    panelElement.hidden = false;
-    panelElement.innerHTML = `
+    panel.dataset.directionalTerrainEditor = 'true';
+    panel.innerHTML = `
       <div class="navigation-profile-layout">
         <aside class="navigation-profile-list-panel">
           <div class="navigation-profile-list-heading">
-            <div>
-              <h2>Направленный рельеф</h2>
-              <p>Как профиль движения относится к прямым и обратным склонам относительно известных бойцу угроз.</p>
-            </div>
+            <div><h2>Направленный рельеф</h2><p>Отношение профиля движения к прямым и обратным склонам относительно известных угроз.</p></div>
             <span>8 секторов угрозы</span>
           </div>
-          <div class="navigation-profile-list">
-            ${registry.listProfiles().map((item) => profileButton(item)).join('')}
-          </div>
+          <div class="navigation-profile-list">${registry.listProfiles().map(profileButton).join('')}</div>
         </aside>
         <main class="navigation-profile-form-panel">
           <header class="navigation-profile-form-heading">
             <div>
               <span class="navigation-profile-kicker">Профиль движения · ${escapeHtml(profile.id)}</span>
               <h2>${escapeHtml(profile.nameRu)}</h2>
-              <p>Значения применяются к существующему A*. Скрытые враги не используются: направление берётся только из личной памяти бойца.</p>
+              <p>Направление берётся только из личной памяти бойца. Скрытые враги не используются.</p>
             </div>
             <div class="navigation-profile-form-actions">
               <button type="button" data-directional-action="cancel">Отменить</button>
@@ -83,35 +85,40 @@ function installDirectionalTerrainEditor(
               ${field('crestPenalty', 'Штраф за гребень', 'Не даёт без необходимости идти по вершинам и пересекать линии гребней.', 0, 4, 0.05)}
               ${field('silhouettePenalty', 'Штраф силуэтной позиции', 'Избегает геометрически заметных вершин и выступов.', 0, 4, 0.05)}
               ${field('valleyPreference', 'Предпочтение ложбин', 'Снижает цену оврагов, ложбин и других вогнутых участков.', 0, 3, 0.05)}
-              ${field('criticalSectorMultiplier', 'Вес критического сектора', 'Не позволяет одной опасной стороне потеряться при усреднении нескольких направлений.', 0, 3, 0.05)}
+              ${field('criticalSectorMultiplier', 'Вес критического сектора', 'Не позволяет одной опасной стороне потеряться при усреднении направлений.', 0, 3, 0.05)}
             </div>
           </section>
           <section class="navigation-profile-placeholder">
             <h3>Как это работает</h3>
-            <p>Рельеф карты рассчитывается один раз и хранится в числовых массивах. При изменении знаний бойца пересчитывается только субъективная направленная цена. Камера, курсор и отрисовка не запускают анализ заново.</p>
+            <p>Рельеф карты рассчитывается один раз. При изменении знаний бойца пересчитывается только субъективная направленная цена.</p>
           </section>
         </main>
-      </div>
-    `;
+      </div>`;
+    bind();
+  }
 
-    panelElement.querySelectorAll<HTMLButtonElement>('[data-directional-profile]').forEach((profileButtonElement) => {
-      profileButtonElement.addEventListener('click', () => {
-        selectedProfileId = profileButtonElement.dataset.directionalProfile ?? 'normal';
-        draft = cloneWeights(registry.getProfile(selectedProfileId).directionalTerrain);
+  function bind(): void {
+    panel.querySelectorAll<HTMLButtonElement>('[data-directional-profile]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const nextId = button.dataset.directionalProfile ?? 'normal';
+        if (nextId === selectedProfileId) return;
+        if (isDirty() && !window.confirm('Отменить несохранённые изменения и открыть другой профиль?')) return;
+        selectedProfileId = nextId;
+        resetDraft();
         render();
       });
     });
-    panelElement.querySelectorAll<HTMLInputElement>('[data-directional-field]').forEach((input) => {
+    panel.querySelectorAll<HTMLInputElement>('[data-directional-field]').forEach((input) => {
       input.addEventListener('input', () => handleFieldInput(input));
     });
-    panelElement.querySelector<HTMLButtonElement>('[data-directional-action="cancel"]')?.addEventListener('click', () => {
-      draft = cloneWeights(registry.getProfile(selectedProfileId).directionalTerrain);
+    panel.querySelector<HTMLButtonElement>('[data-directional-action="cancel"]')?.addEventListener('click', () => {
+      resetDraft();
       render();
     });
-    panelElement.querySelector<HTMLButtonElement>('[data-directional-action="save"]')?.addEventListener('click', () => {
+    panel.querySelector<HTMLButtonElement>('[data-directional-action="save"]')?.addEventListener('click', () => {
       registry.updateProfile(selectedProfileId, { directionalTerrain: cloneWeights(draft) });
       saveNavigationProfileRegistry(registry);
-      draft = cloneWeights(registry.getProfile(selectedProfileId).directionalTerrain);
+      resetDraft();
       render();
     });
   }
@@ -124,19 +131,15 @@ function installDirectionalTerrainEditor(
     const numericValue = Number(input.value);
     const value = Number.isFinite(numericValue) ? Math.max(minimum, Math.min(maximum, numericValue)) : minimum;
     draft[key] = value;
-    panelElement.querySelectorAll<HTMLInputElement>(`[data-directional-field="${key}"]`).forEach((peer) => {
+    panel.querySelectorAll<HTMLInputElement>(`[data-directional-field="${key}"]`).forEach((peer) => {
       if (peer !== input) peer.value = String(value);
     });
-    const valueElement = panelElement.querySelector<HTMLElement>(`[data-directional-value="${key}"]`);
+    const valueElement = panel.querySelector<HTMLElement>(`[data-directional-value="${key}"]`);
     if (valueElement) valueElement.textContent = value.toFixed(2);
   }
 
   function profileButton(profile: NavigationProfile): string {
-    return `
-      <button type="button" data-directional-profile="${escapeHtml(profile.id)}" class="${profile.id === selectedProfileId ? 'active' : ''}">
-        <strong>${escapeHtml(profile.nameRu)}</strong>
-        <span>${escapeHtml(profile.id)}${profile.builtIn ? ' · встроенный' : ' · пользовательский'}</span>
-      </button>`;
+    return `<button type="button" data-directional-profile="${escapeHtml(profile.id)}" class="${profile.id === selectedProfileId ? 'active' : ''}"><strong>${escapeHtml(profile.nameRu)}</strong><span>${escapeHtml(profile.id)}${profile.builtIn ? ' · встроенный' : ' · пользовательский'}</span></button>`;
   }
 
   function field(
@@ -148,15 +151,7 @@ function installDirectionalTerrainEditor(
     step: number,
   ): string {
     const value = draft[key];
-    return `
-      <article class="navigation-profile-field">
-        <div class="navigation-profile-field-title"><strong>${label}</strong><span data-directional-value="${key}">${value.toFixed(2)}</span></div>
-        <p>${help}</p>
-        <div class="navigation-profile-field-control">
-          <input type="range" data-directional-field="${key}" min="${min}" max="${max}" step="${step}" value="${value}" />
-          <input type="number" data-directional-field="${key}" min="${min}" max="${max}" step="${step}" value="${value}" />
-        </div>
-      </article>`;
+    return `<article class="navigation-profile-field"><div class="navigation-profile-field-title"><strong>${label}</strong><span data-directional-value="${key}">${value.toFixed(2)}</span></div><p>${help}</p><div class="navigation-profile-field-control"><input type="range" data-directional-field="${key}" min="${min}" max="${max}" step="${step}" value="${value}" /><input type="number" data-directional-field="${key}" min="${min}" max="${max}" step="${step}" value="${value}" /></div></article>`;
   }
 }
 
@@ -164,8 +159,10 @@ function cloneWeights(value: NavigationDirectionalTerrainWeights): NavigationDir
   return { ...value };
 }
 
+function serialize(value: NavigationDirectionalTerrainWeights): string {
+  return JSON.stringify(value);
+}
+
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-  }[character] ?? character));
+  return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character] ?? character));
 }
