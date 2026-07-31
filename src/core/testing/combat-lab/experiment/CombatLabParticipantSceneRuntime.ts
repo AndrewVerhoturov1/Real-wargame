@@ -1,4 +1,16 @@
+import {
+  mergeAiGraphCatalog,
+  readAiGraphCatalogFromScene,
+  writeAiGraphCatalogToScene,
+} from '../../../ai/AiGraphCatalog';
 import { normalizeUnitSide, type UnitData } from '../../../units/UnitModel';
+import {
+  createUnitManualBrainBinding,
+  installUnitAiBrainBinding,
+  installUnitAiBrainBindingFromData,
+  readUnitAiBrainBinding,
+  serializeUnitAiBrainBinding,
+} from '../../../units/UnitAiBrainBinding';
 import type { CombatLabExperimentRoleV1, CombatLabExperimentV1 } from './CombatLabExperimentContracts';
 import {
   applyAmmoAndAid,
@@ -47,6 +59,7 @@ export function readCombatLabParticipantInitialSummary(
   observer: CombatLabParticipantReadObserverV1 = {},
 ): CombatLabParticipantInitialSummaryV1 {
   const normalized = normalizeCombatLabParticipantSceneUnit(experiment, roleId, observer);
+  installUnitAiBrainBindingFromData(normalized.unit, normalized.sourceRecord as unknown as UnitData);
   return summarize(normalized.role, normalized.unit);
 }
 
@@ -64,6 +77,7 @@ export function readCombatLabParticipantInitialSummaries(
     const sourceRecord = recordsByUnitId.get(role.unitId);
     if (!sourceRecord) throw new CombatLabParticipantSceneError('combat_lab_participant_unit_missing', `Боец «${role.unitId}» участника «${role.roleId}» отсутствует в начальной сцене.`);
     const normalized = normalizeCombatLabParticipantSceneUnitRecord(experiment, role, sourceRecord, observer);
+    installUnitAiBrainBindingFromData(normalized.unit, sourceRecord as unknown as UnitData);
     return summarize(role, normalized.unit);
   }));
 }
@@ -75,6 +89,7 @@ export function readCombatLabParticipantInitialDraft(
 ): CombatLabParticipantInitialDraftV1 {
   const normalized = normalizeCombatLabParticipantSceneUnit(experiment, roleId, observer);
   const unit = normalized.unit;
+  installUnitAiBrainBindingFromData(unit, normalized.sourceRecord as unknown as UnitData);
   const runtime = unit.infantryCombatRuntime;
   return Object.freeze({
     roleId: normalized.role.roleId,
@@ -101,6 +116,7 @@ export function readCombatLabParticipantInitialDraft(
       severity: slot.severity,
       hitCount: slot.hitCount,
     }))),
+    aiBrain: readUnitAiBrainBinding(unit),
     unit,
   });
 }
@@ -113,6 +129,7 @@ export function updateCombatLabParticipantInitialState(
 ): CombatLabExperimentV1 {
   const normalized = normalizeCombatLabParticipantSceneUnit(experiment, roleId);
   const unit = normalized.unit;
+  installUnitAiBrainBindingFromData(unit, normalized.sourceRecord as unknown as UnitData);
   const stable = captureCombatLabParticipantStableRuntime(unit);
   resetCombatLabParticipantForInitialEdit(unit);
   restoreCombatLabParticipantStableRuntime(unit, stable, options.catalogRegistry);
@@ -139,19 +156,23 @@ export function updateCombatLabParticipantInitialState(
     unit.facingRadians = degreesToRadians(normalizeDegrees(patch.facingDegrees));
   }
   if (patch.posture !== undefined) applyPosture(unit, patch.posture);
-  if (patch.loadoutRef !== undefined) applyPublishedLoadout(unit, patch.loadoutRef, options.catalogRegistry);
+  if (patch.loadoutRef === null) clearPublishedLoadout(unit);
+  else if (patch.loadoutRef !== undefined) applyPublishedLoadout(unit, patch.loadoutRef, options.catalogRegistry);
   applyAmmoAndAid(unit, patch);
   if (patch.initialHealth !== undefined) {
     applyInitialHealth(unit, patch.initialHealth, experiment.sceneSnapshot.simulationTimeSeconds, roleId);
   }
+  if (patch.aiBrain !== undefined) installUnitAiBrainBinding(unit, patch.aiBrain);
   unit.labels.ru = nextTitle;
   unit.labels.en = nextTitle;
-  unit.aiControl = 'manual';
 
   const roles = experiment.roles.map((candidate) => candidate.roleId === roleId
     ? freezeRole({ ...candidate, titleRu: nextTitle })
     : candidate);
-  return replaceCombatLabParticipantSceneUnit({ ...experiment, roles }, roleId, unit);
+  const withCatalog = patch.aiGraphDefinition
+    ? installGraphDefinition({ ...experiment, roles }, patch.aiGraphDefinition)
+    : { ...experiment, roles };
+  return replaceCombatLabParticipantSceneUnit(withCatalog, roleId, unit);
 }
 
 export function createCombatLabParticipant(
@@ -174,13 +195,15 @@ export function createCombatLabParticipant(
   const titleRu = requireText(input.titleRu, 'Имя бойца не может быть пустым.');
   assertSnapshotCoordinates(experiment, input.x, input.y);
   const posture = input.posture ?? 'standing';
+  const brain = input.aiBrain ?? createUnitManualBrainBinding();
   const raw: UnitData = {
     id: unitId,
     label: titleRu,
     labelRu: titleRu,
     type: input.unitType,
     side: input.side,
-    aiControl: 'manual',
+    aiControl: brain.kind === 'manual' ? 'manual' : 'graph',
+    aiBrain: serializeUnitAiBrainBinding(brain),
     x: input.x,
     y: input.y,
     facingDegrees: normalizeDegrees(input.facingDegrees ?? 0),
@@ -195,25 +218,30 @@ export function createCombatLabParticipant(
     raw as unknown as Record<string, unknown>,
   );
   const unit = normalized.unit;
-  if (input.loadoutRef !== undefined) applyPublishedLoadout(unit, input.loadoutRef, options.catalogRegistry);
+  installUnitAiBrainBinding(unit, brain);
+  if (input.loadoutRef !== undefined && input.loadoutRef !== null) {
+    applyPublishedLoadout(unit, input.loadoutRef, options.catalogRegistry);
+  }
   applyAmmoAndAid(unit, input);
   if (input.initialHealth !== undefined) {
     applyInitialHealth(unit, input.initialHealth, experiment.sceneSnapshot.simulationTimeSeconds, roleId);
   }
   unit.labels.en = titleRu;
   unit.labels.ru = titleRu;
-  unit.aiControl = 'manual';
   const serialized = serializeCombatLabParticipantSceneUnit(
     raw as unknown as Record<string, unknown>,
     unit,
     normalized.sourceToRuntimeCellScale,
   );
+  const withCatalog = input.aiGraphDefinition
+    ? installGraphDefinition(experiment, input.aiGraphDefinition)
+    : experiment;
   return freezeExperiment({
-    ...experiment,
+    ...withCatalog,
     revision: experiment.revision + 1,
     roles: [...experiment.roles, role],
     sceneSnapshot: {
-      ...experiment.sceneSnapshot,
+      ...withCatalog.sceneSnapshot,
       units: [...experiment.sceneSnapshot.units, serialized],
     },
   });
@@ -233,16 +261,15 @@ export function duplicateCombatLabParticipant(
   duplicatedRecord.id = unitId;
   duplicatedRecord.label = titleRu;
   duplicatedRecord.labelRu = titleRu;
-  duplicatedRecord.aiControl = 'manual';
   const role = freezeRole({ roleId, unitId, titleRu, parameters: normalizeParameters(sourceRole.parameters) });
   const normalized = normalizeCombatLabParticipantSceneUnitRecord(experiment, role, duplicatedRecord);
+  installUnitAiBrainBindingFromData(normalized.unit, duplicatedRecord as unknown as UnitData);
   const stable = captureCombatLabParticipantStableRuntime(normalized.unit);
   resetCombatLabParticipantForInitialEdit(normalized.unit);
   restoreCombatLabParticipantStableRuntime(normalized.unit, stable, options.catalogRegistry);
   normalized.unit.id = unitId;
   normalized.unit.labels.en = titleRu;
   normalized.unit.labels.ru = titleRu;
-  normalized.unit.aiControl = 'manual';
   const serialized = serializeCombatLabParticipantSceneUnit(
     duplicatedRecord,
     normalized.unit,
@@ -270,6 +297,27 @@ function summarize(role: CombatLabExperimentRoleV1, unit: ReturnType<typeof norm
     reserveRounds,
     healthRu: healthSummary(unit.infantryCombatRuntime.wounds.slots, unit.infantryCombatRuntime.physiology.blood.state),
   });
+}
+
+function clearPublishedLoadout(unit: ReturnType<typeof normalizeCombatLabParticipantSceneUnit>['unit']): void {
+  const runtime = unit.infantryCombatRuntime;
+  runtime.primaryWeapon = null;
+  runtime.ammoInventory.loadoutRef = null;
+  runtime.ammoInventory.reserves = [];
+  runtime.ammoInventory.activeReload = null;
+  runtime.ammoInventory.activeTransfer = null;
+  runtime.ammoInventory.revision += 1;
+  unit.behaviorRuntime.ammo = 0;
+  unit.behaviorRuntime.weaponReady = false;
+}
+
+function installGraphDefinition(experiment: CombatLabExperimentV1, graph: Parameters<typeof mergeAiGraphCatalog>[1]): CombatLabExperimentV1 {
+  const catalog = mergeAiGraphCatalog(readAiGraphCatalogFromScene(experiment.sceneSnapshot), graph);
+  const sceneSnapshot = writeAiGraphCatalogToScene(
+    experiment.sceneSnapshot as unknown as Record<string, unknown>,
+    catalog,
+  ) as unknown as CombatLabExperimentV1['sceneSnapshot'];
+  return { ...experiment, sceneSnapshot };
 }
 
 function healthSummary(slots: readonly { readonly severity: string }[], bloodState: string): string {
