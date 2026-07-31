@@ -1,0 +1,229 @@
+.combat-lab-quick-parameters {
+  display: grid;
+  gap: var(--combat-lab-gap-normal, 0.75rem);
+  min-width: 0;
+  font-family: var(--combat-lab-font-family, sans-serif);
+}
+
+.combat-lab-quick-parameters-header,
+.combat-lab-quick-parameter-control-heading,
+.combat-lab-quick-parameters-actions,
+.combat-lab-quick-parameter-snapshot-actions,
+.combat-lab-tuning-comparison-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--combat-lab-gap-normal, 0.75rem);
+  flex-wrap: wrap;
+}
+
+.combat-lab-quick-parameters-identity {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.combat-lab-quick-parameters-identity span,
+.combat-lab-quick-parameter-control-heading small,
+.combat-lab-quick-parameter-meta,
+.combat-lab-quick-parameter-picker-option small,
+.combat-lab-tuning-snapshot-card span,
+.combat-lab-tuning-snapshot-card time {
+  color: var(--combat-lab-text-secondary, #8f9aaa);
+  font-size: 0.78rem;
+}
+
+.combat-lab-quick-parameters-controls {
+  display: grid;
+  gap: var(--combat-lab-gap-compact, 0.375rem);
+}
+
+.combat-lab-quick-parameter-control,
+.combat-lab-tuning-comparison,
+.combat-lab-tuning-snapshot-card {
+  border: 1px solid rgba(143, 154, 170, 0.28);
+  border-radius: 0.55rem;
+  background: rgba(18, 23, 31, 0.58);
+}
+
+.combat-lab-quick-parameter-control {
+  display: grid;
+  gap: 0.55rem;
+  padding: var(--combat-lab-card-padding, 0.75rem);
+}
+
+.combat-lab-quick-parameter-control.is-dirty {
+  border-color: rgba(241, 180, 76, 0.82);
+  box-shadow: inset 0.2rem 0 0 rgba(241, 180, 76, 0.82);
+}
+
+.combat-lab-quick-parameter-control-heading > div:first-child {
+  display: grid;
+  gap: 0.15rem;
+  min-width: min(24rem, 100%);
+}
+
+.combat-lab-quick-parameter-order-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.combat-lab-quick-parameter-order-actions button {
+  min-width: 2rem;
+}
+
+.combat-lab-quick-parameter-inputs {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) 6rem auto minmax(6rem, auto);
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.combat-lab-quick-parameter-inputs input[type="range"] {
+  width: 100%;
+}
+
+.combat-lab-quick-parameter-inputs input[type="number"] {
+  width: 100%;
+  min-height: var(--combat-lab-input-height, 2rem);
+}
+
+.combat-lab-quick-parameter-unit,
+.combat-lab-quick-parameter-output {
+  white-space: nowrap;
+}
+
+.combat-lab-quick-parameter-output {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.combat-lab-quick-parameter-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  flex-wrap: wrap;
+}
+
+.combat-lab-quick-parameter-meta button {
+  margin-left: auto;
+}
+
+.combat-lab-quick-parameters-notice {
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.4rem;
+  background: rgba(82, 127, 178, 0.16);
+}
+
+.combat-lab-quick-parameters-notice.is-warning {
+  background: rgba(241, 180, 76, 0.16);
+}
+
+.combat-lab-quick-parameters-notice.is-error {
+  background: rgba(219, 84, 84, 0.18);
+}
+
+.combat-lab-quick-parameter-snapshot-actions {
+  margin-left: auto;
+}
+
+.combat-lab-quick-parameter-picker {
+  width: min(44rem, calc(100vw - 2rem));
+  max-height: var(--combat-lab-dialog-max-height, calc(100vh - 2rem));
+  border: 1px solid rgba(143, 154, 170, 0.35);
+  border-radius: 0.65rem;
+  padding: 0;
+  color: inherit;
+  background: #111821;
+}
+
+.combat-lab-quick-parameter-picker::backdrop {
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.combat-lab-quick-parameter-picker form {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  max-height: inherit;
+  overflow: auto;
+}
+
+.combat-lab-quick-parameter-picker-presets,
+.combat-lab-quick-parameter-picker-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.combat-lab-quick-parameter-picker-presets {
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+}
+
+.combat-lab-quick-parameter-picker-presets h4 {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.combat-lab-quick-parameter-picker-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+  padding: 0.65rem;
+  border: 1px solid rgba(143, 154, 170, 0.22);
+  border-radius: 0.45rem;
+}
+
+.combat-lab-quick-parameter-picker-option span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.combat-lab-tuning-comparison {
+  display: grid;
+  gap: 0.75rem;
+  padding: var(--combat-lab-card-padding, 0.75rem);
+}
+
+.combat-lab-tuning-snapshot-card {
+  display: grid;
+  min-width: min(16rem, 100%);
+  padding: 0.65rem;
+}
+
+.combat-lab-tuning-comparison-section {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.combat-lab-tuning-comparison-section h4 {
+  margin: 0 0 0.45rem;
+}
+
+.combat-lab-tuning-comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.combat-lab-tuning-comparison-table th,
+.combat-lab-tuning-comparison-table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid rgba(143, 154, 170, 0.18);
+  text-align: right;
+}
+
+.combat-lab-tuning-comparison-table th:first-child {
+  text-align: left;
+}
+
+@media (max-width: 900px) {
+  .combat-lab-quick-parameter-inputs {
+    grid-template-columns: minmax(10rem, 1fr) 5rem auto;
+  }
+
+  .combat-lab-quick-parameter-output {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+}
