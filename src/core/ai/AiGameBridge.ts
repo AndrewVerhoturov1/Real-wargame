@@ -6,7 +6,11 @@ import {
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 import { readUnitAiBrainBinding } from '../units/UnitAiBrainBinding';
-import { resolveRuntimeGraphSnapshotForUnit } from './AiGraphCatalog';
+import {
+  getInstalledAiGraphCatalog,
+  installAiGraphCatalog,
+  resolveRuntimeGraphSnapshotForUnit,
+} from './AiGraphCatalog';
 import { withAiSimulationExecutionContext } from './AiSimulationExecutionContext';
 import * as legacy from './AiGameBridgeLegacy';
 
@@ -17,6 +21,12 @@ export * from './AiGameBridgeLegacy';
  * delegated capabilities explicit makes the facade boundary reviewable and
  * statically verifiable while the posture adapter remains the only new layer.
  */
+export function cloneSimulationStateForDiagnostic(state: SimulationState): SimulationState {
+  const clone = legacy.cloneSimulationStateForDiagnostic(state);
+  installAiGraphCatalog(clone, getInstalledAiGraphCatalog(state));
+  return clone;
+}
+
 export const AI_GAME_BRIDGE_FACADE_CONTRACT = [
   'runAiGraph',
   'createTacticalHost',

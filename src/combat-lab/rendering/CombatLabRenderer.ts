@@ -4,6 +4,7 @@ import { createPixiTacticalBoardAdapter } from '../../rendering/PixiTacticalBoar
 import type {
   CombatLabDiagnosticLayerId,
   CombatLabExperimentV1,
+  CombatLabMarkerV1,
 } from '../../core/testing/combat-lab';
 import { CombatLabDiagnosticOverlayRenderer } from './CombatLabDiagnosticOverlayRenderer';
 import { CombatLabParticipantMapPreviewRenderer } from './CombatLabParticipantMapPreviewRenderer';
@@ -90,6 +91,18 @@ export class CombatLabRenderer {
   setAuthoringSelection(selection: CombatLabScenarioAuthoringOverlaySelectionV1 | null): void {
     if (this.destroyed) return;
     this.authoringOverlay.setSelection(selection);
+    this.context.forceRender();
+  }
+
+  setMarkerSelection(markerId: string | null): void {
+    if (this.destroyed) return;
+    this.authoringOverlay.setMarkerSelection(markerId);
+    this.context.forceRender();
+  }
+
+  setMarkerPreview(marker: CombatLabMarkerV1 | null): void {
+    if (this.destroyed) return;
+    this.authoringOverlay.setMarkerPreview(marker);
     this.context.forceRender();
   }
 

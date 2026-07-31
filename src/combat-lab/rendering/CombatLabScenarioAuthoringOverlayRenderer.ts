@@ -19,6 +19,8 @@ export class CombatLabScenarioAuthoringOverlayRenderer {
   private readonly labels = new Map<string, Text>();
   private experiment: CombatLabExperimentV1 | null = null;
   private selection: CombatLabScenarioAuthoringOverlaySelectionV1 | null = null;
+  private selectedMarkerId: string | null = null;
+  private markerPreview: CombatLabMarkerV1 | null = null;
   private destroyed = false;
 
   constructor(parent: Container) {
@@ -41,10 +43,24 @@ export class CombatLabScenarioAuthoringOverlayRenderer {
     this.render();
   }
 
+  setMarkerSelection(markerId: string | null): void {
+    if (this.destroyed || this.selectedMarkerId === markerId) return;
+    this.selectedMarkerId = markerId;
+    this.render();
+  }
+
+  setMarkerPreview(marker: CombatLabMarkerV1 | null): void {
+    if (this.destroyed) return;
+    this.markerPreview = marker ? { ...marker } : null;
+    this.render();
+  }
+
   clear(): void {
     if (this.destroyed) return;
     this.experiment = null;
     this.selection = null;
+    this.selectedMarkerId = null;
+    this.markerPreview = null;
     this.graphics.clear();
     this.clearLabels();
   }
@@ -54,6 +70,8 @@ export class CombatLabScenarioAuthoringOverlayRenderer {
     this.destroyed = true;
     this.experiment = null;
     this.selection = null;
+    this.selectedMarkerId = null;
+    this.markerPreview = null;
     this.clearLabels();
     this.graphics.destroy();
     this.container.removeFromParent();
@@ -70,7 +88,12 @@ export class CombatLabScenarioAuthoringOverlayRenderer {
     }
 
     const visibleLabels = new Set<string>();
-    for (const marker of experiment.markers) this.drawMarker(experiment, marker, visibleLabels);
+    for (const marker of experiment.markers) {
+      this.drawMarker(experiment, this.markerPreview?.markerId === marker.markerId ? this.markerPreview : marker, visibleLabels);
+    }
+    if (this.markerPreview && !experiment.markers.some((marker) => marker.markerId === this.markerPreview?.markerId)) {
+      this.drawMarker(experiment, this.markerPreview, visibleLabels);
+    }
     const selected = this.resolveSelected(experiment);
     if (selected) {
       this.drawSelectedGuide(experiment, selected.track, selected.step, visibleLabels);
@@ -85,23 +108,47 @@ export class CombatLabScenarioAuthoringOverlayRenderer {
     visibleLabels: Set<string>,
   ): void {
     const point = metresToWorld(experiment, marker.xMetres, marker.yMetres);
-    const selectedTarget = this.isSelectedMarkerTarget(experiment, marker.markerId);
-    const color = selectedTarget ? 0xffe28a : marker.kind === 'circle' ? 0x8bc6ff : 0x9de18f;
+    const selectedByStep = this.isSelectedMarkerTarget(experiment, marker.markerId);
+    const selectedForEdit = this.selectedMarkerId === marker.markerId;
+    const previewing = this.markerPreview?.markerId === marker.markerId;
+    const selected = selectedByStep || selectedForEdit;
+    const color = selected ? 0xffe28a : marker.kind === 'circle' ? 0x8bc6ff : 0x9de18f;
     if (marker.kind === 'circle') {
       const radius = metresToPixels(experiment, marker.radiusMetres);
       this.graphics.circle(point.x, point.y, radius)
-        .fill({ color, alpha: selectedTarget ? 0.13 : 0.07 })
-        .stroke({ color, width: selectedTarget ? 2.2 : 1.3, alpha: 0.88 });
+        .fill({ color, alpha: selected ? 0.13 : 0.07 })
+        .stroke({ color, width: selected ? 2.2 : 1.3, alpha: previewing ? 1 : 0.88 });
+      if (selectedForEdit) this.drawCircleEditHandles(point.x, point.y, radius, color);
     } else {
-      const size = selectedTarget ? 7 : 5;
+      const size = selected ? 7 : 5;
       this.graphics.moveTo(point.x - size, point.y).lineTo(point.x + size, point.y);
       this.graphics.moveTo(point.x, point.y - size).lineTo(point.x, point.y + size)
-        .stroke({ color, width: selectedTarget ? 2.2 : 1.5, alpha: 0.95 });
-      this.graphics.circle(point.x, point.y, selectedTarget ? 4 : 3).fill({ color, alpha: 0.9 });
+        .stroke({ color, width: selected ? 2.2 : 1.5, alpha: previewing ? 1 : 0.95 });
+      this.graphics.circle(point.x, point.y, selected ? 4 : 3).fill({ color, alpha: 0.9 });
+      if (selectedForEdit) this.drawSquareHandle(point.x, point.y, color);
     }
     const labelId = `marker:${marker.markerId}`;
     visibleLabels.add(labelId);
-    this.updateLabel(labelId, `${marker.titleRu} · ${marker.markerId}`, point.x + 8, point.y - 16, selectedTarget ? 11 : 10, color);
+    this.updateLabel(
+      labelId,
+      `${marker.titleRu}${selectedForEdit ? ' · выбрано' : ''}`,
+      point.x + 8,
+      point.y - 16,
+      selected ? 11 : 10,
+      color,
+    );
+  }
+
+  private drawCircleEditHandles(x: number, y: number, radius: number, color: number): void {
+    this.graphics.circle(x, y, 5).fill({ color, alpha: 0.94 }).stroke({ color: 0x111611, width: 1.5, alpha: 1 });
+    this.graphics.moveTo(x, y).lineTo(x + radius, y).stroke({ color, width: 1.2, alpha: 0.88 });
+    this.drawSquareHandle(x + radius, y, color);
+  }
+
+  private drawSquareHandle(x: number, y: number, color: number): void {
+    this.graphics.rect(x - 4, y - 4, 8, 8)
+      .fill({ color, alpha: 0.98 })
+      .stroke({ color: 0x111611, width: 1.5, alpha: 1 });
   }
 
   private drawSelectedGuide(
@@ -191,28 +238,25 @@ export class CombatLabScenarioAuthoringOverlayRenderer {
 
 function referencedMarkerId(step: CombatLabScenarioStepV1): string | null {
   const action = step.action;
-  if (action.kind === 'move') return action.markerId;
-  if (action.kind === 'fire') {
-    const target = action.target;
-    if (target.kind === 'marker') return target.markerId;
-  }
+  if (action.kind === 'move' || action.kind === 'face') return action.markerId;
+  if (action.kind === 'fire' && action.target.kind === 'marker') return action.target.markerId;
   return null;
 }
 
 function actionTargetPoint(experiment: CombatLabExperimentV1, step: CombatLabScenarioStepV1): { x: number; y: number } | null {
   const action = step.action;
-  if (action.kind === 'move') {
-    const markerId = action.markerId;
-    const marker = experiment.markers.find((candidate) => candidate.markerId === markerId);
+  if (action.kind === 'move' || action.kind === 'face') {
+    const marker = experiment.markers.find((candidate) => candidate.markerId === action.markerId);
     return marker ? metresToWorld(experiment, marker.xMetres, marker.yMetres) : null;
   }
   if (action.kind === 'fire') {
-    if (action.target.kind === 'marker') {
-      const markerId = action.target.markerId;
+    const target = action.target;
+    if (target.kind === 'marker') {
+      const markerId = target.markerId;
       const marker = experiment.markers.find((candidate) => candidate.markerId === markerId);
       return marker ? metresToWorld(experiment, marker.xMetres, marker.yMetres) : null;
     }
-    return roleScenePoint(experiment, action.target.roleId);
+    return roleScenePoint(experiment, target.roleId);
   }
   if (action.kind === 'transfer' || action.kind === 'first_aid') {
     return roleScenePoint(experiment, action.targetRoleId);

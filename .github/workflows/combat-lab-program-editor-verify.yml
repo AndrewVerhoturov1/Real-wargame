@@ -69,6 +69,28 @@ jobs:
       - name: Combined editor and runtime regression
         run: node scripts/combat_lab_unified_runtime_combined_behavior_smoke.mjs
 
+      - name: Program authoring behavior
+        run: |
+          node scripts/combat_lab_selection_controller_behavior_smoke.mjs
+          node scripts/combat_lab_map_tool_transaction_behavior_smoke.mjs
+          node scripts/combat_lab_program_layout_behavior_smoke.mjs
+          node scripts/combat_lab_track_dialog_behavior_smoke.mjs
+          node scripts/combat_lab_map_mode_behavior_smoke.mjs
+          node scripts/combat_lab_marker_authoring_behavior_smoke.mjs
+          node scripts/combat_lab_step_dialog_behavior_smoke.mjs
+
+      - name: Quick fighter parameters behavior
+        run: |
+          node scripts/combat_lab_participant_mutation_port_behavior_smoke.mjs
+          node scripts/combat_lab_quick_parameter_registry_smoke.mjs
+          node scripts/combat_lab_quick_parameter_preferences_smoke.mjs
+          node scripts/combat_lab_quick_parameters_panel_behavior_smoke.mjs
+          node scripts/combat_lab_quick_parameters_rerun_behavior_smoke.mjs
+          node scripts/combat_lab_tuning_ab_behavior_smoke.mjs
+
+      - name: Final Combat Lab assembly behavior
+        run: node scripts/combat_lab_final_assembly_behavior_smoke.mjs
+
       - name: Runtime acceptance checks
         run: |
           node scripts/combat_lab_visual_speed_point_one_behavior_smoke.mjs

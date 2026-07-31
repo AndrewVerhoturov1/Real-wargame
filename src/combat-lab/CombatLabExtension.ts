@@ -23,6 +23,11 @@ import {
 import { CombatLabBatchClient } from './runtime/CombatLabBatchClient';
 import { CombatLabExperimentVisualController } from './runtime/CombatLabExperimentVisualController';
 import { asCombatLabExperimentVisualSnapshot } from './runtime/CombatLabExperimentRunState';
+import {
+  COMBAT_LAB_RESET_AND_START_EVENT,
+  executeCombatLabResetAndStart,
+  readCombatLabResetAndStartRequest,
+} from './runtime/CombatLabResetAndStart';
 import { replayCombatLabRepresentativeRun } from './runtime/CombatLabRepresentativeRunReplay';
 import type { CombatLabVisualSession } from './runtime/CombatLabVisualSession';
 import { CombatLabBatchPanel } from './ui/CombatLabBatchPanel';
@@ -95,6 +100,7 @@ export class CombatLabExtension implements GameApplicationExtension {
   private readonly workspaceServices: CombatLabWorkspaceServices;
   private readonly unregisterWorkspaceServices: () => void;
   private readonly removeSelectionTickerListener: () => void;
+  private readonly removeRendererSelectionListener: () => void;
   private readonly listeners: Array<readonly [EventTarget, string, EventListener]> = [];
   private mapAuthoringController: CombatLabMapAuthoringController | null = null;
   private validationIssues: readonly CombatLabExperimentIssueV1[];
@@ -137,6 +143,11 @@ export class CombatLabExtension implements GameApplicationExtension {
     );
 
     this.renderer = CombatLabRenderer.create(context, session, this.handleFrame);
+    this.removeRendererSelectionListener = this.workspaceServices.selection.subscribe((selection) => {
+      this.renderer.setMarkerSelection(selection.kind === 'marker' ? selection.markerId : null);
+    });
+    const initialSelection = this.workspaceServices.selection.get();
+    this.renderer.setMarkerSelection(initialSelection.kind === 'marker' ? initialSelection.markerId : null);
     this.visualController = CombatLabExperimentVisualController.create({
       session,
       getExperiment: () => this.draft.getExperiment(),
@@ -165,6 +176,8 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.editorPanel = CombatLabScenarioEditorPanel.create({
       host: this.layout.programHost,
       draft: this.draft,
+      mapTools: this.workspaceServices.mapTools,
+      selection: this.workspaceServices.selection,
       onExperimentChanged: (experiment) => this.handleExperimentChanged(experiment, 'editor'),
       onRequestMapPick: (request) => this.mapAuthoringController?.requestPick(request),
       onSelectRole: (roleId) => this.selectRoleUnit(roleId),
@@ -213,6 +226,10 @@ export class CombatLabExtension implements GameApplicationExtension {
       context,
       state: session.state,
       draft: this.draft,
+      mapTools: this.workspaceServices.mapTools,
+      selection: this.workspaceServices.selection,
+      markerHost: this.editorPanel.getMarkerHost(),
+      onMarkerPreviewChanged: (marker) => this.renderer.setMarkerPreview(marker),
       getMode: () => this.effectiveMapMode(),
       getSelectedActorRoleId: () => this.editorPanel.getSelectedActorRoleId(),
       onExperimentChanged: (experiment) => this.handleExperimentChanged(experiment, 'external'),
@@ -237,6 +254,7 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.listen(this.root, 'combat-lab:activate-tab', this.handleTabRequest as EventListener);
     this.listen(this.root, 'combat-lab:toggle-pause', this.handleTogglePauseRequest);
     this.listen(this.root, 'combat-lab:set-paused', this.handleSetPausedRequest as EventListener);
+    this.listen(this.root, COMBAT_LAB_RESET_AND_START_EVENT, this.handleResetAndStartRequest as EventListener);
 
     this.root.dataset.combatLabExtension = 'active';
     document.body.classList.add('combat-lab-dock-open');
@@ -386,6 +404,7 @@ export class CombatLabExtension implements GameApplicationExtension {
 
   private teardownFoundationServices(): void {
     runTeardownStep('temporary map transaction', () => this.workspaceServices.mapTools.cancel());
+    runTeardownStep('renderer selection relay', this.removeRendererSelectionListener);
     runTeardownStep('selection ticker', this.removeSelectionTickerListener);
     runTeardownStep('workspace services registry', this.unregisterWorkspaceServices);
     runTeardownStep('workspace services', () => this.workspaceServices.destroy());
@@ -486,6 +505,16 @@ export class CombatLabExtension implements GameApplicationExtension {
     const paused = Boolean((event as CustomEvent<boolean>).detail);
     if (paused) this.visualController.pause();
     else if (!this.hasValidationErrors()) this.visualController.start();
+  };
+
+  private readonly handleResetAndStartRequest = (event: Event): void => {
+    const request = readCombatLabResetAndStartRequest(event);
+    if (!request) return;
+    executeCombatLabResetAndStart(
+      this.visualController,
+      request,
+      () => !this.hasValidationErrors() && !this.isStructuralEditingLocked(),
+    );
   };
 }
 

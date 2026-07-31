@@ -3,12 +3,14 @@ import { readFileSync } from 'node:fs';
 
 const card = readFileSync('src/combat-lab/scenario-editor/CombatLabStepCard.ts', 'utf8');
 const panel = readFileSync('src/combat-lab/scenario-editor/CombatLabScenarioEditorPanel.ts', 'utf8');
-const dialog = readFileSync('src/combat-lab/scenario-editor/CombatLabActionDialog.ts', 'utf8');
+const facade = readFileSync('src/combat-lab/scenario-editor/CombatLabActionDialog.ts', 'utf8');
+const dialog = readFileSync('src/combat-lab/scenario-editor/CombatLabStepDialog.ts', 'utf8');
 const trackList = readFileSync('src/combat-lab/scenario-editor/CombatLabTrackList.ts', 'utf8');
 
 assert.match(card, /Изменить/);
 assert.doesNotMatch(card, /CombatLabStepInspector|<details|detailsBlock/);
-assert.match(panel, /CombatLabActionDialog\.open/);
+assert.match(panel, /CombatLabStepDialog\.open/);
+assert.match(facade, /CombatLabStepDialog\.open/);
 assert.doesNotMatch(panel, /inspectorHost|new CombatLabStepInspector/);
 assert.match(dialog, /document\.createElement\('dialog'\)/);
 assert.match(dialog, /showModal\(\)/);

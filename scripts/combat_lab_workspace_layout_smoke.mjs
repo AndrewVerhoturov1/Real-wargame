@@ -7,6 +7,7 @@ const workspaceHosts = readFileSync('src/combat-lab/ui/CombatLabWorkspaceHosts.t
 const shell = readFileSync('src/combat-lab/ui/CombatLabShell.ts', 'utf8');
 const renderer = readFileSync('src/combat-lab/rendering/CombatLabRenderer.ts', 'utf8');
 const visualSession = readFileSync('src/combat-lab/runtime/CombatLabVisualSession.ts', 'utf8');
+const aiTestRuntime = readFileSync('src/core/testing/AiTestLabRuntime.ts', 'utf8');
 const layoutEnhancements = readFileSync('src/ui/TacticalWorkspaceLayoutEnhancements.ts', 'utf8');
 const unitBarPresentation = readFileSync('src/ui/UnitBarPresentation.ts', 'utf8');
 const uiBoundary = `${extension}\n${workspaceTabs}\n${workspaceHosts}\n${shell}\n${renderer}\n${layoutEnhancements}\n${unitBarPresentation}`;
@@ -103,7 +104,8 @@ for (const token of [
   assert.ok(unitBarPresentation.includes(token), `Shared soldier panel must contain ${token}`);
 }
 
-assert.match(visualSession, /COMBAT_LAB_VISUAL_SPEEDS\s*=\s*\[0\.25, 0\.5, 1, 2, 4, 10\]/, 'Combat Lab must accept every speed shown by the shared header.');
+assert.match(visualSession, /COMBAT_LAB_VISUAL_SPEEDS\s*=\s*AI_TEST_TIME_SCALES/, 'Combat Lab must use the canonical shared speed list.');
+assert.match(aiTestRuntime, /AI_TEST_TIME_SCALES\s*=\s*\[0\.1, 0\.25, 0\.5, 1, 2, 4, 10\]/, 'The shared header and Combat Lab must retain the ×0.1 speed.');
 assert.match(labMain, /combat-lab-header-final\.css/, 'The readable dock header correction must load last.');
 assert.match(labHeaderCss, /grid-template-areas:\s*\n\s*"brand toggle"\s*\n\s*"status toggle"/s, 'The dock title must own a full readable row.');
 assert.match(finalFixesCss, /\.workspace-time-controls \.unit-bar-speed-group\s*\{[^}]*grid-column:\s*auto !important/s, 'Legacy lower-panel grid placement must not push speed buttons onto a second row.');
