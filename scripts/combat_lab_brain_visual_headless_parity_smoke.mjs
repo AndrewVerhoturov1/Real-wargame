@@ -27,7 +27,30 @@ assert.match(checkpoint, /installSceneBrainData/);
 assert.match(sceneRuntime, /aiGraphDefinition/);
 assert.match(sceneRuntime, /installUnitAiBrainBinding/);
 
-const digest = loadTypescriptModule('src/core/testing/combat-lab/experiment/CombatLabExperimentDigest.ts');
+function unexpectedRuntimeSerializer(name) {
+  return () => {
+    throw new Error(`Experiment digest unexpectedly called runtime serializer: ${name}`);
+  };
+}
+
+const digest = loadTypescriptModule(
+  'src/core/testing/combat-lab/experiment/CombatLabExperimentDigest.ts',
+  {
+    '../../actions/PhysicalActionCoordinatorSerialization': {
+      serializePhysicalActionCoordinatorState: unexpectedRuntimeSerializer('serializePhysicalActionCoordinatorState'),
+    },
+    '../../actions/PostureTransition': {
+      serializeUnitPhysicalAction: unexpectedRuntimeSerializer('serializeUnitPhysicalAction'),
+    },
+    '../../infantry-combat/runtime': {
+      serializeInfantryCombatUnitRuntime: unexpectedRuntimeSerializer('serializeInfantryCombatUnitRuntime'),
+      serializeReferenceProjectileRuntimeState: unexpectedRuntimeSerializer('serializeReferenceProjectileRuntimeState'),
+    },
+    '../../movement/MovementRuntime': {
+      serializeMovementRuntime: unexpectedRuntimeSerializer('serializeMovementRuntime'),
+    },
+  },
+);
 const baseUnit = makeSceneUnit('unit-a');
 const base = makeExperiment({
   roles: [{ roleId: 'role-a', unitId: 'unit-a', titleRu: 'Боец', parameters: { schemaVersion: 1, accuracy: null } }],
