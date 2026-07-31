@@ -16,6 +16,7 @@ export function loadTypescriptModule(entryPath, stubs = {}) {
   const cache = new Map();
   const load = (filePath) => {
     const absolute = resolve(filePath);
+    if (absolute.endsWith('.json')) return JSON.parse(readFileSync(absolute, 'utf8'));
     if (cache.has(absolute)) return cache.get(absolute).exports;
     const source = readFileSync(absolute, 'utf8');
     const compiled = ts.transpileModule(source, {
@@ -25,6 +26,7 @@ export function loadTypescriptModule(entryPath, stubs = {}) {
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
         esModuleInterop: true,
+        resolveJsonModule: true,
         moduleResolution: ts.ModuleResolutionKind.Node10,
       },
     });
@@ -41,7 +43,9 @@ export function loadTypescriptModule(entryPath, stubs = {}) {
       if (specifier.startsWith('.')) {
         const base = resolve(dirname(absolute), specifier);
         for (const candidate of [base, `${base}.ts`, `${base}.mjs`, resolve(base, 'index.ts')]) {
-          if (existsSync(candidate)) return load(candidate);
+          if (!existsSync(candidate)) continue;
+          if (candidate.endsWith('.json')) return JSON.parse(readFileSync(candidate, 'utf8'));
+          return load(candidate);
         }
       }
       return nativeRequire(specifier);
