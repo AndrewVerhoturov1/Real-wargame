@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - verification/20260731-combat-lab-program-authoring-base
+  pull_request:
+    branches:
+      - verification/20260731-combat-lab-program-authoring-report-base
 
 permissions:
   contents: read
