@@ -31,6 +31,9 @@ try {
     const second = batch.runCombatLabBatchWithRunner(request(count), runner, { chunkSize: 25 });
     assert.deepEqual(first, second);
     assert.equal(first.runCount, count);
+    assert.equal(first.diagnostics.completedRuns, count);
+    assert.equal(first.diagnostics.uniqueSeedCount, count);
+    assert.equal(first.diagnostics.uniqueFinalStateDigestCount, count);
   }
   const fourWorkerRequest = request(100, 4);
   const partitions = [0, 1, 2, 3].map((workerId) => Array.from({ length: 100 }, (_, index) => index).filter((index) => index % 4 === workerId));
@@ -60,6 +63,7 @@ try {
   assert.throws(() => batch.runCombatLabBatchWithRunner(request(0), runner), /runCount/);
   assert.ok(single.failureReasons['failure-a'] > 0);
   assert.ok(single.representatives.length <= 20);
+  await import('./combat_lab_batch_seed_diagnostics_behavior_smoke.mjs');
   console.log('Combat Lab batch runner smoke passed.');
 } finally {
   await rm(temp, { recursive: true, force: true });
