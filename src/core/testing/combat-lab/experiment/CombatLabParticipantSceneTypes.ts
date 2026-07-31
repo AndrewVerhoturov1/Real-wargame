@@ -1,4 +1,5 @@
 import type { AiGraph } from '../../../ai/AiGraph';
+import type { BehaviorProfileId, SoldierCondition, SoldierTraits } from '../../../behavior/BehaviorModel';
 import type { DefinitionRef } from '../../../infantry-combat/catalogs/CombatCatalogTypes';
 import type { CombatCatalogRegistry } from '../../../infantry-combat/catalogs/CombatCatalogRegistry';
 import type { UnitAiBrainBindingV1 } from '../../../units/UnitAiBrainBinding';
@@ -24,6 +25,12 @@ export interface CombatLabParticipantScenePatchV1 {
   readonly y?: number;
   readonly facingDegrees?: number;
   readonly posture?: 'standing' | 'crouched' | 'prone';
+  readonly behaviorProfile?: BehaviorProfileId;
+  readonly speedCellsPerSecond?: number;
+  readonly viewAngleDegrees?: number;
+  readonly viewRangeCells?: number;
+  readonly soldierTraits?: Partial<SoldierTraits>;
+  readonly soldierCondition?: Partial<SoldierCondition>;
   /** Omitted means preserve; null means explicitly clear the published loadout and all weapon/ammo runtime. */
   readonly loadoutRef?: DefinitionRef | null;
   readonly loadedRounds?: number;
@@ -78,6 +85,12 @@ export interface CombatLabParticipantInitialDraftV1 {
   readonly facingDegrees: number;
   readonly runtimeMetersPerCell: number;
   readonly posture: 'standing' | 'crouched' | 'prone';
+  readonly behaviorProfile: BehaviorProfileId;
+  readonly speedCellsPerSecond: number;
+  readonly viewAngleDegrees: number;
+  readonly viewRangeCells: number;
+  readonly soldierTraits: Readonly<SoldierTraits>;
+  readonly soldierCondition: Readonly<SoldierCondition>;
   readonly loadoutRef: DefinitionRef | null;
   readonly loadedRounds: number;
   readonly reserves: readonly { readonly ammoDefinitionId: string; readonly rounds: number; readonly maximumRounds: number }[];
