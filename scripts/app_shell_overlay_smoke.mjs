@@ -26,6 +26,9 @@ const editorEntry = readFileSync('src/shared/AiEditorShellMenuEntry.ts', 'utf8')
 assert.equal(packageJson.scripts?.['app-shell-overlay:smoke'], 'node scripts/app_shell_overlay_smoke.mjs');
 
 assert.match(shell, /getAppOverlayCoordinator/);
+assert.match(shell, /const installations = new WeakMap<Document/);
+assert.equal((shell.match(/data-shell-action="open-menu"/g) ?? []).length, 1, 'На странице должен создаваться один компактный вызов меню.');
+assert.match(shell, /this\.root\.innerHTML = '<button[^']*data-shell-action="open-menu"/);
 assert.match(shell, /data-shell-action="open-menu"/);
 assert.match(shell, /app-shell-menu-trigger/);
 assert.match(shell, /openModal\(/);
@@ -50,6 +53,9 @@ assert.match(coordinator, /event\.key !== 'Escape'/);
 assert.match(coordinator, /registerDismissLayer/);
 assert.match(coordinator, /setEscapeFallback/);
 assert.match(coordinator, /findHighestOpenLayer/);
+assert.match(coordinator, /layer\.priority > highest\.priority/);
+assert.match(coordinator, /if \(highestLayer\) \{[\s\S]*requestClose\(highestLayer\);[\s\S]*return;[\s\S]*if \(!this\.escapeFallback\)/);
+assert.match(coordinator, /this\.escapeFallback\(\);/);
 assert.match(coordinator, /requestClose/);
 assert.match(coordinator, /document\.removeEventListener\('keydown'/);
 assert.match(coordinator, /WeakMap<Document/);
