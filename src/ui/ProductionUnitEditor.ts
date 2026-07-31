@@ -117,7 +117,7 @@ const TRAIT_FIELDS: ReadonlyArray<readonly [keyof SoldierTraits, string]> = [
   ['caution', 'Осторожность'],
   ['decisiveness', 'Решительность'],
   ['discipline', 'Дисциплина'],
-  ['initiative', 'Инициати'],
+  ['initiative', 'Инициатива'],
   ['tactics', 'Тактика'],
   ['weaponSkill', 'Владение оружием'],
 ];
