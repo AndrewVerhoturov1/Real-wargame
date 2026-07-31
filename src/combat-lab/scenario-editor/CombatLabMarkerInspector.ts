@@ -76,8 +76,12 @@ export class CombatLabMarkerInspector {
 
     const save = button('Сохранить', () => {
       try {
-        this.options.manager.rename(marker.markerId, title.value);
-        this.options.manager.updateCoordinates(marker.markerId, Number(x.value), Number(y.value), radius ? Number(radius.value) : undefined);
+        this.options.manager.update(marker.markerId, {
+          titleRu: title.value,
+          xMetres: Number(x.value),
+          yMetres: Number(y.value),
+          radiusMetres: radius ? Number(radius.value) : undefined,
+        });
         status.textContent = 'Изменения сохранены.';
         this.options.onExperimentChanged?.(this.options.draft.getExperiment());
         this.render();
