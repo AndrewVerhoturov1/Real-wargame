@@ -19,11 +19,11 @@ const adapter = {
 const root = productionEditor.createProductionUnitEditorSection(adapter, { showTitle: true });
 const technical = findDetailsBySummary(root, 'Технические сведения');
 assert.equal(technical.open, false, 'Technical details must be collapsed by default.');
-assert.ok(technical.textContent.includes('role-internal-17'));
-assert.ok(technical.textContent.includes('unit-internal-29'));
 
 const roleControl = findControlByLabel(technical, 'roleId');
 const unitControl = findControlByLabel(technical, 'unitId');
+assert.equal(roleControl?.value, 'role-internal-17');
+assert.equal(unitControl?.value, 'unit-internal-29');
 assert.equal(roleControl?.readOnly, true);
 assert.equal(unitControl?.readOnly, true);
 assert.equal(roleControl?.disabled, false, 'Read-only IDs must remain keyboard-readable.');
@@ -31,7 +31,7 @@ assert.equal(unitControl?.disabled, false, 'Read-only IDs must remain keyboard-r
 
 const outsideTechnical = walkElements(root)
   .filter((element) => element !== technical && !isDescendantOf(element, technical))
-  .map((element) => element._textContent ?? '')
+  .map((element) => `${element._textContent ?? ''} ${element.value ?? ''}`)
   .join(' ');
 assert.doesNotMatch(outsideTechnical, /role-internal-17|unit-internal-29/, 'IDs must not leak into the primary header or normal sections.');
 
