@@ -14,7 +14,15 @@ try {
   const representatives = await import(pathToFileUrl(path.join(temp, 'CombatLabRepresentativeRuns.mjs')));
 
   assert.deepEqual(statistics.summarizeCombatLabDistribution([1, 2, 3]), {
-    count: 3, minimum: 1, maximum: 3, mean: 2, median: 2, p05: 1.1, p95: 2.9,
+    count: 3,
+    sampleCount: 3,
+    minimum: 1,
+    maximum: 3,
+    mean: 2,
+    median: 2,
+    standardDeviation: 0.816496581,
+    p05: 1.1,
+    p95: 2.9,
     histogram: [
       { minimum: 1, maximum: 2, count: 1 },
       { minimum: 2, maximum: 3, count: 2 },
