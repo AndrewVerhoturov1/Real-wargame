@@ -16,7 +16,10 @@ jobs:
       TARGET_ORIGIN: https://repo-hba09463a-111s-projects-807221af.vercel.app
       EXPECTED_PRODUCT_SHA: 6220ba65de584239612600ae2ec025363137e09f
       CANONICAL_FEATURE_BRANCH: feature/20260731-combat-lab-user-acceptance-fixes
-      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      PLAYWRIGHT_STORAGE_STATE: ${{ runner.temp }}/vercel-storage-state.json
 
     steps:
       - uses: actions/checkout@v4
@@ -34,6 +37,53 @@ jobs:
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+
+      - name: Link permanent Vercel project
+        run: npx --yes vercel@56.4.1 pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Create protected deployment browser session
+        shell: bash
+        run: |
+          set -euo pipefail
+          cookie_file="$RUNNER_TEMP/vercel-cookies.txt"
+          npx --yes vercel@56.4.1 curl /ai-node-editor.html \
+            --deployment "$TARGET_ORIGIN" \
+            --token="$VERCEL_TOKEN" \
+            -H 'x-vercel-set-bypass-cookie: true' \
+            -L \
+            -c "$cookie_file" \
+            -o /dev/null
+
+          COOKIE_FILE="$cookie_file" STORAGE_STATE_FILE="$PLAYWRIGHT_STORAGE_STATE" node <<'NODE'
+          const fs = require('node:fs');
+          const lines = fs.readFileSync(process.env.COOKIE_FILE, 'utf8').split(/\r?\n/);
+          const cookies = [];
+          for (let line of lines) {
+            let httpOnly = false;
+            if (line.startsWith('#HttpOnly_')) {
+              line = line.slice('#HttpOnly_'.length);
+              httpOnly = true;
+            } else if (!line || line.startsWith('#')) {
+              continue;
+            }
+            const fields = line.split('\t');
+            if (fields.length < 7) continue;
+            const [domain, , path, secure, expires, name, ...valueParts] = fields;
+            cookies.push({
+              name,
+              value: valueParts.join('\t'),
+              domain,
+              path: path || '/',
+              expires: Number(expires) || -1,
+              httpOnly,
+              secure: secure === 'TRUE',
+              sameSite: 'Lax',
+            });
+          }
+          if (cookies.length === 0) throw new Error('Vercel CLI did not create a browser bypass cookie.');
+          fs.writeFileSync(process.env.STORAGE_STATE_FILE, JSON.stringify({ cookies, origins: [] }));
+          console.log(`Prepared ${cookies.length} protected-session cookie(s) without exposing their values.`);
+          NODE
 
       - name: Audit deployed editor and Combat Lab
         run: npx playwright test --config=ci/playwright.ui-audit.config.ts
