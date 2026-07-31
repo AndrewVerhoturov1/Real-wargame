@@ -37,23 +37,33 @@
   background: rgba(0, 0, 0, .62);
 }
 
-.combat-lab-experiment-settings-dialog__form {
+.combat-lab-experiment-settings-dialog__form,
+.combat-lab-batch-setup-view,
+.combat-lab-batch-progress-view,
+.combat-lab-batch-diagnostics-view {
   display: grid;
   gap: 12px;
 }
 
 .combat-lab-experiment-settings-dialog__form h3,
-.combat-lab-experiment-settings-dialog__form p {
+.combat-lab-experiment-settings-dialog__form p,
+.combat-lab-batch-setup-view h3,
+.combat-lab-batch-progress-view h3,
+.combat-lab-batch-diagnostics-view h3 {
   margin: 0;
 }
 
-.combat-lab-experiment-settings-dialog__form label {
+.combat-lab-experiment-settings-dialog__form label,
+.combat-lab-batch-setup-grid label {
   display: grid;
   gap: 5px;
 }
 
 .combat-lab-experiment-settings-dialog__form select,
-.combat-lab-experiment-settings-dialog__form input {
+.combat-lab-experiment-settings-dialog__form input,
+.combat-lab-batch-setup-grid select,
+.combat-lab-batch-setup-grid input,
+.combat-lab-batch-setup-grid textarea {
   box-sizing: border-box;
   width: 100%;
   min-height: 34px;
@@ -64,10 +74,77 @@
   color: #ff9a86;
 }
 
-.combat-lab-experiment-settings-dialog__actions {
+.combat-lab-experiment-settings-dialog__actions,
+.combat-lab-batch-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.combat-lab-batch-setup-view,
+.combat-lab-batch-progress-view,
+.combat-lab-batch-diagnostics-view {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255, 240, 161, .12);
+  border-radius: 10px;
+  background: rgba(255, 242, 168, .025);
+}
+
+.combat-lab-batch-setup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.combat-lab-batch-seed-hint,
+.combat-lab-batch-warning,
+.combat-lab-batch-progress-detail {
+  margin: 0;
+  color: var(--workspace-muted, #aeb7aa);
+  font-size: 12px;
+}
+
+.combat-lab-batch-warning {
+  padding: 8px 10px;
+  border-left: 3px solid #d6b75d;
+  background: rgba(214, 183, 93, .08);
+}
+
+.combat-lab-batch-progress-view progress {
+  width: 100%;
+}
+
+.combat-lab-batch-diagnostic-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.combat-lab-batch-diagnostic-cards > div {
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+  border: 1px solid rgba(255, 240, 161, .12);
+  border-radius: 8px;
+}
+
+.combat-lab-batch-statistics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.combat-lab-batch-statistics-table th,
+.combat-lab-batch-statistics-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 240, 161, .1);
+  text-align: right;
+}
+
+.combat-lab-batch-statistics-table th:first-child,
+.combat-lab-batch-statistics-table td:first-child {
+  text-align: left;
 }
 
 @media (max-width: 860px) {
@@ -75,5 +152,9 @@
     flex-wrap: wrap;
     width: 100%;
     margin-left: 0;
+  }
+
+  .combat-lab-batch-statistics-table {
+    font-size: 11px;
   }
 }
