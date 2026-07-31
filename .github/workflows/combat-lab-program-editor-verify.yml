@@ -47,6 +47,15 @@ jobs:
           node scripts/combat_lab_participant_parameters_smoke.mjs
           node scripts/combat_lab_participant_editor_ui_contract_smoke.mjs
 
+      - name: Unified fighter editor contracts
+        run: |
+          node scripts/unit_ai_brain_binding_roundtrip_smoke.mjs
+          node scripts/combat_lab_brain_visual_headless_parity_smoke.mjs
+          node scripts/combat_lab_scene_editor_adapter_behavior_smoke.mjs
+          node scripts/combat_lab_participant_dialog_behavior_smoke.mjs
+          node scripts/combat_lab_participant_placement_behavior_smoke.mjs
+          node scripts/combat_lab_participant_facing_behavior_smoke.mjs
+
       - name: Existing Combat Lab gates
         continue-on-error: true
         run: |
@@ -57,7 +66,6 @@ jobs:
           npm run performance-contract:smoke
 
       - name: TypeScript
-        continue-on-error: true
         run: npx tsc --noEmit
 
       - name: Build
