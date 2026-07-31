@@ -15,6 +15,7 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
     viewport: { width: 1440, height: 900 },
     deviceScaleFactor: 1,
+    storageState: process.env.PLAYWRIGHT_STORAGE_STATE || undefined,
     trace: 'on',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
