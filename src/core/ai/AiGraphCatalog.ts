@@ -95,6 +95,21 @@ export function listAvailableAiGraphCatalogEntries(storage: Storage | null = saf
   return Object.freeze([...entries.values()]);
 }
 
+export function listMergedAiGraphCatalogEntries(
+  sceneCatalog: AiGraphCatalogV1,
+  storage: Storage | null = safeLocalStorage(),
+): readonly AiGraphCatalogEntryV1[] {
+  const entries = new Map<string, AiGraphCatalogEntryV1>();
+  const normalizedSceneCatalog = normalizeAiGraphCatalog(sceneCatalog);
+  for (const graph of normalizedSceneCatalog.graphs) {
+    entries.set(graph.id, catalogEntry(graph, 'scene'));
+  }
+  for (const entry of listAvailableAiGraphCatalogEntries(storage)) {
+    if (!entries.has(entry.graphId)) entries.set(entry.graphId, entry);
+  }
+  return Object.freeze([...entries.values()]);
+}
+
 export function readAvailableAiGraphCatalog(storage: Storage | null = safeLocalStorage()): AiGraphCatalogV1 {
   return createAiGraphCatalog(listAvailableAiGraphCatalogEntries(storage).map((entry) => entry.graph));
 }
