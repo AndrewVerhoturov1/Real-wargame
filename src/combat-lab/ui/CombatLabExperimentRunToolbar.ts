@@ -2,8 +2,13 @@ import type {
   CombatLabExperimentIssueV1,
   CombatLabScenarioRuntimeSnapshotV1,
 } from '../../core/testing/combat-lab';
+import { getCombatLabWorkspaceServices } from '../CombatLabWorkspaceServices';
+import { updateCombatLabExperimentRuntimeSettings } from '../scenario-editor/CombatLabExperimentRuntimeSettings';
 import type { CombatLabExperimentVisualController } from '../runtime/CombatLabExperimentVisualController';
 import { asCombatLabExperimentVisualSnapshot } from '../runtime/CombatLabExperimentRunState';
+import { CombatLabExperimentSettingsDialog } from './CombatLabExperimentSettingsDialog';
+import { CombatLabExperimentSettingsSummary } from './CombatLabExperimentSettingsSummary';
+import './combat-lab-runtime-controls.css';
 
 export interface CombatLabExperimentRunToolbarOptions {
   readonly host: HTMLElement;
@@ -22,9 +27,16 @@ export class CombatLabExperimentRunToolbar {
   private readonly batchButton = button('Серия');
   private readonly speedSelect = document.createElement('select');
   private readonly listeners: Array<readonly [EventTarget, string, EventListener]> = [];
+  private readonly settingsDialog: CombatLabExperimentSettingsDialog;
+  private readonly settingsSummary: CombatLabExperimentSettingsSummary;
+  private readonly unsubscribeDraft: () => void;
   private destroyed = false;
 
   private constructor(private readonly options: CombatLabExperimentRunToolbarOptions) {
+    const workspaceRoot = options.host.closest<HTMLElement>('.combat-lab-workspace');
+    if (!workspaceRoot) throw new Error('Панель запуска Combat Lab находится вне рабочей области.');
+    const services = getCombatLabWorkspaceServices(workspaceRoot);
+
     this.root.className = 'combat-lab-experiment-run-toolbar combat-lab-run-toolbar';
     this.speedSelect.className = 'combat-lab-experiment-speed';
     this.speedSelect.setAttribute('aria-label', 'Скорость визуального прогона');
@@ -49,6 +61,24 @@ export class CombatLabExperimentRunToolbar {
       this.batchButton,
     );
     options.host.replaceChildren(this.root);
+
+    this.settingsDialog = new CombatLabExperimentSettingsDialog({
+      host: options.host,
+      getExperiment: () => services.draft.get(),
+      onApply: (maximumSimulationSeconds) => {
+        const updated = updateCombatLabExperimentRuntimeSettings(
+          services.draft.get(),
+          { maximumSimulationSeconds },
+        );
+        services.draft.replace(updated, 'external');
+      },
+    });
+    this.settingsSummary = new CombatLabExperimentSettingsSummary({
+      host: this.root,
+      getExperiment: () => services.draft.get(),
+      onOpenSettings: () => this.settingsDialog.open(),
+    });
+    this.unsubscribeDraft = services.draft.subscribe(() => this.settingsSummary.refresh());
 
     this.listen(this.resetButton, 'click', () => options.controller.reset());
     this.listen(this.startButton, 'click', () => options.controller.start());
@@ -78,6 +108,7 @@ export class CombatLabExperimentRunToolbar {
     this.speedSelect.value = String(visual?.speed ?? this.options.controller.getSpeed());
     this.root.dataset.status = status;
     this.root.dataset.validation = validationBlocked ? 'blocked' : 'valid';
+    this.settingsSummary.refresh();
   }
 
   destroy(): void {
@@ -85,6 +116,9 @@ export class CombatLabExperimentRunToolbar {
     this.destroyed = true;
     for (const [target, type, listener] of this.listeners) target.removeEventListener(type, listener);
     this.listeners.length = 0;
+    this.unsubscribeDraft();
+    this.settingsSummary.destroy();
+    this.settingsDialog.destroy();
     this.options.host.replaceChildren();
   }
 
