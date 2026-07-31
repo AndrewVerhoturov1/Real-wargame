@@ -250,11 +250,13 @@ function actionTargetPoint(experiment: CombatLabExperimentV1, step: CombatLabSce
     return marker ? metresToWorld(experiment, marker.xMetres, marker.yMetres) : null;
   }
   if (action.kind === 'fire') {
-    if (action.target.kind === 'marker') {
-      const marker = experiment.markers.find((candidate) => candidate.markerId === action.target.markerId);
+    const target = action.target;
+    if (target.kind === 'marker') {
+      const markerId = target.markerId;
+      const marker = experiment.markers.find((candidate) => candidate.markerId === markerId);
       return marker ? metresToWorld(experiment, marker.xMetres, marker.yMetres) : null;
     }
-    return roleScenePoint(experiment, action.target.roleId);
+    return roleScenePoint(experiment, target.roleId);
   }
   if (action.kind === 'transfer' || action.kind === 'first_aid') {
     return roleScenePoint(experiment, action.targetRoleId);
