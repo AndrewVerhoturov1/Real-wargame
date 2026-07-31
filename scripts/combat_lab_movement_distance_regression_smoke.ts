@@ -45,8 +45,6 @@ console.log('Combat Lab movement distance regression smoke passed.');
 function runFlatWalk(state: SimulationState, unit: UnitModel): number {
   unit.behaviorRuntime.posture = 'standing';
   unit.behaviorRuntime.previousPosture = 'standing';
-  unit.suppression = 0;
-  unit.stress = 0;
   const start = { ...unit.position };
   setMovementProfileRequest(state, unit, 'normal_walk', 'player_order');
   unit.order = createMoveOrder({ x: start.x + 10, y: start.y }, { source: 'player' });
