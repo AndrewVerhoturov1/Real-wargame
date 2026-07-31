@@ -26,8 +26,11 @@ export class CombatLabStepCard {
   readonly root = document.createElement('article');
 
   constructor(private readonly options: CombatLabStepCardOptions) {
-    const { step, runtime, selected } = options;
-    const summary = buildCombatLabActionSummary(options.experiment, step);
+    const { step, runtime, selected, experiment } = options;
+    const summary = buildCombatLabActionSummary(experiment, step);
+    const actorTitle = resolveActorTitle(experiment, options.trackId, step);
+    const runtimeLabel = combatLabRuntimeStateLabelRu(runtime?.state ?? null);
+
     this.root.className = 'combat-lab-step-card combat-lab-step-card--compact';
     this.root.dataset.combatLabStepCard = step.stepId;
     this.root.dataset.trackId = options.trackId;
@@ -37,8 +40,8 @@ export class CombatLabStepCard {
     this.root.classList.toggle('is-disabled', !step.enabled);
     this.root.tabIndex = 0;
 
-    const main = document.createElement('div');
-    main.className = 'combat-lab-step-summary';
+    const heading = document.createElement('div');
+    heading.className = 'combat-lab-step-name-row';
     const drag = iconButton('↕', 'Перетащить действие');
     drag.classList.add('combat-lab-step-drag-handle');
     drag.addEventListener('pointerdown', (event) => {
@@ -47,28 +50,46 @@ export class CombatLabStepCard {
       options.onBeginPointerReorder(event);
     });
     const number = text('span', 'combat-lab-step-number', String(options.index + 1));
-    const copy = document.createElement('div');
-    copy.className = 'combat-lab-step-copy';
-    copy.append(
-      text('strong', 'combat-lab-step-action', summary.titleRu),
+    const name = text('strong', 'combat-lab-step-name', step.titleRu || summary.titleRu);
+    name.title = step.titleRu || summary.titleRu;
+    heading.append(drag, number, name);
+
+    const relation = document.createElement('div');
+    relation.className = 'combat-lab-step-relation-row';
+    relation.append(
+      text('span', 'combat-lab-step-actor', actorTitle),
+      text('span', 'combat-lab-step-arrow', '→'),
       text('span', 'combat-lab-step-target', summary.targetRu),
+    );
+
+    const condition = document.createElement('div');
+    condition.className = 'combat-lab-step-condition-row';
+    condition.append(
+      text('span', 'combat-lab-step-row-label', 'Начало'),
       text('span', 'combat-lab-step-schedule', summary.scheduleRu),
     );
-    const state = text('span', 'combat-lab-step-state', combatLabRuntimeStateLabelRu(runtime?.state ?? null));
-    state.dataset.state = runtime?.state ?? 'idle';
-    main.append(drag, number, copy, state);
+
+    const runtimeRow = document.createElement('div');
+    runtimeRow.className = 'combat-lab-step-runtime-row';
+    const state = text('span', 'combat-lab-step-state', step.enabled ? runtimeLabel : 'Отключено');
+    state.dataset.state = step.enabled ? runtime?.state ?? 'idle' : 'disabled';
+    runtimeRow.append(state);
+    if (runtime?.reasonRu) {
+      const reason = text('span', 'combat-lab-step-reason', runtime.reasonRu);
+      reason.title = runtime.reasonRu;
+      runtimeRow.append(reason);
+    }
 
     const actions = document.createElement('div');
     actions.className = 'combat-lab-step-card-actions';
     actions.append(
-      actionButton('Изменить', (button) => options.onEdit(button)),
-      actionButton('Копировать', () => options.onDuplicate()),
-      actionButton(step.enabled ? 'Отключить' : 'Включить', () => options.onToggleEnabled()),
-      actionButton('Удалить', () => options.onDelete(), 'danger'),
+      actionButton('Изменить', 'Изменить действие', (control) => options.onEdit(control)),
+      actionButton('Копия', 'Дублировать действие', () => options.onDuplicate()),
+      actionButton(step.enabled ? 'Выкл.' : 'Вкл.', step.enabled ? 'Отключить действие' : 'Включить действие', () => options.onToggleEnabled()),
+      actionButton('Удалить', 'Удалить действие', () => options.onDelete(), 'danger'),
     );
-    this.root.append(main, actions);
-    if (runtime?.reasonRu) this.root.append(text('div', 'combat-lab-step-reason', runtime.reasonRu));
 
+    this.root.append(heading, relation, condition, runtimeRow, actions);
     this.root.addEventListener('click', this.handleClick);
     this.root.addEventListener('keydown', this.handleKeyDown);
   }
@@ -101,25 +122,50 @@ export class CombatLabStepCard {
   };
 }
 
-function actionButton(label: string, onClick: (button: HTMLButtonElement) => void, className = ''): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.textContent = label;
-  if (className) button.classList.add(className);
-  button.addEventListener('click', (event) => {
+function resolveActorTitle(
+  experiment: CombatLabExperimentV1,
+  trackId: string,
+  step: CombatLabScenarioStepV1,
+): string {
+  const track = experiment.tracks.find((candidate) => candidate.trackId === trackId);
+  const actorRoleId = track?.actorRoleId ?? actorRoleForStep(step);
+  return experiment.roles.find((role) => role.roleId === actorRoleId)?.titleRu ?? 'Исполнитель';
+}
+
+function actorRoleForStep(step: CombatLabScenarioStepV1): string | null {
+  const action = step.action;
+  if (action.kind === 'wait') return null;
+  if (action.kind === 'transfer') return action.sourceRoleId;
+  return action.actorRoleId;
+}
+
+function actionButton(
+  label: string,
+  ariaLabel: string,
+  onClick: (button: HTMLButtonElement) => void,
+  className = '',
+): HTMLButtonElement {
+  const control = document.createElement('button');
+  control.type = 'button';
+  control.textContent = label;
+  control.setAttribute('aria-label', ariaLabel);
+  control.title = ariaLabel;
+  if (className) control.classList.add(className);
+  control.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
-    onClick(button);
+    onClick(control);
   });
-  return button;
+  return control;
 }
 
 function iconButton(label: string, ariaLabel: string): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.textContent = label;
-  button.setAttribute('aria-label', ariaLabel);
-  return button;
+  const control = document.createElement('button');
+  control.type = 'button';
+  control.textContent = label;
+  control.setAttribute('aria-label', ariaLabel);
+  control.title = ariaLabel;
+  return control;
 }
 
 function text<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, value: string): HTMLElementTagNameMap[K] {
