@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 
-const [bindingSource, unitSource, snapshotSource] = await Promise.all([
+const [bindingSource, sceneExportSource, catalogSource] = await Promise.all([
   readFile('src/core/units/UnitAiBrainBinding.ts', 'utf8'),
-  readFile('src/core/units/UnitModel.ts', 'utf8'),
-  readFile('src/core/simulation/SceneSnapshot.ts', 'utf8'),
+  readFile('src/ui/SceneExport.ts', 'utf8'),
+  readFile('src/core/ai/AiGraphCatalog.ts', 'utf8'),
 ]);
 const js = ts.transpileModule(bindingSource, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
@@ -36,10 +36,12 @@ const graphBinding = binding.createUnitGraphBrainBinding('graph-alpha');
 assert.deepEqual(binding.serializeUnitAiBrainBinding(graphBinding), graphBinding);
 assert.equal(Object.isFrozen(graphBinding), true);
 
-assert.match(unitSource, /aiBrain\??:\s*UnitAiBrainBindingV1/);
-assert.match(unitSource, /aiBrain:\s*UnitAiBrainBindingV1/);
-assert.match(unitSource, /normalizeUnitAiBrainBinding/);
-assert.match(snapshotSource, /aiBrain:\s*serializeUnitAiBrainBinding\(unit\.aiBrain\)/);
-assert.match(snapshotSource, /aiGraphCatalog/);
+assert.match(bindingSource, /interface UnitData[\s\S]*aiBrain\?: UnitAiBrainBindingInputV1/);
+assert.match(bindingSource, /interface UnitModel[\s\S]*aiBrain\?: UnitAiBrainBindingV1/);
+assert.match(sceneExportSource, /aiBrain:\s*serializeUnitAiBrainBinding\(unit\.aiBrain\)/);
+assert.match(sceneExportSource, /writeAiGraphCatalogToScene/);
+assert.match(sceneExportSource, /installSceneBrainData/);
+assert.match(catalogSource, /export interface AiGraphCatalogV1/);
+assert.match(catalogSource, /resolveAiGraphCatalogEntry/);
 
 console.log('Unit AI brain binding roundtrip smoke passed.');
