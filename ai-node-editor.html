@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="/src/ai-node-editor/tactical-position-profile-editor.css" />
     <link rel="stylesheet" href="/src/ai-node-editor/directional-terrain-responsive.css" />
     <link rel="stylesheet" href="/src/ai-node-editor/attention-node-controls.css" />
+    <link rel="stylesheet" href="/src/game-editors/game-editor-workspace.css" />
     <link rel="stylesheet" href="/src/ai-dictionary.css" />
     <link rel="stylesheet" href="/src/ai-dictionary-compat.css" />
     <link rel="stylesheet" href="/src/ai-dictionary-workbench.css" />
@@ -30,11 +31,7 @@
         localStorage.setItem(graphStorageKey, JSON.stringify(graphData));
       }
     </script>
-    <script type="module" src="/src/ai-node-editor/NavigationProfileEditor.ts"></script>
-    <script type="module" src="/src/ai-node-editor/TacticalPositionProfileEditor.ts"></script>
-    <script type="module" src="/src/ai-node-editor/MovementProfileEditorIntegration.ts"></script>
-    <script type="module" src="/src/ai-node-editor/CombatCatalogEditor.ts"></script>
-    <script type="module" src="/src/ai-node-editor/DirectionalTerrainProfileEditor.ts"></script>
+    <script type="module" src="/src/ai-node-editor/AiEditorGameEditorPlatform.ts"></script>
     <script type="module" src="/src/ai-node-editor/human-node-ui.ts"></script>
     <script type="module" src="/src/ai-node-editor/HumanSelectValueGuard.ts"></script>
     <script type="module" src="/src/ai-node-editor/stateful-node-ui.ts"></script>
