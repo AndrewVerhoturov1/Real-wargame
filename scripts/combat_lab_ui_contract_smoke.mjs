@@ -1,5 +1,14 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+
+const diffCheck = spawnSync('git', ['diff', '--check'], { encoding: 'utf8' });
+assert.equal(
+  diffCheck.status,
+  0,
+  `git diff --check failed.\n${diffCheck.stdout ?? ''}${diffCheck.stderr ?? ''}`,
+);
+console.log('git diff --check passed.');
 
 await import('./combat_lab_selection_controller_behavior_smoke.mjs');
 await import('./combat_lab_map_tool_transaction_behavior_smoke.mjs');
