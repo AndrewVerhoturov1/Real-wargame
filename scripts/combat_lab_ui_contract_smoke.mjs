@@ -151,8 +151,10 @@ assert.match(compactRouteCss, /\.route-cost-inspector-panel\s+\.unit-route-detai
 assert.match(labMain, /GameApplication\.create\(/);
 assert.match(labMain, /installAppShellMenu\(\{ mode: 'combat-lab' \}\)/);
 assert.match(labMain, /installCombatLabQuickParameters\(extensionRoot, session\)/);
+assert.match(quickParametersInstaller, /getOnlyCombatLabWorkspaceRoot\(\)/);
+assert.match(quickParametersInstaller, /getCombatLabWorkspaceHosts\(workspaceRoot\)/);
 assert.match(quickParametersInstaller, /getCombatLabWorkspaceServices\(workspaceRoot\)/);
-assert.match(quickParametersInstaller, /data-combat-lab-parameters-host="selected-unit"/);
+assert.doesNotMatch(quickParametersInstaller, /querySelector<HTMLElement>\('\[data-combat-lab-parameters-host=/);
 assert.match(quickParametersInstaller, /requestCombatLabResetAndStart\(extensionRoot, seed\)/);
 assert.doesNotMatch(quickParametersInstaller, /combat-lab:set-paused/);
 assert.doesNotMatch(quickParametersInstaller, /CombatLabExperimentDraft|CombatLabScenarioExecutor|CombatLabBatchClient/);
