@@ -117,7 +117,7 @@ const TRAIT_FIELDS: ReadonlyArray<readonly [keyof SoldierTraits, string]> = [
   ['caution', 'Осторожность'],
   ['decisiveness', 'Решительность'],
   ['discipline', 'Дисциплина'],
-  ['initiative', 'Инициатива'],
+  ['initiative', 'Инициати'],
   ['tactics', 'Тактика'],
   ['weaponSkill', 'Владение оружием'],
 ];
@@ -288,24 +288,16 @@ function createBrainSection(
   graph.disabled = mode.value !== 'graph';
   mode.addEventListener('change', () => {
     if (mode.value === 'manual') {
+      graph.value = '';
       graph.disabled = true;
       apply({ aiBrain: { schemaVersion: 1, kind: 'manual' } });
       return;
     }
-    const selected = graphs.find((entry) => entry.graphId === graph.value);
-    if (!selected) {
-      mode.value = snapshot.aiBrain.kind;
-      graph.disabled = snapshot.aiBrain.kind !== 'graph';
-      adapter.onError?.('Выберите точный граф Graph v2. Другой граф автоматически не подставляется.');
-      return;
-    }
     graph.disabled = false;
-    apply({
-      aiBrain: { schemaVersion: 1, kind: 'graph', graphId: selected.graphId },
-      aiGraphDefinition: selected.graph,
-    });
+    adapter.onError?.('Выберите точный граф Graph v2. Другой граф автоматически не подставляется.');
   });
   graph.addEventListener('change', () => {
+    if (mode.value !== 'graph') return;
     const selected = graphs.find((entry) => entry.graphId === graph.value);
     if (!selected) return;
     apply({
