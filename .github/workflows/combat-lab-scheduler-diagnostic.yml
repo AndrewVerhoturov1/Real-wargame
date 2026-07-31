@@ -1,0 +1,59 @@
+name: Combat Lab Scheduler Diagnostic
+
+on:
+  pull_request:
+    branches:
+      - ci/combat-lab-final-visual-base-20260731t122000z-1b09ee7
+
+permissions:
+  contents: read
+
+jobs:
+  scheduler-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: acceptance-node22
+            ref: a841e29a751b51f1cb583075ce2a41c94c2d561c
+            node: 22
+          - label: acceptance-node24
+            ref: a841e29a751b51f1cb583075ce2a41c94c2d561c
+            node: 24
+          - label: accepted-workers-node22
+            ref: aab878113abb876f066745debd6d04fe3246fd94
+            node: 22
+          - label: accepted-workers-node24
+            ref: aab878113abb876f066745debd6d04fe3246fd94
+            node: 24
+          - label: final-node22
+            ref: 1b09ee727b413174e86627e76cc08af23c12c1b3
+            node: 22
+          - label: final-node24
+            ref: 1b09ee727b413174e86627e76cc08af23c12c1b3
+            node: 24
+    name: ${{ matrix.label }}
+    steps:
+      - name: Checkout exact ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.ref }}
+          fetch-depth: 1
+
+      - name: Setup Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify exact ref
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "${{ matrix.ref }}"
+
+      - name: Run scheduler smoke
+        run: node scripts/ai_per_unit_scheduler_smoke.mjs
