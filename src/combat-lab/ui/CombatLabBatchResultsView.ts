@@ -2,6 +2,7 @@ import type {
   CombatLabBatchResultV1,
   CombatLabRepresentativeRunV1,
 } from '../../core/testing/combat-lab/experiment/CombatLabBatchContracts';
+import { CombatLabBatchDiagnosticsView } from './CombatLabBatchDiagnosticsView';
 import { combatLabMetricLabelRu } from './CombatLabMetricLabels';
 import { CombatLabMetricDistributionView } from './CombatLabMetricDistributionView';
 
@@ -13,6 +14,8 @@ export interface CombatLabBatchResultsViewOptions {
 
 export class CombatLabBatchResultsView {
   private readonly root = document.createElement('div');
+  private readonly diagnosticsHost = document.createElement('div');
+  private readonly diagnostics: CombatLabBatchDiagnosticsView;
   private readonly metricLabelRu: (metricId: string) => string;
   private readonly distributions: CombatLabMetricDistributionView[] = [];
   private destroyed = false;
@@ -20,12 +23,15 @@ export class CombatLabBatchResultsView {
   constructor(private readonly options: CombatLabBatchResultsViewOptions) {
     this.metricLabelRu = options.metricLabelRu ?? combatLabMetricLabelRu;
     this.root.className = 'combat-lab-batch-results';
+    this.diagnostics = new CombatLabBatchDiagnosticsView(this.diagnosticsHost);
     options.host.replaceChildren(this.root);
   }
 
   render(result: CombatLabBatchResultV1): void {
     if (this.destroyed) return;
     this.clearDistributions();
+    this.diagnostics.render(result);
+
     const heading = element('h3', 'combat-lab-batch-results__title', 'Результаты серии');
     const summary = element('div', 'combat-lab-batch-results__summary');
     summary.append(
@@ -61,7 +67,8 @@ export class CombatLabBatchResultsView {
       const card = element('article', 'combat-lab-batch-representative');
       card.append(
         element('strong', '', representativeTitle(result, representative)),
-        element('span', '', `Начальное число случайности ${representative.seed} · ${formatSeconds(representative.simulatedSeconds)}`),
+        element('span', '', `Seed: ${representative.seed} · ${formatSeconds(representative.simulatedSeconds)}`),
+        element('span', '', `Причина остановки: ${representative.stopReason}`),
       );
       const replay = document.createElement('button');
       replay.type = 'button';
@@ -73,12 +80,13 @@ export class CombatLabBatchResultsView {
     if (result.representatives.length === 0) cards.append(element('p', 'combat-lab-batch-results__empty', 'Характерные прогоны не выбраны.'));
     representatives.append(cards);
 
-    this.root.replaceChildren(heading, summary, failureSection, distributionHost, representatives);
+    this.root.replaceChildren(heading, summary, this.diagnosticsHost, failureSection, distributionHost, representatives);
   }
 
   clear(): void {
     if (this.destroyed) return;
     this.clearDistributions();
+    this.diagnostics.clear();
     this.root.replaceChildren(element('p', 'combat-lab-batch-results__empty', 'Результаты серии появятся после запуска.'));
   }
 
@@ -86,6 +94,7 @@ export class CombatLabBatchResultsView {
     if (this.destroyed) return;
     this.destroyed = true;
     this.clearDistributions();
+    this.diagnostics.destroy();
     this.root.remove();
   }
 
@@ -107,7 +116,7 @@ function summaryCard(label: string, value: string): HTMLElement {
 }
 
 function representativeTitle(result: CombatLabBatchResultV1, representative: CombatLabRepresentativeRunV1): string {
-  if (!representative.success) return `Первая неудача: ${representative.stopReason}`;
+  if (!representative.success) return 'Характерный неудачный прогон';
   const successful = result.representatives.filter((candidate) => candidate.success);
   const fastest = successful.reduce<CombatLabRepresentativeRunV1 | null>((best, candidate) => (
     !best || candidate.simulatedSeconds < best.simulatedSeconds || (candidate.simulatedSeconds === best.simulatedSeconds && candidate.runIndex < best.runIndex)
