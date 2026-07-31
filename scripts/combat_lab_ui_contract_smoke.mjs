@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
+await import('./combat_lab_foundation_composition_behavior_smoke.mjs');
+
 const [
   shell,
   session,
