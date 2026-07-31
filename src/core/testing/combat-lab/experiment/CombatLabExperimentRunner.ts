@@ -114,7 +114,8 @@ function installExperimentBrainRuntime(state: SimulationState, experiment: Comba
     if (!isRecord(value) || typeof value.id !== 'string') continue;
     sourceById.set(value.id, value as unknown as UnitData);
   }
-  for (const unit of state.units) {
+  const units = Array.isArray(state.units) ? state.units : [];
+  for (const unit of units) {
     const source = sourceById.get(unit.id);
     if (source) installUnitAiBrainBindingFromData(unit, source);
   }
