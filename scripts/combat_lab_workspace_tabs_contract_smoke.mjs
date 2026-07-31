@@ -23,7 +23,11 @@ for (const [id, label, title] of expected) {
 assert.equal((hosts.match(/tabId:/g) ?? []).length, 6, 'Exactly six workspace tab definitions are required.');
 assert.doesNotMatch(hosts, /tabId:\s*'stand'|labelRu:\s*'Стенд'/);
 assert.match(tabs, /dock\.append\(header, toolbarHost, tabList, panelHost\)/, 'Run toolbar must sit outside switchable panels.');
-assert.match(tabs, /panel\.hidden\s*=\s*tabId !== normalized/);
+assert.match(
+  tabs,
+  /for\s*\(const\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s+of\s+this\.panels\)\s*\2\.hidden\s*=\s*\1\s*!==\s*normalized/,
+  'Tab activation must keep only the normalized panel visible regardless of local variable names.',
+);
 const activateBody = tabs.match(/activate\(tabId:[\s\S]*?\n  getActiveTab\(\)/)?.[0] ?? '';
 assert.doesNotMatch(activateBody, /replaceChildren\(/, 'Tab switching must not recreate workspace hosts.');
 assert.match(extension, /CombatLabWorkspaceTabs\.create/);
