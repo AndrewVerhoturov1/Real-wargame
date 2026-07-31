@@ -1,6 +1,6 @@
 import type { SimulationState } from '../../core/simulation/SimulationState';
 import type { CombatLabWorkspaceServices } from '../CombatLabWorkspaceServices';
-import type { CombatLabMapToolPointerV1 } from '../map-tools/CombatLabMapToolTypes';
+import type { CombatLabMapToolModeV1, CombatLabMapToolPointerV1 } from '../map-tools/CombatLabMapToolTypes';
 import {
   createCombatLabParticipantFacingContributor,
   createCombatLabParticipantMapPreviewEventPort,
@@ -32,13 +32,14 @@ export class CombatLabParticipantMapInteractionController {
   private activePlacement: CombatLabParticipantPlacementTransactionV1 | null = null;
   private activeFacing: CombatLabParticipantFacingTransactionV1 | null = null;
   private facingDragActive = false;
-  private previousMode = this.options.services.mapTools.getMode();
+  private previousMode: CombatLabMapToolModeV1;
   private destroyed = false;
 
   private constructor(private readonly options: CombatLabParticipantMapInteractionControllerOptionsV1) {
     const canvas = options.canvas ?? document.querySelector<HTMLCanvasElement>('#app canvas');
     if (!canvas) throw new Error('Не найдено поле карты для размещения бойца.');
     this.canvas = canvas;
+    this.previousMode = options.services.mapTools.getMode();
     const preview = createCombatLabParticipantMapPreviewEventPort(window);
     this.removePlacementContributor = options.services.mapTools.registerContributor(
       createCombatLabParticipantPlacementContributor({
@@ -63,10 +64,11 @@ export class CombatLabParticipantMapInteractionController {
       }),
     );
     this.removeModeListener = options.services.mapTools.subscribe(this.handleModeChanged);
-    this.canvas.addEventListener('pointermove', this.handlePointerMove, true);
-    this.canvas.addEventListener('pointerdown', this.handlePointerDown, true);
-    this.canvas.addEventListener('pointerup', this.handlePointerUp, true);
-    this.canvas.addEventListener('pointercancel', this.handlePointerCancel, true);
+    // Bubble phase is intentional: the production board updates mouseGridPosition first.
+    this.canvas.addEventListener('pointermove', this.handlePointerMove);
+    this.canvas.addEventListener('pointerdown', this.handlePointerDown);
+    this.canvas.addEventListener('pointerup', this.handlePointerUp);
+    this.canvas.addEventListener('pointercancel', this.handlePointerCancel);
   }
 
   static create(options: CombatLabParticipantMapInteractionControllerOptionsV1): CombatLabParticipantMapInteractionController {
@@ -111,10 +113,10 @@ export class CombatLabParticipantMapInteractionController {
     if (this.destroyed) return;
     this.destroyed = true;
     this.options.services.mapTools.cancel();
-    this.canvas.removeEventListener('pointermove', this.handlePointerMove, true);
-    this.canvas.removeEventListener('pointerdown', this.handlePointerDown, true);
-    this.canvas.removeEventListener('pointerup', this.handlePointerUp, true);
-    this.canvas.removeEventListener('pointercancel', this.handlePointerCancel, true);
+    this.canvas.removeEventListener('pointermove', this.handlePointerMove);
+    this.canvas.removeEventListener('pointerdown', this.handlePointerDown);
+    this.canvas.removeEventListener('pointerup', this.handlePointerUp);
+    this.canvas.removeEventListener('pointercancel', this.handlePointerCancel);
     delete this.canvas.dataset.combatLabParticipantTool;
     this.removeModeListener();
     this.removeFacingContributor();
@@ -157,7 +159,7 @@ export class CombatLabParticipantMapInteractionController {
     this.facingDragActive = false;
   };
 
-  private readonly handleModeChanged = (mode: ReturnType<CombatLabWorkspaceServices['mapTools']['getMode']>): void => {
+  private readonly handleModeChanged = (mode: CombatLabMapToolModeV1): void => {
     const leftTemporaryMode = (this.previousMode === 'place_participant' || this.previousMode === 'rotate_participant')
       && mode !== 'place_participant'
       && mode !== 'rotate_participant';
