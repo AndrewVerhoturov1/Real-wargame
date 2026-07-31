@@ -124,6 +124,8 @@ export class CombatLabSceneEditorAdapter implements ProductionUnitEditorAdapterV
       viewRangeCells: patch.viewRangeCells,
       soldierTraits: patch.soldierTraits,
       soldierCondition: patch.soldierCondition,
+      stress: patch.stress,
+      suppression: patch.suppression,
       loadoutRef: patch.loadoutRef,
       loadedRounds: patch.loadedRounds,
       reserveRoundsByAmmoDefinitionId: patch.reserveRoundsByAmmoDefinitionId,
@@ -142,6 +144,6 @@ export class CombatLabSceneEditorAdapter implements ProductionUnitEditorAdapterV
   }
 }
 
-function compactUndefined<T extends Record<string, unknown>>(value: T): T {
+function compactUndefined<T extends object>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
 }
