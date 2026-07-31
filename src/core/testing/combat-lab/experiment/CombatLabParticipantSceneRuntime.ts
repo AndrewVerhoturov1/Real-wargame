@@ -181,6 +181,8 @@ export function updateCombatLabParticipantInitialState(
   }
   if (patch.soldierTraits !== undefined) Object.assign(unit.soldier.traits, patch.soldierTraits);
   if (patch.soldierCondition !== undefined) Object.assign(unit.soldier.condition, patch.soldierCondition);
+  if (patch.stress !== undefined) applyTacticalLevel(unit, 'stress', patch.stress);
+  if (patch.suppression !== undefined) applyTacticalLevel(unit, 'suppression', patch.suppression);
   if (patch.loadoutRef === null) clearPublishedLoadout(unit);
   else if (patch.loadoutRef !== undefined) applyPublishedLoadout(unit, patch.loadoutRef, options.catalogRegistry);
   applyAmmoAndAid(unit, patch);
@@ -240,8 +242,16 @@ export function createCombatLabParticipant(
       ? { traits: input.soldierTraits, condition: input.soldierCondition }
       : undefined,
     heldItem: heldItemForType(input.unitType),
-    initialState: { posture },
-    runtime: { posture },
+    initialState: {
+      posture,
+      stress: input.stress,
+      suppression: input.suppression,
+    },
+    runtime: {
+      posture,
+      stress: input.stress,
+      suppression: input.suppression,
+    },
   };
   const role = freezeRole({ roleId, unitId, titleRu, parameters: normalizeParameters(input.parameters) });
   const normalized = normalizeCombatLabParticipantSceneUnitRecord(
@@ -251,6 +261,8 @@ export function createCombatLabParticipant(
   );
   const unit = normalized.unit;
   installUnitAiBrainBinding(unit, brain);
+  if (input.stress !== undefined) applyTacticalLevel(unit, 'stress', input.stress);
+  if (input.suppression !== undefined) applyTacticalLevel(unit, 'suppression', input.suppression);
   if (input.loadoutRef !== undefined && input.loadoutRef !== null) {
     applyPublishedLoadout(unit, input.loadoutRef, options.catalogRegistry);
   }
@@ -350,6 +362,18 @@ function installGraphDefinition(experiment: CombatLabExperimentV1, graph: Parame
     catalog,
   ) as unknown as CombatLabExperimentV1['sceneSnapshot'];
   return { ...experiment, sceneSnapshot };
+}
+
+function applyTacticalLevel(
+  unit: ReturnType<typeof normalizeCombatLabParticipantSceneUnit>['unit'],
+  key: 'stress' | 'suppression',
+  value: number,
+): void {
+  if (!Number.isFinite(value) || value < 0 || value > 100) {
+    throw new CombatLabParticipantSceneError('combat_lab_participant_tactical_level_invalid', `${key === 'stress' ? 'Стресс' : 'Подавление'} должно находиться в диапазоне 0..100.`);
+  }
+  unit.initialState[key] = value;
+  unit.behaviorRuntime[key] = value;
 }
 
 function assertPositiveFinite(value: number, message: string): void {
