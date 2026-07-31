@@ -13,7 +13,7 @@ const DIALOG_REQUIRED_SECTIONS = [
   'Здоровье и помощь',
   'Тактика',
   'Мозг',
-  'Технические данные',
+  'Технические сведения',
 ] as const;
 const DIALOG_REQUIRED_CHOICES = ['Без оружия', 'Ручное управление', 'Graph v2'] as const;
 
