@@ -88,7 +88,17 @@ export class CombatLabMapToolCoordinator {
     if (this.transaction) this.cancel();
     const transaction = contributor.createTransaction(request);
     if (transaction.mode !== mode) {
-      throw new Error(`Инструмент «${mode}» создал транзакцию другого режима «${transaction.mode}».`);
+      const mismatchError = new Error(`Инструмент «${mode}» создал транзакцию другого режима «${transaction.mode}».`);
+      let cleanupError: unknown;
+      try {
+        transaction.cancel();
+      } catch (error) {
+        cleanupError = error;
+      }
+      if (cleanupError !== undefined) {
+        throw new AggregateError([mismatchError, cleanupError], mismatchError.message);
+      }
+      throw mismatchError;
     }
     this.transaction = transaction;
     this.publishMode();
@@ -165,10 +175,11 @@ export class CombatLabMapToolCoordinator {
 
   private readonly handleKeyDown: EventListener = (event): void => {
     const keyboardEvent = event as KeyboardEvent;
-    if (keyboardEvent.key !== 'Escape' || !this.transaction) return;
+    if (!this.transaction || (keyboardEvent.key !== 'Escape' && keyboardEvent.key !== 'Enter')) return;
     keyboardEvent.preventDefault();
     keyboardEvent.stopImmediatePropagation();
-    this.cancel();
+    if (keyboardEvent.key === 'Enter') this.confirm();
+    else this.cancel();
   };
 
   private publishMode(): void {
