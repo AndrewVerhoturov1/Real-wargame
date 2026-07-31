@@ -1,4 +1,5 @@
 import type { CombatLabVisualSession } from '../runtime/CombatLabVisualSession';
+import { requestCombatLabResetAndStart } from '../runtime/CombatLabResetAndStart';
 import { getCombatLabWorkspaceServices } from '../CombatLabWorkspaceServices';
 import { CombatLabQuickParametersPanel } from '../ui/CombatLabQuickParametersPanel';
 
@@ -27,8 +28,8 @@ export function installCombatLabQuickParameters(
     isLocked,
     getRuntimeSnapshot: () => null,
     getVisualSnapshot: () => session.getSnapshot(),
-    onApplyAndRerun: (_seed) => {
-      extensionRoot.dispatchEvent(new CustomEvent('combat-lab:set-paused', { detail: false }));
+    onResetAndStart: (seed) => {
+      requestCombatLabResetAndStart(extensionRoot, seed);
     },
     onRequestMapSelection: () => {
       const canvas = document.querySelector<HTMLCanvasElement>('canvas');
