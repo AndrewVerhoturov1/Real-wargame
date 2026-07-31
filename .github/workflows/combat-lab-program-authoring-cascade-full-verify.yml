@@ -1,0 +1,60 @@
+name: Combat Lab Program Authoring Cascade Full Verify
+
+on:
+  pull_request:
+    branches:
+      - verification/20260731-combat-lab-program-authoring-base
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Foundation selection behavior
+        run: node scripts/combat_lab_selection_controller_behavior_smoke.mjs
+      - name: Foundation map transaction behavior
+        run: node scripts/combat_lab_map_tool_transaction_behavior_smoke.mjs
+      - name: Foundation composition behavior
+        run: node scripts/combat_lab_foundation_composition_behavior_smoke.mjs
+      - name: Foundation workspace services behavior
+        run: node scripts/combat_lab_workspace_services_behavior_smoke.mjs
+      - name: Program layout behavior
+        run: node scripts/combat_lab_program_layout_behavior_smoke.mjs
+      - name: Track dialog behavior
+        run: node scripts/combat_lab_track_dialog_behavior_smoke.mjs
+      - name: Map mode behavior
+        run: node scripts/combat_lab_map_mode_behavior_smoke.mjs
+      - name: Marker authoring behavior
+        run: node scripts/combat_lab_marker_authoring_behavior_smoke.mjs
+      - name: Step dialog behavior
+        run: node scripts/combat_lab_step_dialog_behavior_smoke.mjs
+      - name: Scenario editor smoke
+        run: npm run combat-lab-scenario-editor:smoke
+      - name: Scenario system verify
+        run: npm run combat-lab-scenario-system:verify
+      - name: UI contract
+        run: npm run combat-lab-ui-contract:smoke
+      - name: Typecheck
+        run: npm run typecheck
+      - name: TypeScript no emit
+        run: npx tsc --noEmit
+      - name: Build application
+        run: npm run build:app
+      - name: Build all
+        run: npm run build
+      - name: Diff whitespace check
+        run: git diff --check
