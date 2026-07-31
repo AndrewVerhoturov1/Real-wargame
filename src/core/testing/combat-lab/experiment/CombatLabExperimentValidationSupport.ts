@@ -6,7 +6,10 @@ import type {
 import type { CombatLabExperimentIssueV1 } from './CombatLabExperimentValidation';
 
 export interface SceneUnitSummary {
+  readonly [key: string]: unknown;
   readonly id: string;
+  readonly aiControl?: string;
+  readonly aiBrain?: unknown;
   readonly primaryWeapon: Record<string, unknown> | null;
   readonly availableFireModes: readonly string[];
   readonly totalRounds: number;
@@ -101,6 +104,8 @@ export function readSceneUnits(experiment: CombatLabExperimentV1): readonly Scen
     const suppression = asRecord(combat?.suppression);
     return [{
       id,
+      aiControl: text(unit.aiControl) || undefined,
+      aiBrain: unit.aiBrain,
       primaryWeapon,
       availableFireModes: modes,
       totalRounds: Math.max(0, finite(primaryWeapon?.roundsInWeapon)) + reserveRounds,

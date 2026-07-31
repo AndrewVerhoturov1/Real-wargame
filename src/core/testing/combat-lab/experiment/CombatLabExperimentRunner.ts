@@ -1,6 +1,9 @@
+import { installAiGraphCatalog, readAiGraphCatalogFromScene } from '../../../ai/AiGraphCatalog';
 import { tickSimulation } from '../../../simulation/SimulationTick';
 import { createInitialState, type SimulationState } from '../../../simulation/SimulationState';
 import { restoreSimulationStateFromSceneSnapshot } from '../../../simulation/SceneSnapshot';
+import { installUnitAiBrainBindingFromData } from '../../../units/UnitAiBrainBinding';
+import type { UnitData } from '../../../units/UnitModel';
 import { COMBAT_LAB_FIXED_STEP_SECONDS, type CombatLabCommandResultV1 } from '../CombatLabContracts';
 import { digestCombatLabEvents, digestCombatLabState, digestStableValue } from '../CombatLabDigest';
 import {
@@ -32,6 +35,7 @@ export function runCombatLabExperiment(
   const experiment = prepareCombatLabExperimentForRun(request.experiment, request.seed);
   const state = createEmptySimulationState();
   restoreSimulationStateFromSceneSnapshot(state, experiment.sceneSnapshot);
+  installExperimentBrainRuntime(state, experiment);
   const startedSeconds = state.simulationTimeSeconds;
   const executor = CombatLabScenarioExecutor.create(experiment, state);
   const metricCollector = createCombatLabMetricCollector(state);
@@ -103,6 +107,19 @@ export function runCombatLabExperiment(
   });
 }
 
+function installExperimentBrainRuntime(state: SimulationState, experiment: CombatLabExperimentV1): void {
+  installAiGraphCatalog(state, readAiGraphCatalogFromScene(experiment.sceneSnapshot));
+  const sourceById = new Map<string, UnitData>();
+  for (const value of experiment.sceneSnapshot.units) {
+    if (!isRecord(value) || typeof value.id !== 'string') continue;
+    sourceById.set(value.id, value as unknown as UnitData);
+  }
+  const units = Array.isArray(state.units) ? state.units : [];
+  for (const unit of units) {
+    const source = sourceById.get(unit.id);
+    if (source) installUnitAiBrainBindingFromData(unit, source);
+  }
+}
 
 function beforeSimulationStepIgnoringBreakpoints(
   executor: CombatLabScenarioExecutor,
@@ -141,4 +158,8 @@ function validateRunRequest(request: CombatLabExperimentRunRequestV1): void {
 
 function isTerminal(status: string): boolean {
   return status === 'completed' || status === 'failed' || status === 'stopped';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

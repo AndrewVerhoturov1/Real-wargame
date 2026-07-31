@@ -1,5 +1,8 @@
+import type { AiGraph } from '../../../ai/AiGraph';
+import type { BehaviorProfileId, SoldierCondition, SoldierTraits } from '../../../behavior/BehaviorModel';
 import type { DefinitionRef } from '../../../infantry-combat/catalogs/CombatCatalogTypes';
 import type { CombatCatalogRegistry } from '../../../infantry-combat/catalogs/CombatCatalogRegistry';
+import type { UnitAiBrainBindingV1 } from '../../../units/UnitAiBrainBinding';
 import type { UnitModel, UnitSideInput, UnitType } from '../../../units/UnitModel';
 import type { CombatLabParticipantParametersV1 } from './CombatLabExperimentContracts';
 
@@ -22,12 +25,23 @@ export interface CombatLabParticipantScenePatchV1 {
   readonly y?: number;
   readonly facingDegrees?: number;
   readonly posture?: 'standing' | 'crouched' | 'prone';
-  /** Omitted means preserve the existing loadout. There is no implicit unequip. */
-  readonly loadoutRef?: DefinitionRef;
+  readonly behaviorProfile?: BehaviorProfileId;
+  readonly speedCellsPerSecond?: number;
+  readonly viewAngleDegrees?: number;
+  readonly viewRangeCells?: number;
+  readonly soldierTraits?: Partial<SoldierTraits>;
+  readonly soldierCondition?: Partial<SoldierCondition>;
+  readonly stress?: number;
+  readonly suppression?: number;
+  /** Omitted means preserve; null means explicitly clear the published loadout and all weapon/ammo runtime. */
+  readonly loadoutRef?: DefinitionRef | null;
   readonly loadedRounds?: number;
   readonly reserveRoundsByAmmoDefinitionId?: Readonly<Record<string, number>>;
   readonly firstAidCharges?: number;
   readonly initialHealth?: CombatLabInitialHealthV1;
+  readonly aiBrain?: UnitAiBrainBindingV1;
+  /** Graph data is stored once in the scene catalog, never inside the participant record. */
+  readonly aiGraphDefinition?: AiGraph;
 }
 
 export interface CombatLabParticipantMutationOptionsV1 {
@@ -73,12 +87,19 @@ export interface CombatLabParticipantInitialDraftV1 {
   readonly facingDegrees: number;
   readonly runtimeMetersPerCell: number;
   readonly posture: 'standing' | 'crouched' | 'prone';
+  readonly behaviorProfile: BehaviorProfileId;
+  readonly speedCellsPerSecond: number;
+  readonly viewAngleDegrees: number;
+  readonly viewRangeCells: number;
+  readonly soldierTraits: Readonly<SoldierTraits>;
+  readonly soldierCondition: Readonly<SoldierCondition>;
   readonly loadoutRef: DefinitionRef | null;
   readonly loadedRounds: number;
   readonly reserves: readonly { readonly ammoDefinitionId: string; readonly rounds: number; readonly maximumRounds: number }[];
   readonly firstAidCharges: number;
   readonly bloodLoss: number;
   readonly wounds: readonly CombatLabInitialWoundV1[];
+  readonly aiBrain: UnitAiBrainBindingV1;
   readonly unit: UnitModel;
 }
 

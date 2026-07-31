@@ -22,6 +22,9 @@ export interface CombatLabMapToolPointerV1 {
   readonly yMetres: number;
 }
 
+/** Compatibility alias used by participant editor contributors. */
+export type CombatLabMapPointerV1 = CombatLabMapToolPointerV1;
+
 export interface CombatLabMapToolTransactionV1 {
   readonly mode: CombatLabMapToolModeV1;
   preview(pointer: CombatLabMapToolPointerV1): void;
@@ -31,6 +34,7 @@ export interface CombatLabMapToolTransactionV1 {
 
 export interface CombatLabMapToolContributorV1<TRequest = unknown> {
   readonly mode: CombatLabTemporaryMapToolModeV1;
+  readonly statusRu?: string;
   createTransaction(request: TRequest): CombatLabMapToolTransactionV1;
 }
 

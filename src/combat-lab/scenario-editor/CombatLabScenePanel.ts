@@ -28,6 +28,7 @@ export interface CombatLabScenePanelOptions {
   readonly getSelectedUnitId: () => string | null;
   readonly onSelectRole?: (roleId: string) => void;
   readonly host?: HTMLElement;
+  readonly parametersHost?: HTMLElement;
   readonly fileCodec?: CombatLabExperimentFileCodecV1;
   readonly storage?: Storage;
 }
@@ -57,6 +58,7 @@ export class CombatLabScenePanel {
 
     this.roleEditor = new CombatLabRoleEditor({
       host: this.roleHost,
+      parametersHost: options.parametersHost,
       state: options.state,
       draft: options.draft,
       getSelectedUnitId: options.getSelectedUnitId,

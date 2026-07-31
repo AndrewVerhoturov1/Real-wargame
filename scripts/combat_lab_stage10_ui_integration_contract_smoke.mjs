@@ -29,7 +29,11 @@ assert.equal((hosts.match(/tabId:/g) ?? []).length, 6, 'Stage 10 workspace must 
 assert.doesNotMatch(hosts, /labelRu:\s*'Стенд'/);
 assert.match(tabs, /dock\.append\(header, toolbarHost, tabList, panelHost\)/,
   'The run toolbar must remain outside switchable tab panels.');
-assert.match(tabs, /panel\.hidden\s*=\s*tabId !== normalized/);
+assert.match(
+  tabs,
+  /for\s*\(const\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s+of\s+this\.panels\)\s*\2\.hidden\s*=\s*\1\s*!==\s*normalized/,
+  'Tab activation must keep only the normalized panel visible regardless of local variable names.',
+);
 assert.match(tabs, /readonly hosts: CombatLabWorkspaceHosts/);
 
 assert.match(extension, /onRequestBatch:\s*\(\)\s*=>\s*this\.activateTab\('batch'\)/);

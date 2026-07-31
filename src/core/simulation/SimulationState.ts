@@ -14,6 +14,7 @@ export * from './SimulationStateLegacy';
  */
 export interface SimulationState extends legacy.SimulationState {}
 export const getSelectedUnits = legacy.getSelectedUnits;
+export const getSelectedUnit = legacy.getSelectedUnit;
 export const beginEditorPointerAction = legacy.beginEditorPointerAction;
 
 /**

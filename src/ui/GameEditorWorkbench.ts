@@ -1,9 +1,11 @@
 import {
+  addGraphToInstalledCatalog,
+  getInstalledAiGraphCatalog,
+  listMergedAiGraphCatalogEntries,
+} from '../core/ai/AiGraphCatalog';
+import {
   createBehaviorSettings,
   createSoldierParameters,
-  type BehaviorProfileId,
-  type SoldierCondition,
-  type SoldierTraits,
   type UnitPosture,
 } from '../core/behavior/BehaviorModel';
 import {
@@ -33,26 +35,27 @@ import {
   getSelectedMapObject,
   getSelectedPressureZone,
   getSelectedUnit,
-  selectUnit,
   type SimulationState,
 } from '../core/simulation/SimulationState';
-import type { UnitHeldItem, UnitModel, UnitSide, UnitType } from '../core/units/UnitModel';
+import {
+  createUnitManualBrainBinding,
+  installUnitAiBrainBinding,
+  readUnitAiBrainBinding,
+} from '../core/units/UnitAiBrainBinding';
+import type { UnitModel } from '../core/units/UnitModel';
+import {
+  createProductionUnitEditorPositionScale,
+  createProductionUnitEditorSection,
+  type ProductionUnitEditorAdapterV1,
+  type ProductionUnitEditorPatchV1,
+  type ProductionUnitEditorSnapshotV1,
+} from './ProductionUnitEditor';
+import './production-unit-editor.css';
 
 const OBJECT_KIND_OPTIONS: Array<[MapObjectKind, string]> = [
   ['cover', 'Укрытие'], ['structure', 'Здание'], ['ditch', 'Канава'], ['logs', 'Брёвна'],
   ['rock', 'Камень'], ['crates', 'Ящики'], ['fence', 'Забор'], ['tree', 'Дерево'],
   ['post', 'Пост'], ['well', 'Колодец'], ['bridge', 'Мост'],
-];
-const UNIT_TYPE_OPTIONS: Array<[UnitType, string]> = [
-  ['infantry_squad', 'Пехотинец'], ['scout_team', 'Разведчик'], ['support_team', 'Поддержка'],
-];
-const UNIT_SIDE_OPTIONS: Array<[UnitSide, string]> = [['blue', 'Свои'], ['red', 'Противник']];
-const HELD_ITEM_OPTIONS: Array<[UnitHeldItem, string]> = [
-  ['long_item', 'Винтовка / автомат'], ['support_item', 'Тяжёлое оружие'], ['short_item', 'Короткое оружие'],
-];
-const PROFILE_OPTIONS: Array<[BehaviorProfileId, string]> = [
-  ['green', 'Новобранец'], ['regular', 'Обычный'], ['veteran', 'Ветеран'],
-  ['cautious', 'Осторожный'], ['reckless', 'Безрассудный'],
 ];
 const POSTURE_OPTIONS: Array<[UnitPosture, string]> = [
   ['standing', 'Стоя'], ['crouched', 'Пригнувшись'], ['prone', 'Лёжа'],
@@ -62,16 +65,6 @@ const THREAT_MODE_OPTIONS: Array<[PressureZoneMode, string]> = [
   ['area', 'Область опасности'], ['directional_fire', 'Направленный огонь'],
 ];
 const BRUSH_SHAPE_OPTIONS: Array<[EditorBrushShape, string]> = [['circle', 'Круглая'], ['square', 'Квадратная']];
-const TRAIT_FIELDS: Array<[keyof SoldierTraits, string]> = [
-  ['resilience', 'Стойкость'], ['caution', 'Осторожность'], ['decisiveness', 'Решительность'],
-  ['discipline', 'Дисциплина'], ['initiative', 'Инициатива'], ['tactics', 'Тактика'],
-  ['weaponSkill', 'Владение оружием'],
-];
-const CONDITION_FIELDS: Array<[keyof SoldierCondition, string]> = [
-  ['fatigue', 'Усталость'], ['morale', 'Мораль'], ['confusion', 'Замешательство'],
-  ['health', 'Здоровье'], ['attention', 'Внимание'], ['view', 'Зрение'],
-  ['intuition', 'Интуиция'], ['speed', 'Физическая скорость'], ['stealth', 'Скрытность'],
-];
 
 type WorkbenchTab = 'object' | 'unit' | 'threat' | 'terrain' | 'scene';
 
@@ -236,52 +229,220 @@ function renderUnitPanel(
   onChanged: () => void,
   rerender: () => void,
 ): void {
-  const draft = drafts.unit;
   const selected = getSelectedUnit(state);
+  const adapter = createGameWorkbenchUnitAdapter(state, drafts, selected, onChanged);
   target.append(
-    panelHeading('Новый боец', 'Профиль заполняет характеристики разумными значениями. После этого любое поле можно изменить вручную.'),
-    textField('Имя', draft.name, (value) => { draft.name = value; }),
-    selectField('Сторона', UNIT_SIDE_OPTIONS, draft.side, (value) => {
-      draft.side = value;
-      syncLegacyEditorFields(state);
-      rerender();
+    panelHeading(
+      selected ? 'Выбранный боец' : 'Новый боец',
+      selected
+        ? 'Поля изменяют выбранного бойца напрямую. Это тот же production-редактор, который используется в Combat Lab.'
+        : 'Настрой шаблон бойца, затем включи постановку на карту.',
+    ),
+    createProductionUnitEditorSection(adapter, {
+      showTitle: false,
+      placementButtons: false,
     }),
-    selectField('Тип', UNIT_TYPE_OPTIONS, draft.type, (value) => { draft.type = value; syncLegacyEditorFields(state); }),
-    selectField('Оружие в руках', HELD_ITEM_OPTIONS, draft.heldItem, (value) => { draft.heldItem = value; }),
-    selectField('Профиль', PROFILE_OPTIONS, draft.profile, (value) => {
-      resetUnitDraftForProfile(draft, value);
-      rerender();
-    }),
-    numberField('Скорость, клеток/с', draft.speedCellsPerSecond, 0.05, 1.5, 0.05, (value) => { draft.speedCellsPerSecond = value; }),
-    numberField('Направление взгляда, °', draft.facingDegrees, -360, 360, 5, (value) => { draft.facingDegrees = value; }),
-    numberField('Угол обзора, °', draft.viewAngleDegrees, 1, 360, 1, (value) => { draft.viewAngleDegrees = value; }),
-    numberField('Дальность обзора, клеток', draft.viewRangeCells, 1, 60, 0.5, (value) => { draft.viewRangeCells = value; }),
-    selectField('Поза', POSTURE_OPTIONS, draft.posture, (value) => { draft.posture = value; }),
-    groupHeading('Начальное состояние'),
-    numberField('Стресс', draft.stress, 0, 100, 1, (value) => { draft.stress = value; }),
-    numberField('Подавление', draft.suppression, 0, 100, 1, (value) => { draft.suppression = value; }),
-    numberField('Патроны', draft.ammo, 0, 999, 1, (value) => { draft.ammo = Math.round(value); }),
-    checkboxField('Оружие готово', draft.weaponReady, (value) => { draft.weaponReady = value; }),
-    collapsibleNumbers('Черты бойца', TRAIT_FIELDS, draft.traits),
-    collapsibleNumbers('Физическое и моральное состояние', CONDITION_FIELDS, draft.condition),
     buttonRow([
       toolButton('Ставить бойца', 'spawn_unit', state, rerender, 'primary'),
-      actionButton('Взять параметры выбранного', () => {
+      actionButton('Взять выбранного как шаблон', () => {
         if (!selected) return;
-        copyUnitToDraft(selected, draft);
+        copyUnitToDraft(selected, drafts.unit);
         syncLegacyEditorFields(state);
+        state.editor.lastMessage = `Шаблон бойца скопирован из ${selected.id}.`;
         rerender();
       }),
-      actionButton('Применить к выбранному', () => {
-        if (!selected) return;
-        applyUnitDraft(selected, draft);
-        state.editor.lastMessage = `Параметры применены к бойцу: ${selected.id}`;
-        onChanged();
+      actionButton('Редактировать новый шаблон', () => {
+        state.selectedUnitId = null;
+        state.editor.lastMessage = 'Редактируется шаблон нового бойца.';
         rerender();
       }),
     ]),
-    selectedSummary('Выбранный боец', selected ? `${selected.labels.ru} · ${selected.id}` : 'не выбран'),
+    selectedSummary('Источник данных', selected ? `${selected.labels.ru} · ${selected.id}` : 'шаблон нового бойца'),
   );
+}
+
+function createGameWorkbenchUnitAdapter(
+  state: SimulationState,
+  drafts: GameEditorDrafts,
+  selected: UnitModel | null | undefined,
+  onChanged: () => void,
+): ProductionUnitEditorAdapterV1 {
+  return {
+    mode: 'live',
+    positionScale: createProductionUnitEditorPositionScale(state.map.metersPerCell),
+    read: () => selected ? snapshotFromLiveUnit(selected) : snapshotFromUnitDraft(drafts.unit),
+    update: (patch) => {
+      if (selected) applyProductionPatchToLiveUnit(state, selected, patch);
+      else applyProductionPatchToDraft(drafts.unit, patch);
+      syncLegacyEditorFields(state);
+      onChanged();
+    },
+    listGraphOptions: () => listMergedAiGraphCatalogEntries(
+      getInstalledAiGraphCatalog(state),
+    ).map((entry) => ({
+      graphId: entry.graphId,
+      titleRu: entry.titleRu,
+      graph: entry.graph,
+    })),
+    listLoadoutOptions: () => {
+      const runtime = selected?.infantryCombatRuntime;
+      const ref = runtime?.ammoInventory.loadoutRef;
+      const weapon = runtime?.primaryWeapon;
+      if (!ref || !weapon) return [];
+      return [{
+        ref,
+        titleRu: ref.definitionId,
+        weaponTitleRu: weapon.resolved.weapon.nameRu,
+        magazineCapacity: weapon.resolved.weapon.capacityRounds,
+      }];
+    },
+    onError: (messageRu) => { state.editor.lastMessage = messageRu; },
+  };
+}
+
+function snapshotFromLiveUnit(unit: UnitModel): ProductionUnitEditorSnapshotV1 {
+  const runtime = unit.infantryCombatRuntime;
+  return {
+    roleId: null,
+    unitId: unit.id,
+    titleRu: unit.labels.ru,
+    side: unit.side,
+    unitType: unit.type,
+    x: unit.position.x - 0.5,
+    y: unit.position.y - 0.5,
+    facingDegrees: radiansToDegrees(unit.facingRadians),
+    posture: unit.behaviorRuntime.posture,
+    behaviorProfile: unit.behaviorProfile,
+    speedCellsPerSecond: unit.speedCellsPerSecond,
+    viewAngleDegrees: radiansToDegrees(unit.viewAngleRadians),
+    viewRangeCells: unit.viewRangeCells,
+    soldierTraits: { ...unit.soldier.traits },
+    soldierCondition: { ...unit.soldier.condition },
+    stress: unit.behaviorRuntime.stress,
+    suppression: unit.behaviorRuntime.suppression,
+    loadoutRef: runtime.ammoInventory.loadoutRef ? { ...runtime.ammoInventory.loadoutRef } : null,
+    loadedRounds: runtime.primaryWeapon?.roundsInWeapon ?? unit.behaviorRuntime.ammo,
+    reserveRoundsByAmmoDefinitionId: Object.fromEntries(runtime.ammoInventory.reserves.map((entry) => [entry.ammoDefinitionId, entry.rounds])),
+    firstAidCharges: runtime.medical.firstAidCharges,
+    bloodLoss: runtime.physiology.blood.bloodLoss,
+    aiBrain: readUnitAiBrainBinding(unit),
+  };
+}
+
+function snapshotFromUnitDraft(draft: GameEditorDrafts['unit']): ProductionUnitEditorSnapshotV1 {
+  return {
+    roleId: null,
+    unitId: 'new-unit-template',
+    titleRu: draft.name,
+    side: draft.side,
+    unitType: draft.type,
+    x: 0,
+    y: 0,
+    facingDegrees: draft.facingDegrees,
+    posture: draft.posture,
+    behaviorProfile: draft.profile,
+    speedCellsPerSecond: draft.speedCellsPerSecond,
+    viewAngleDegrees: draft.viewAngleDegrees,
+    viewRangeCells: draft.viewRangeCells,
+    soldierTraits: { ...draft.traits },
+    soldierCondition: { ...draft.condition },
+    stress: draft.stress,
+    suppression: draft.suppression,
+    loadoutRef: null,
+    loadedRounds: draft.ammo,
+    reserveRoundsByAmmoDefinitionId: {},
+    firstAidCharges: 0,
+    bloodLoss: 0,
+    aiBrain: createUnitManualBrainBinding(),
+  };
+}
+
+function applyProductionPatchToDraft(
+  draft: GameEditorDrafts['unit'],
+  patch: ProductionUnitEditorPatchV1,
+): void {
+  if (patch.titleRu !== undefined) draft.name = patch.titleRu;
+  if (patch.side !== undefined) draft.side = patch.side;
+  if (patch.unitType !== undefined) draft.type = patch.unitType;
+  if (patch.facingDegrees !== undefined) draft.facingDegrees = patch.facingDegrees;
+  if (patch.posture !== undefined) draft.posture = patch.posture;
+  if (patch.behaviorProfile !== undefined) resetUnitDraftForProfile(draft, patch.behaviorProfile);
+  if (patch.speedCellsPerSecond !== undefined) draft.speedCellsPerSecond = patch.speedCellsPerSecond;
+  if (patch.viewAngleDegrees !== undefined) draft.viewAngleDegrees = patch.viewAngleDegrees;
+  if (patch.viewRangeCells !== undefined) draft.viewRangeCells = patch.viewRangeCells;
+  if (patch.soldierTraits !== undefined) Object.assign(draft.traits, patch.soldierTraits);
+  if (patch.soldierCondition !== undefined) Object.assign(draft.condition, patch.soldierCondition);
+  if (patch.stress !== undefined) draft.stress = patch.stress;
+  if (patch.suppression !== undefined) draft.suppression = patch.suppression;
+  if (patch.loadedRounds !== undefined) draft.ammo = Math.round(patch.loadedRounds);
+  if (patch.loadoutRef === null) {
+    draft.ammo = 0;
+    draft.weaponReady = false;
+  }
+}
+
+function applyProductionPatchToLiveUnit(
+  state: SimulationState,
+  unit: UnitModel,
+  patch: ProductionUnitEditorPatchV1,
+): void {
+  if (patch.titleRu !== undefined) unit.labels = { en: patch.titleRu || unit.id, ru: patch.titleRu || unit.id };
+  if (patch.side !== undefined) unit.side = patch.side;
+  if (patch.unitType !== undefined) unit.type = patch.unitType;
+  if (patch.x !== undefined || patch.y !== undefined) {
+    unit.position = {
+      x: (patch.x ?? unit.position.x - 0.5) + 0.5,
+      y: (patch.y ?? unit.position.y - 0.5) + 0.5,
+    };
+  }
+  if (patch.facingDegrees !== undefined) unit.facingRadians = degreesToRadians(patch.facingDegrees);
+  if (patch.posture !== undefined) {
+    unit.behaviorRuntime.posture = patch.posture;
+    unit.behaviorRuntime.previousPosture = patch.posture;
+  }
+  if (patch.behaviorProfile !== undefined) {
+    unit.behaviorProfile = patch.behaviorProfile;
+    unit.behaviorSettings = createBehaviorSettings(patch.behaviorProfile);
+  }
+  if (patch.speedCellsPerSecond !== undefined) unit.speedCellsPerSecond = patch.speedCellsPerSecond;
+  if (patch.viewAngleDegrees !== undefined) unit.viewAngleRadians = degreesToRadians(patch.viewAngleDegrees);
+  if (patch.viewRangeCells !== undefined) unit.viewRangeCells = patch.viewRangeCells;
+  if (patch.soldierTraits !== undefined || patch.soldierCondition !== undefined) {
+    unit.soldier = createSoldierParameters(unit.behaviorProfile, {
+      traits: { ...unit.soldier.traits, ...patch.soldierTraits },
+      condition: { ...unit.soldier.condition, ...patch.soldierCondition },
+    });
+  }
+  if (patch.stress !== undefined) unit.behaviorRuntime.stress = patch.stress;
+  if (patch.suppression !== undefined) unit.behaviorRuntime.suppression = patch.suppression;
+  if (patch.loadedRounds !== undefined) {
+    if (unit.infantryCombatRuntime.primaryWeapon) {
+      unit.infantryCombatRuntime.primaryWeapon.roundsInWeapon = Math.round(patch.loadedRounds);
+    }
+    unit.behaviorRuntime.ammo = Math.round(patch.loadedRounds);
+  }
+  if (patch.reserveRoundsByAmmoDefinitionId !== undefined) {
+    for (const entry of unit.infantryCombatRuntime.ammoInventory.reserves) {
+      const rounds = patch.reserveRoundsByAmmoDefinitionId[entry.ammoDefinitionId];
+      if (rounds !== undefined) entry.rounds = Math.max(0, Math.round(rounds));
+    }
+  }
+  if (patch.firstAidCharges !== undefined) unit.infantryCombatRuntime.medical.firstAidCharges = Math.max(0, Math.round(patch.firstAidCharges));
+  if (patch.bloodLoss !== undefined) unit.infantryCombatRuntime.physiology.blood.bloodLoss = Math.max(0, Math.min(1, patch.bloodLoss));
+  if (patch.loadoutRef === null) clearLiveUnitLoadout(unit);
+  if (patch.aiBrain !== undefined) installUnitAiBrainBinding(unit, patch.aiBrain);
+  if (patch.aiGraphDefinition !== undefined) addGraphToInstalledCatalog(state, patch.aiGraphDefinition);
+  state.editor.lastMessage = `Параметры бойца ${unit.id} изменены.`;
+}
+
+function clearLiveUnitLoadout(unit: UnitModel): void {
+  unit.infantryCombatRuntime.primaryWeapon = null;
+  unit.infantryCombatRuntime.ammoInventory.loadoutRef = null;
+  unit.infantryCombatRuntime.ammoInventory.reserves = [];
+  unit.infantryCombatRuntime.ammoInventory.activeReload = null;
+  unit.infantryCombatRuntime.ammoInventory.activeTransfer = null;
+  unit.behaviorRuntime.ammo = 0;
+  unit.behaviorRuntime.weaponReady = false;
 }
 
 function renderThreatPanel(
@@ -530,27 +691,6 @@ function wrapField(label: string, control: HTMLElement): HTMLElement {
   return wrapper;
 }
 
-function collapsibleNumbers<T extends object>(
-  title: string,
-  fields: Array<[keyof T, string]>,
-  record: T,
-): HTMLElement {
-  const details = document.createElement('details');
-  details.className = 'game-editor-details';
-  const summary = document.createElement('summary');
-  summary.textContent = title;
-  const content = document.createElement('div');
-  content.className = 'game-editor-details-body';
-  for (const [key, label] of fields) {
-    const current = Number(record[key]);
-    content.append(numberField(label, current, 0, 100, 1, (value) => {
-      (record as unknown as Record<keyof T, number>)[key] = value;
-    }));
-  }
-  details.append(summary, content);
-  return details;
-}
-
 function copyObjectToDraft(object: MapObject, draft: GameEditorDrafts['object']): void {
   const cover = resolveObjectCoverProperties(object);
   Object.assign(draft, {
@@ -598,29 +738,6 @@ function copyUnitToDraft(unit: UnitModel, draft: GameEditorDrafts['unit']): void
     weaponReady: unit.behaviorRuntime.weaponReady,
     traits: { ...unit.soldier.traits },
     condition: { ...unit.soldier.condition },
-  });
-}
-
-function applyUnitDraft(unit: UnitModel, draft: GameEditorDrafts['unit']): void {
-  unit.labels = { en: draft.name || unit.id, ru: draft.name || unit.id };
-  unit.side = draft.side;
-  unit.type = draft.type;
-  unit.heldItem = draft.heldItem;
-  unit.behaviorProfile = draft.profile;
-  unit.behaviorSettings = createBehaviorSettings(draft.profile);
-  unit.speedCellsPerSecond = draft.speedCellsPerSecond;
-  unit.facingRadians = degreesToRadians(draft.facingDegrees);
-  unit.viewAngleRadians = degreesToRadians(draft.viewAngleDegrees);
-  unit.viewRangeCells = draft.viewRangeCells;
-  unit.behaviorRuntime.posture = draft.posture;
-  unit.behaviorRuntime.previousPosture = draft.posture;
-  unit.behaviorRuntime.stress = draft.stress;
-  unit.behaviorRuntime.suppression = draft.suppression;
-  unit.behaviorRuntime.ammo = Math.round(draft.ammo);
-  unit.behaviorRuntime.weaponReady = draft.weaponReady;
-  unit.soldier = createSoldierParameters(draft.profile, {
-    traits: { ...draft.traits },
-    condition: { ...draft.condition },
   });
 }
 

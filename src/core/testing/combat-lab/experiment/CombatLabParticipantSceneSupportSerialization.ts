@@ -6,6 +6,7 @@ import { getWeaponRuntime } from '../../../combat/WeaponModel';
 import { serializeInfantryCombatUnitRuntime } from '../../../infantry-combat/runtime';
 import { serializeMovementRuntime } from '../../../movement/MovementRuntime';
 import { serializeTacticalPositionSettings } from '../../../tactical/TacticalPositionSettings';
+import { serializeUnitAiBrainBinding } from '../../../units/UnitAiBrainBinding';
 import type { UnitModel } from '../../../units/UnitModel';
 import type { CombatLabExperimentV1 } from './CombatLabExperimentContracts';
 import { CombatLabParticipantSceneError } from './CombatLabParticipantSceneTypes';
@@ -17,6 +18,7 @@ export function serializeCombatLabParticipantSceneUnit(sourceRecord: Record<stri
   return {
     ...structuredClone(sourceRecord), id: unit.id, label: unit.labels.en, labelRu: unit.labels.ru,
     type: unit.type, side: unit.side, aiControl: unit.aiControl,
+    aiBrain: serializeUnitAiBrainBinding(unit.aiBrain, unit.aiControl),
     x: roundThree((unit.position.x / scale) - 0.5), y: roundThree((unit.position.y / scale) - 0.5),
     speedCellsPerSecond: roundThree(unit.speedCellsPerSecond / scale), heldItem: unit.heldItem,
     facingDegrees: roundOne((unit.facingRadians * 180) / Math.PI),
