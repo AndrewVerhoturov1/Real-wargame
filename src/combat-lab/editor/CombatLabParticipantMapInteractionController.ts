@@ -10,6 +10,7 @@ import {
   type CombatLabParticipantPlacementInputV1,
   type CombatLabParticipantPlacementTransactionV1,
 } from './CombatLabParticipantMapTools';
+import './combat-lab-participant-map-action-bar.css';
 
 export interface CombatLabParticipantMapInteractionControllerOptionsV1 {
   readonly root: HTMLElement;
@@ -25,6 +26,8 @@ export type CombatLabParticipantMapCompletionListenerV1 = (
 
 export class CombatLabParticipantMapInteractionController {
   private readonly canvas: HTMLCanvasElement;
+  private readonly actionBar = document.createElement('div');
+  private readonly actionBarStatus = document.createElement('span');
   private readonly removePlacementContributor: () => void;
   private readonly removeFacingContributor: () => void;
   private readonly removeModeListener: () => void;
@@ -40,6 +43,7 @@ export class CombatLabParticipantMapInteractionController {
     if (!canvas) throw new Error('Не найдено поле карты для размещения бойца.');
     this.canvas = canvas;
     this.previousMode = options.services.mapTools.getMode();
+    this.installActionBar();
     const preview = createCombatLabParticipantMapPreviewEventPort(window);
     this.removePlacementContributor = options.services.mapTools.registerContributor(
       createCombatLabParticipantPlacementContributor({
@@ -69,6 +73,7 @@ export class CombatLabParticipantMapInteractionController {
     this.canvas.addEventListener('pointerdown', this.handlePointerDown);
     this.canvas.addEventListener('pointerup', this.handlePointerUp);
     this.canvas.addEventListener('pointercancel', this.handlePointerCancel);
+    this.renderActionBar(this.previousMode);
   }
 
   static create(options: CombatLabParticipantMapInteractionControllerOptionsV1): CombatLabParticipantMapInteractionController {
@@ -92,10 +97,12 @@ export class CombatLabParticipantMapInteractionController {
   }
 
   confirm(): void {
+    if (this.destroyed) return;
     this.options.services.mapTools.confirm();
   }
 
   cancel(): void {
+    if (this.destroyed) return;
     this.options.services.mapTools.cancel();
   }
 
@@ -121,8 +128,42 @@ export class CombatLabParticipantMapInteractionController {
     this.removeModeListener();
     this.removeFacingContributor();
     this.removePlacementContributor();
+    this.actionBar.remove();
     this.completionListeners.clear();
     if (controllersByRoot.get(this.options.root) === this) controllersByRoot.delete(this.options.root);
+  }
+
+  private installActionBar(): void {
+    this.actionBar.className = 'combat-lab-participant-map-action-bar';
+    this.actionBar.hidden = true;
+    this.actionBar.setAttribute('role', 'group');
+    this.actionBar.setAttribute('aria-label', 'Действия временного режима карты');
+    this.actionBarStatus.className = 'combat-lab-participant-map-action-bar__status';
+    const confirm = document.createElement('button');
+    confirm.type = 'button';
+    confirm.textContent = 'Подтвердить';
+    confirm.className = 'combat-lab-participant-map-action-bar__confirm';
+    confirm.addEventListener('click', () => this.confirm());
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = 'Отменить';
+    cancel.addEventListener('click', () => this.cancel());
+    this.actionBar.append(this.actionBarStatus, confirm, cancel);
+    this.options.root.append(this.actionBar);
+  }
+
+  private renderActionBar(mode: CombatLabMapToolModeV1): void {
+    const participantMode = mode === 'place_participant' || mode === 'rotate_participant';
+    this.actionBar.hidden = !participantMode;
+    if (!participantMode) {
+      delete this.actionBar.dataset.combatLabParticipantMapMode;
+      this.actionBarStatus.textContent = '';
+      return;
+    }
+    this.actionBar.dataset.combatLabParticipantMapMode = mode;
+    this.actionBarStatus.textContent = mode === 'place_participant'
+      ? 'Размещение бойца'
+      : 'Направление бойца';
   }
 
   private readonly handlePointerMove = (event: PointerEvent): void => {
@@ -160,6 +201,7 @@ export class CombatLabParticipantMapInteractionController {
   };
 
   private readonly handleModeChanged = (mode: CombatLabMapToolModeV1): void => {
+    this.renderActionBar(mode);
     const leftTemporaryMode = (this.previousMode === 'place_participant' || this.previousMode === 'rotate_participant')
       && mode !== 'place_participant'
       && mode !== 'rotate_participant';
