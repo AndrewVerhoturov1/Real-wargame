@@ -62,13 +62,18 @@ export class CombatLabTrackList {
       section.className = 'combat-lab-track';
       section.dataset.trackId = track.trackId;
       section.classList.toggle('is-disabled', !track.enabled);
+      section.classList.toggle('is-selected', selected?.trackId === track.trackId);
       const heading = document.createElement('header');
       heading.className = 'combat-lab-track-header';
       const role = experiment.roles.find((candidate) => candidate.roleId === track.actorRoleId);
-      heading.append(
-        text('strong', '', track.titleRu),
-        text('span', '', role?.titleRu ?? 'Исполнитель не назначен'),
+      const titleCopy = document.createElement('div');
+      titleCopy.className = 'combat-lab-track-header__copy';
+      titleCopy.append(
+        text('strong', 'combat-lab-track-title', track.titleRu),
+        text('span', 'combat-lab-track-actor', role?.titleRu ?? 'Исполнитель не назначен'),
       );
+      const count = text('span', 'combat-lab-track-count', `${track.steps.length} ${stepCountWord(track.steps.length)}`);
+      heading.append(titleCopy, count);
       section.append(heading);
 
       const steps = document.createElement('div');
@@ -105,6 +110,16 @@ export class CombatLabTrackList {
     this.root.replaceChildren(...fragments);
   }
 
+  scrollTrackIntoView(trackId: string): void {
+    queueMicrotask(() => {
+      if (this.destroyed) return;
+      const escaped = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(trackId) : trackId.replace(/["\\]/g, '\\$&');
+      const track = this.root.querySelector<HTMLElement>(`[data-track-id="${escaped}"]`);
+      track?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      track?.querySelector<HTMLElement>('button, [tabindex="0"]')?.focus();
+    });
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
@@ -129,13 +144,13 @@ export class CombatLabTrackList {
       const roleMissing = descriptor.requiresOtherRole && !experiment.roles.some((role) => role.roleId !== actorRoleId);
       const reason = markerMissing ? 'Сначала создайте метку на карте.' : roleMissing ? 'Нужен второй боец.' : availability.reasonRu;
       const enabled = availability.enabled && !markerMissing && !roleMissing;
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = descriptor.labelRu;
-      button.dataset.actionCatalogId = descriptor.id;
-      button.disabled = !enabled;
-      if (reason) button.title = reason;
-      button.addEventListener('click', () => {
+      const control = document.createElement('button');
+      control.type = 'button';
+      control.textContent = descriptor.labelRu;
+      control.dataset.actionCatalogId = descriptor.id;
+      control.disabled = !enabled;
+      if (reason) control.title = reason;
+      control.addEventListener('click', () => {
         this.mutate(() => {
           const step = createCombatLabScenarioStepFromCatalog(experiment, actorRoleId, descriptor.id, {
             markerId: descriptor.requiresMarker ? experiment.markers[0]?.markerId ?? null : null,
@@ -146,7 +161,7 @@ export class CombatLabTrackList {
         });
         details.open = false;
       });
-      grid.append(button);
+      grid.append(control);
     }
     details.append(grid);
     return details;
@@ -200,6 +215,14 @@ export class CombatLabTrackList {
   }
 }
 
+function stepCountWord(count: number): string {
+  const value = Math.abs(count) % 100;
+  const last = value % 10;
+  if (value > 10 && value < 20) return 'действий';
+  if (last === 1) return 'действие';
+  if (last >= 2 && last <= 4) return 'действия';
+  return 'действий';
+}
 function text<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, value: string): HTMLElementTagNameMap[K] {
   const element = document.createElement(tag);
   element.className = className;
