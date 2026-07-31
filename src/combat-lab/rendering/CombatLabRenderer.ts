@@ -4,7 +4,9 @@ import { createPixiTacticalBoardAdapter } from '../../rendering/PixiTacticalBoar
 import type {
   CombatLabDiagnosticLayerId,
   CombatLabExperimentV1,
+  CombatLabMarkerV1,
 } from '../../core/testing/combat-lab';
+import { getCombatLabWorkspaceServices } from '../CombatLabWorkspaceServices';
 import { CombatLabDiagnosticOverlayRenderer } from './CombatLabDiagnosticOverlayRenderer';
 import {
   CombatLabScenarioAuthoringOverlayRenderer,
@@ -42,6 +44,8 @@ export class CombatLabRenderer {
   private readonly authoringOverlay: CombatLabScenarioAuthoringOverlayRenderer;
   private readonly removeLabTicker: () => void;
   private readonly removeViewportStabilizer: () => void;
+  private readonly removeMarkerSelectionListener: () => void;
+  private readonly canvas: HTMLCanvasElement | null;
   private boundRevision: number;
   private destroyed = false;
 
@@ -53,6 +57,17 @@ export class CombatLabRenderer {
     const world = context.getWorldContainer();
     this.overlay = new CombatLabDiagnosticOverlayRenderer(world, session);
     this.authoringOverlay = new CombatLabScenarioAuthoringOverlayRenderer(world);
+    const workspaceRoot = document.querySelector<HTMLElement>('.combat-lab-workspace');
+    const services = workspaceRoot ? getCombatLabWorkspaceServices(workspaceRoot) : null;
+    const syncMarkerSelection = (): void => {
+      const selection = services?.selection.get();
+      this.authoringOverlay.setMarkerSelection(selection?.kind === 'marker' ? selection.markerId : null);
+      this.context.forceRender();
+    };
+    this.removeMarkerSelectionListener = services?.selection.subscribe(syncMarkerSelection) ?? (() => undefined);
+    syncMarkerSelection();
+    this.canvas = document.querySelector<HTMLCanvasElement>('#app canvas');
+    this.canvas?.addEventListener('combat-lab:marker-preview', this.handleMarkerPreview as EventListener);
     this.boundRevision = session.revision;
     this.keepProductionTickerPaused();
     this.removeLabTicker = context.addTickerListener(this.tick);
@@ -109,11 +124,19 @@ export class CombatLabRenderer {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.canvas?.removeEventListener('combat-lab:marker-preview', this.handleMarkerPreview as EventListener);
+    this.removeMarkerSelectionListener();
     this.removeViewportStabilizer();
     this.removeLabTicker();
     this.authoringOverlay.destroy();
     this.overlay.destroy();
   }
+
+  private readonly handleMarkerPreview = (event: CustomEvent<CombatLabMarkerV1 | null>): void => {
+    if (this.destroyed) return;
+    this.authoringOverlay.setMarkerPreview(event.detail ?? null);
+    this.context.forceRender();
+  };
 
   private readonly tick = (ticker: Ticker): void => {
     if (this.destroyed) return;
