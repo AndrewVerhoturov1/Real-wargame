@@ -2,6 +2,10 @@ import type { CombatLabVisualSession } from '../runtime/CombatLabVisualSession';
 import { requestCombatLabResetAndStart } from '../runtime/CombatLabResetAndStart';
 import { getCombatLabWorkspaceServices } from '../CombatLabWorkspaceServices';
 import { CombatLabQuickParametersPanel } from '../ui/CombatLabQuickParametersPanel';
+import {
+  getCombatLabWorkspaceHosts,
+  getOnlyCombatLabWorkspaceRoot,
+} from '../ui/CombatLabWorkspaceTabs';
 
 export interface CombatLabQuickParametersInstallationV1 {
   destroy(): void;
@@ -11,10 +15,10 @@ export function installCombatLabQuickParameters(
   extensionRoot: HTMLElement,
   session: CombatLabVisualSession,
 ): CombatLabQuickParametersInstallationV1 {
-  const workspaceRoot = extensionRoot.querySelector<HTMLElement>('.combat-lab-workspace');
-  const host = extensionRoot.querySelector<HTMLElement>('[data-combat-lab-parameters-host="selected-unit"]');
-  const programHost = extensionRoot.querySelector<HTMLElement>('.combat-lab-stage10-program-host');
-  if (!workspaceRoot || !host) throw new Error('Не найдена foundation-точка подключения быстрых параметров.');
+  const workspaceRoot = getOnlyCombatLabWorkspaceRoot();
+  const workspaceHosts = getCombatLabWorkspaceHosts(workspaceRoot);
+  const host = workspaceHosts.parameters;
+  const programHost = workspaceHosts.program.querySelector<HTMLElement>('.combat-lab-stage10-program-host');
   const services = getCombatLabWorkspaceServices(workspaceRoot);
   const isActive = (): boolean => {
     const panel = extensionRoot.querySelector<HTMLElement>('[data-combat-lab-tab-panel="parameters"]');
