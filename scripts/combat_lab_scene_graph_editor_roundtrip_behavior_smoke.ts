@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import {
   buildCombatLabBuiltInExperiment,
+  listCombatLabScenarioDefinitions,
   parseCombatLabExperiment,
   readCombatLabParticipantInitialDraft,
   serializeCombatLabExperiment,
   updateCombatLabParticipantInitialState,
-  type CombatLabExperimentV1,
 } from '../src/core/testing/combat-lab';
 import {
   listMergedAiGraphCatalogEntries,
@@ -16,13 +16,20 @@ import { CombatLabSceneEditorAdapter } from '../src/combat-lab/editor/CombatLabS
 import type { CombatLabWorkspaceServices } from '../src/combat-lab/CombatLabWorkspaceServices';
 import { formatProductionUnitEditorGraphOptionLabel } from '../src/ui/ProductionUnitEditor';
 
-void main().catch((error: unknown) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+class MemoryStorage implements Storage {
+  private readonly values = new Map<string, string>();
+  get length(): number { return this.values.size; }
+  clear(): void { this.values.clear(); }
+  getItem(key: string): string | null { return this.values.get(key) ?? null; }
+  key(index: number): string | null { return [...this.values.keys()][index] ?? null; }
+  removeItem(key: string): void { this.values.delete(key); }
+  setItem(key: string, value: string): void { this.values.set(key, value); }
+}
 
 async function main(): Promise<void> {
-  const base = buildCombatLabBuiltInExperiment('rifle-distance-baseline', 17);
+  const definition = listCombatLabScenarioDefinitions()[0];
+  assert.ok(definition, 'Combat Lab must expose at least one built-in scenario.');
+  const base = buildCombatLabBuiltInExperiment(definition.scenarioId, 17);
   const role = base.roles[0];
   assert.ok(role, 'Built-in experiment must contain a participant.');
   const customGraph = {
@@ -88,12 +95,7 @@ async function main(): Promise<void> {
   console.log('Combat Lab scene graph editor roundtrip behavior smoke passed.');
 }
 
-class MemoryStorage implements Storage {
-  private readonly values = new Map<string, string>();
-  get length(): number { return this.values.size; }
-  clear(): void { this.values.clear(); }
-  getItem(key: string): string | null { return this.values.get(key) ?? null; }
-  key(index: number): string | null { return [...this.values.keys()][index] ?? null; }
-  removeItem(key: string): void { this.values.delete(key); }
-  setItem(key: string, value: string): void { this.values.set(key, value); }
-}
+void main().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});
