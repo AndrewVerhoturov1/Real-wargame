@@ -33,6 +33,7 @@
     "combat-lab-batch:smoke": "node scripts/combat_lab_experiment_runner_smoke.mjs && node scripts/combat_lab_batch_statistics_smoke.mjs && node scripts/combat_lab_batch_runner_smoke.mjs && node scripts/combat_lab_batch_worker_contract_smoke.mjs && node scripts/combat_lab_batch_results_ui_contract_smoke.mjs && node scripts/combat_lab_batch_result_render_contract_smoke.mjs && node scripts/combat_lab_batch_path_contract_smoke.mjs",
     "combat-lab-scenario-system:verify": "node scripts/combat_lab_scenario_system_verify.mjs",
     "game-editor:smoke": "node scripts/game_editor_smoke.mjs",
+    "shared-game-editors:smoke": "node scripts/shared_game_editor_platform_smoke.mjs",
     "workspace-architecture-contract:smoke": "node scripts/workspace_smoke_architecture_contract.mjs",
     "workspace:smoke": "npm run workspace-architecture-contract:smoke && node scripts/tactical_workspace_smoke.mjs",
     "cell-inspector:smoke": "node scripts/cell_inspector_smoke.mjs",
