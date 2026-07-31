@@ -11,7 +11,6 @@ export class CombatLabBatchProgressView {
     const heading = document.createElement('h3');
     heading.textContent = 'Ход серии';
     this.status.setAttribute('role', 'status');
-    this.progress.min = 0;
     this.progress.max = 1;
     this.progress.value = 0;
     this.detail.className = 'combat-lab-batch-progress-detail';
