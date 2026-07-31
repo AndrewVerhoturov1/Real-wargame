@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { CombatLabExperimentDraft } from '../src/combat-lab/scenario-editor/CombatLabExperimentDraft';
+import { updateCombatLabExperimentRuntimeSettings } from '../src/combat-lab/scenario-editor/CombatLabExperimentRuntimeSettings';
 import {
   buildCombatLabBuiltInExperiment,
   digestCombatLabExperiment,
@@ -18,10 +18,8 @@ if (experiment.batchDefaults.seedStrategy.kind === 'sequential') {
 
 const originalStepTimeouts = experiment.tracks.flatMap((track) => track.steps.map((step) => step.timeoutSeconds));
 const beforeDigest = digestCombatLabExperiment(experiment);
-const draft = new CombatLabExperimentDraft(experiment);
-const beforeRevision = draft.getExperiment().revision;
-draft.updateExperimentRuntimeSettings({ maximumSimulationSeconds: 60 });
-const updated = draft.getExperiment();
+const beforeRevision = experiment.revision;
+const updated = updateCombatLabExperimentRuntimeSettings(experiment, { maximumSimulationSeconds: 60 });
 assert.equal(updated.revision, beforeRevision + 1);
 assert.equal(updated.stopCondition.maximumSimulationSeconds, 60);
 assert.equal(updated.batchDefaults.maximumSimulationSeconds, 60);
@@ -34,11 +32,12 @@ const [toolbar, dialog, summary, executor] = await Promise.all([
   readFile('src/combat-lab/ui/CombatLabExperimentSettingsSummary.ts', 'utf8'),
   readFile('src/core/testing/combat-lab/experiment/CombatLabScenarioExecutor.ts', 'utf8'),
 ]);
-assert.match(toolbar, /Настройки/);
+assert.match(toolbar, /CombatLabExperimentSettingsSummary/);
+assert.match(toolbar, /CombatLabExperimentSettingsDialog/);
 assert.match(summary, /Seed:/);
 assert.match(summary, /Лимит:/);
-for (const preset of [30, 60, 120, 300]) assert.match(dialog, new RegExp(`value[^\n]*${preset}|${preset}[^\n]*с`));
+assert.match(dialog, /PRESET_SECONDS\s*=\s*\[30,\s*60,\s*120,\s*300\]/);
 assert.match(dialog, /Произвольн/);
-assert.match(executor, /Достигнут лимит длительности эксперимента/);
+assert.match(executor, /combat_lab_stop_time_reached/);
 
 console.log('Combat Lab experiment duration behavior smoke passed.');
