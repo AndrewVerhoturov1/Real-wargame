@@ -37,10 +37,15 @@ export interface CombatLabQuickParametersPanelOptionsV1 {
   readonly isLocked: () => boolean;
   readonly getRuntimeSnapshot: () => CombatLabScenarioRuntimeSnapshotV1 | null;
   readonly getVisualSnapshot: () => CombatLabVisualSnapshotV1 | null;
-  readonly onApplyAndRerun: (seed: number) => void;
+  readonly onResetAndStart: (seed: number) => void;
   readonly onRequestMapSelection: () => void;
   readonly preferences?: CombatLabQuickParameterPreferencesStore;
   readonly snapshotStore?: CombatLabTuningSnapshotStore;
+}
+
+export interface CombatLabQuickParameterApplyResultV1 {
+  readonly experiment: CombatLabExperimentV1;
+  readonly changed: boolean;
 }
 
 export interface CombatLabQuickParameterControlStateV1 {
@@ -128,18 +133,21 @@ export class CombatLabQuickParametersPanelModel {
     this.buffer.resetAll();
   }
 
-  apply(): CombatLabExperimentV1 | null {
+  apply(): CombatLabQuickParameterApplyResultV1 | null {
     const context = this.context;
     if (!context || this.locked) return null;
     const dirty = this.buffer.dirtyValues();
-    if (Object.keys(dirty).length === 0) return context.experiment;
+    if (Object.keys(dirty).length === 0) {
+      return Object.freeze({ experiment: context.experiment, changed: false });
+    }
+    const previousRevision = context.experiment.revision;
     const next = applyCombatLabParticipantQuickParameterValues(
       this.services.participantMutations,
       context.role.roleId,
       dirty,
     );
     this.loadRole(context.role.roleId);
-    return next;
+    return Object.freeze({ experiment: next, changed: next.revision !== previousRevision });
   }
 
   clearParticipantOverride(): CombatLabExperimentV1 | null {
@@ -227,6 +235,27 @@ export class CombatLabQuickParametersPanelModel {
     }
     this.buffer.load(values);
   }
+}
+
+export interface CombatLabQuickParameterRerunFlowOptionsV1 {
+  readonly model: CombatLabQuickParametersPanelModel;
+  readonly runtimeSnapshot: CombatLabScenarioRuntimeSnapshotV1 | null;
+  readonly visualSnapshot: CombatLabVisualSnapshotV1 | null;
+  readonly onResetAndStart: (seed: number) => void;
+}
+
+export function applyCombatLabQuickParametersAndRerun(
+  options: CombatLabQuickParameterRerunFlowOptionsV1,
+): CombatLabQuickParameterApplyResultV1 | null {
+  const seed = resolveRuntimeSeed(
+    options.runtimeSnapshot,
+    options.visualSnapshot,
+    options.model.currentContext(),
+  );
+  const result = options.model.apply();
+  if (!result) return null;
+  options.onResetAndStart(seed);
+  return result;
 }
 
 export class CombatLabQuickParametersPanel {
@@ -326,8 +355,8 @@ export class CombatLabQuickParametersPanel {
     }
     const identity = node('div', 'combat-lab-quick-parameters-identity');
     identity.append(
-      node('strong', '', state.titleRu ?? state.roleId),
-      node('span', '', `${state.sideRu ?? 'Сторона не определена'} · роль ${state.roleId} · unit ${state.unitId ?? '—'}`),
+      node('strong', '', state.titleRu ?? 'Выбранный боец'),
+      node('span', '', state.sideRu ?? 'Сторона не определена'),
     );
     this.headerHost.replaceChildren(identity, actionButton('Выбрать на карте', () => this.options.onRequestMapSelection()));
   }
@@ -482,9 +511,21 @@ export class CombatLabQuickParametersPanel {
   private apply(rerun: boolean): void {
     if (this.options.isLocked()) return;
     try {
-      this.model.apply();
-      this.showMessage(rerun ? 'Параметры применены; запускается чистый повтор.' : 'Параметры бойца применены.', false);
-      if (rerun) this.options.onApplyAndRerun(resolveRuntimeSeed(this.runtimeSnapshot, this.model.currentContext()));
+      const result = rerun
+        ? applyCombatLabQuickParametersAndRerun({
+            model: this.model,
+            runtimeSnapshot: this.runtimeSnapshot,
+            visualSnapshot: this.options.getVisualSnapshot(),
+            onResetAndStart: this.options.onResetAndStart,
+          })
+        : this.model.apply();
+      if (!result) return;
+      const message = rerun
+        ? 'Параметры применены; запускается чистый повтор.'
+        : result.changed
+          ? 'Параметры бойца применены.'
+          : 'Сохранённые параметры уже совпадают с выбранными значениями.';
+      this.showMessage(message, false);
       this.refresh();
     } catch (error) {
       this.showMessage(error instanceof Error ? error.message : 'Не удалось применить параметры.', true);
@@ -524,11 +565,12 @@ export class CombatLabQuickParametersPanel {
 }
 
 function resolveRuntimeSeed(
-  snapshot: CombatLabScenarioRuntimeSnapshotV1 | null,
+  runtimeSnapshot: CombatLabScenarioRuntimeSnapshotV1 | null,
+  visualSnapshot: CombatLabVisualSnapshotV1 | null,
   context: CombatLabParticipantEditContextV1 | null,
 ): number {
-  const candidate = snapshot as (CombatLabScenarioRuntimeSnapshotV1 & { readonly seed?: number }) | null;
-  const value = candidate?.seed ?? context?.experiment.defaults.seed ?? 1;
+  const runtimeCandidate = runtimeSnapshot as (CombatLabScenarioRuntimeSnapshotV1 & { readonly seed?: number }) | null;
+  const value = runtimeCandidate?.seed ?? visualSnapshot?.seed ?? context?.experiment.defaults.seed ?? 1;
   if (!Number.isFinite(value)) return 1;
   const normalized = Math.trunc(value) >>> 0;
   return normalized === 0 ? 1 : normalized;
