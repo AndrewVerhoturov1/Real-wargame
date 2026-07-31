@@ -1,15 +1,21 @@
-import { registerAiEditorSection } from './AiEditorSectionRegistry';
+import type { GameEditorInstallation, GameEditorMountContext } from '../game-editors/GameEditorTypes';
 import {
   disposeEnvironmentProfileEditorPanel,
   renderEnvironmentProfiles,
   requestEnvironmentProfileEditorLeave,
 } from './EnvironmentProfileEditorPanel';
 
-registerAiEditorSection({
-  id: 'environmentProfiles',
-  labelRu: 'Профили местности',
-  order: 25,
-  render: renderEnvironmentProfiles,
-  beforeLeave: requestEnvironmentProfileEditorLeave,
-  dispose: disposeEnvironmentProfileEditorPanel,
-});
+export function mountEnvironmentProfileEditor(context: GameEditorMountContext): GameEditorInstallation {
+  const panel = context.host;
+  let destroyed = false;
+  renderEnvironmentProfiles(panel);
+  return {
+    beforeClose: requestEnvironmentProfileEditorLeave,
+    destroy(): void {
+      if (destroyed) return;
+      destroyed = true;
+      disposeEnvironmentProfileEditorPanel();
+      panel.replaceChildren();
+    },
+  };
+}
