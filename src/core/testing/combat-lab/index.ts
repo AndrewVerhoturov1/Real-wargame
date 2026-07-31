@@ -1,6 +1,7 @@
 export * from './CombatLabContracts';
 export * from './CombatLabCommands';
 export * from './CombatLabDigest';
+export * from './CombatLabGridScale';
 export * from './CombatLabMetrics';
 export * from './CombatLabTargetSurvivability';
 export * from './CombatLabRunner';
