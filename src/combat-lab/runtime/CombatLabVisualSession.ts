@@ -10,6 +10,7 @@ import {
 } from '../../core/infantry-combat/runtime';
 import { tickSimulation } from '../../core/simulation/SimulationTick';
 import type { SimulationState } from '../../core/simulation/SimulationState';
+import { AI_TEST_TIME_SCALES } from '../../core/testing/AiTestLabRuntime';
 import type { UnitModel } from '../../core/units/UnitModel';
 import {
   COMBAT_LAB_FIXED_STEP_SECONDS,
@@ -37,7 +38,7 @@ import {
   type CombatLabCheckpointV1,
 } from './CombatLabCheckpoint';
 
-export const COMBAT_LAB_VISUAL_SPEEDS = [0.25, 0.5, 1, 2, 4, 10] as const;
+export const COMBAT_LAB_VISUAL_SPEEDS = AI_TEST_TIME_SCALES;
 const MAX_ACCUMULATED_SECONDS = 0.5;
 const MAX_JOURNAL_ENTRIES = 256;
 const MAX_OBSERVED_SHOT_IDS = 4096;
