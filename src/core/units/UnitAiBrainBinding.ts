@@ -18,7 +18,8 @@ declare module './UnitModel' {
   }
 
   interface UnitModel {
-    aiBrain: UnitAiBrainBindingV1;
+    /** Optional only for in-memory units created by legacy constructors; readers normalize it immediately. */
+    aiBrain?: UnitAiBrainBindingV1;
   }
 }
 
@@ -44,10 +45,14 @@ export function normalizeUnitAiBrainBinding(
     : createUnitGraphBrainBinding(DEFAULT_UNIT_AI_GRAPH_ID);
 }
 
-export function serializeUnitAiBrainBinding(binding: UnitAiBrainBindingV1): UnitAiBrainBindingV1 {
-  return binding.kind === 'manual'
+export function serializeUnitAiBrainBinding(
+  binding: UnitAiBrainBindingV1 | undefined,
+  legacyAiControl: UnitAiControl | string | undefined = 'graph',
+): UnitAiBrainBindingV1 {
+  const normalized = normalizeUnitAiBrainBinding(binding, legacyAiControl);
+  return normalized.kind === 'manual'
     ? createUnitManualBrainBinding()
-    : createUnitGraphBrainBinding(binding.graphId);
+    : createUnitGraphBrainBinding(normalized.graphId);
 }
 
 export function readUnitAiBrainBinding(unit: Pick<UnitModel, 'aiControl'> & Partial<Pick<UnitModel, 'aiBrain'>>): UnitAiBrainBindingV1 {
