@@ -15,6 +15,8 @@ export interface CombatLabSelectionControllerOptionsV1 {
 export interface CombatLabSelectionControllerV1 {
   get(): CombatLabSelectedEntityV1;
   select(selection: CombatLabSelectedEntityV1): void;
+  syncFromState(): void;
+  reconcileFromState(): void;
   subscribe(listener: CombatLabSelectionListenerV1): () => void;
 }
 
@@ -52,6 +54,12 @@ export class CombatLabSelectionController implements CombatLabSelectionControlle
     if (this.destroyed) return;
     const selectedUnitId = this.options.state.selectedUnitId;
     if (selectedUnitId === this.lastObservedSelectedUnitId) return;
+    this.reconcileFromState();
+  }
+
+  reconcileFromState(): void {
+    if (this.destroyed) return;
+    const selectedUnitId = this.options.state.selectedUnitId;
     this.lastObservedSelectedUnitId = selectedUnitId;
     const next = this.resolveStateSelection(selectedUnitId);
     if (combatLabSelectionsEqual(this.selection, next)) return;
