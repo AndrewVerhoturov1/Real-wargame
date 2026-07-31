@@ -1,5 +1,4 @@
 import { setFireAllowed } from '../core/combat/CombatRules';
-import { selectUnit } from '../core/simulation/SimulationState';
 import {
   buildCombatLabBuiltInExperiment,
   listCombatLabScenarioDefinitions,
@@ -38,6 +37,10 @@ import {
   type CombatLabWorkspaceTab,
 } from './ui/CombatLabWorkspaceHosts';
 import { CombatLabWorkspaceTabs } from './ui/CombatLabWorkspaceTabs';
+import {
+  CombatLabWorkspaceServices,
+  registerCombatLabWorkspaceServices,
+} from './CombatLabWorkspaceServices';
 
 type ExperimentChangeSource = 'editor' | 'external';
 
@@ -89,6 +92,9 @@ export class CombatLabExtension implements GameApplicationExtension {
   private readonly sharedSimulationControls: SharedSimulationControls;
   private readonly currentMetrics: DisposableView;
   private readonly removeMapInputGuard: () => void;
+  private readonly workspaceServices: CombatLabWorkspaceServices;
+  private readonly unregisterWorkspaceServices: () => void;
+  private readonly removeSelectionTickerListener: () => void;
   private readonly listeners: Array<readonly [EventTarget, string, EventListener]> = [];
   private mapAuthoringController: CombatLabMapAuthoringController | null = null;
   private validationIssues: readonly CombatLabExperimentIssueV1[];
@@ -109,6 +115,26 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.draft = new CombatLabExperimentDraft(initialExperiment);
     this.validationIssues = validateCombatLabExperiment(initialExperiment);
     this.batchClient = new CombatLabBatchClient();
+    this.workspaceServices = CombatLabWorkspaceServices.create({
+      state: session.state,
+      draft: this.draft,
+      onExperimentChanged: (experiment) => this.handleExperimentChanged(experiment, 'external'),
+      initialMapToolMode: 'program_authoring',
+      mapToolEventTarget: window,
+      mapToolStatusHost: this.layout.mapModeStatus,
+      getMapToolStatusOverride: () => (
+        this.isStructuralEditingLocked()
+          ? 'Карта заблокирована до остановки или сброса прогона.'
+          : null
+      ),
+    });
+    this.unregisterWorkspaceServices = registerCombatLabWorkspaceServices(
+      this.workspace.root,
+      this.workspaceServices,
+    );
+    this.removeSelectionTickerListener = context.addTickerListener(
+      () => this.workspaceServices.selection.syncFromState(),
+    );
 
     this.renderer = CombatLabRenderer.create(context, session, this.handleFrame);
     this.visualController = CombatLabExperimentVisualController.create({
@@ -128,6 +154,7 @@ export class CombatLabExtension implements GameApplicationExtension {
       draft: this.draft,
       host: this.layout.scenePanelHost,
       getSelectedUnitId: () => session.state.selectedUnitId,
+      onSelectRole: (roleId) => this.selectRoleUnit(roleId),
       onExperimentChanged: (experiment) => this.handleExperimentChanged(experiment, 'external'),
       fileCodec: {
         serialize: serializeCombatLabExperiment,
@@ -141,7 +168,10 @@ export class CombatLabExtension implements GameApplicationExtension {
       onExperimentChanged: (experiment) => this.handleExperimentChanged(experiment, 'editor'),
       onRequestMapPick: (request) => this.mapAuthoringController?.requestPick(request),
       onSelectRole: (roleId) => this.selectRoleUnit(roleId),
-      onMapModeChanged: () => {
+      onMapModeChanged: (mode) => {
+        this.workspaceServices.mapTools.setPersistentMode(
+          mode === 'manual_control' ? 'manual_control' : 'program_authoring',
+        );
         this.mapAuthoringController?.syncMode();
         this.updateInteractionState();
       },
@@ -226,6 +256,7 @@ export class CombatLabExtension implements GameApplicationExtension {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.teardownFoundationServices();
     for (const [target, type, listener] of this.listeners) target.removeEventListener(type, listener);
     this.listeners.length = 0;
     this.batchPanel.destroy();
@@ -290,6 +321,7 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.renderer.setAuthoredExperiment(current);
     this.renderValidation();
     this.visualController.reset(current.defaults.seed);
+    this.workspaceServices.selection.reconcileFromState();
     this.mapAuthoringController?.syncMode();
     this.updateInteractionState();
   }
@@ -315,7 +347,11 @@ export class CombatLabExtension implements GameApplicationExtension {
   private selectRoleUnit(roleId: string): void {
     const role = this.draft.getExperiment().roles.find((candidate) => candidate.roleId === roleId);
     if (!role) return;
-    selectUnit(this.session.state, role.unitId);
+    this.workspaceServices.selection.select({
+      kind: 'participant',
+      roleId: role.roleId,
+      unitId: role.unitId,
+    });
     this.context.forceRender();
   }
 
@@ -344,12 +380,15 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.layout.scenePanelHost.setAttribute('aria-disabled', String(locked));
     this.layout.programHost.setAttribute('aria-disabled', String(locked));
     this.layout.manualHost.setAttribute('aria-disabled', String(locked || !manualMode));
-    this.layout.mapModeStatus.textContent = locked
-      ? 'Карта заблокирована до остановки или сброса прогона.'
-      : manualMode
-        ? 'Режим карты: ручное управление.'
-        : 'Режим карты: редактор сценария.';
     this.mapAuthoringController?.syncMode();
+    this.workspaceServices.mapTools.refreshStatus();
+  }
+
+  private teardownFoundationServices(): void {
+    runTeardownStep('temporary map transaction', () => this.workspaceServices.mapTools.cancel());
+    runTeardownStep('selection ticker', this.removeSelectionTickerListener);
+    runTeardownStep('workspace services registry', this.unregisterWorkspaceServices);
+    runTeardownStep('workspace services', () => this.workspaceServices.destroy());
   }
 
   private renderValidation(): void {
@@ -448,6 +487,14 @@ export class CombatLabExtension implements GameApplicationExtension {
     if (paused) this.visualController.pause();
     else if (!this.hasValidationErrors()) this.visualController.start();
   };
+}
+
+function runTeardownStep(label: string, step: () => void): void {
+  try {
+    step();
+  } catch (error) {
+    console.error(`Combat Lab teardown failed for ${label}.`, error);
+  }
 }
 
 function createWorkspaceMountLayout(hosts: CombatLabWorkspaceHosts): WorkspaceMountLayout {
