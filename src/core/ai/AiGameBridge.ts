@@ -5,6 +5,8 @@ import {
 } from '../actions/PostureTransition';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
+import { readUnitAiBrainBinding } from '../units/UnitAiBrainBinding';
+import { resolveRuntimeGraphSnapshotForUnit } from './AiGraphCatalog';
 import { withAiSimulationExecutionContext } from './AiSimulationExecutionContext';
 import * as legacy from './AiGameBridgeLegacy';
 
@@ -61,9 +63,10 @@ export function tickAiGameBridgeForUnit(
   nowMs = simulationNowMs(state),
   options: legacy.AiGameBridgeTickOptions = { force: false, applyEffects: true },
 ): ReturnType<typeof legacy.tickAiGameBridgeForUnit> {
-  if (!state.units.includes(unit)) return null;
-  if (!options.applyEffects) return legacy.tickAiGameBridgeForUnit(state, unit, nowMs, options);
-  return runAndAdapt(state, unit, nowMs, options, false);
+  if (!state.units.includes(unit) || readUnitAiBrainBinding(unit).kind !== 'graph') return null;
+  const exactOptions = bindExactGraph(state, unit, options);
+  if (!exactOptions.applyEffects) return legacy.tickAiGameBridgeForUnit(state, unit, nowMs, exactOptions);
+  return runAndAdapt(state, unit, nowMs, exactOptions, false);
 }
 
 export function tickAiGameBridgeForTrustedUnit(
@@ -72,8 +75,20 @@ export function tickAiGameBridgeForTrustedUnit(
   nowMs = simulationNowMs(state),
   options: legacy.AiGameBridgeTickOptions = { force: false, applyEffects: true },
 ): ReturnType<typeof legacy.tickAiGameBridgeForTrustedUnit> {
-  if (!options.applyEffects) return legacy.tickAiGameBridgeForTrustedUnit(state, unit, nowMs, options);
-  return runAndAdapt(state, unit, nowMs, options, true);
+  if (readUnitAiBrainBinding(unit).kind !== 'graph') return null;
+  const exactOptions = bindExactGraph(state, unit, options);
+  if (!exactOptions.applyEffects) return legacy.tickAiGameBridgeForTrustedUnit(state, unit, nowMs, exactOptions);
+  return runAndAdapt(state, unit, nowMs, exactOptions, true);
+}
+
+function bindExactGraph(
+  state: SimulationState,
+  unit: UnitModel,
+  options: legacy.AiGameBridgeTickOptions,
+): legacy.AiGameBridgeTickOptions {
+  const exact = resolveRuntimeGraphSnapshotForUnit(state, unit);
+  if (options.graphSnapshot?.graph.id === exact.graph.id) return options;
+  return { ...options, graphSnapshot: exact };
 }
 
 function runAndAdapt(
