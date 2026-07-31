@@ -13,6 +13,7 @@ const experiment = {
   roles: [
     { roleId: 'shooter', titleRu: 'Стрелок' },
     { roleId: 'target', titleRu: 'Цель' },
+    { roleId: 'reserve', titleRu: 'Резерв' },
   ],
   tracks: [
     { trackId: 'track-a', actorRoleId: 'shooter', titleRu: 'Огонь' },
@@ -27,7 +28,7 @@ assert.deepEqual(validateCombatLabTrackCreation(experiment, {
   titleRu: 'Вторая дорожка', actorRoleId: 'shooter', insertion: 'end', selectedTrackId: null,
 }), { ok: false, reasonRu: 'Для этого бойца дорожка уже существует.' });
 assert.deepEqual(validateCombatLabTrackCreation(experiment, {
-  titleRu: '  ', actorRoleId: 'new-role', insertion: 'end', selectedTrackId: null,
+  titleRu: '  ', actorRoleId: 'reserve', insertion: 'end', selectedTrackId: null,
 }), { ok: false, reasonRu: 'Введите понятное название дорожки.' });
 assert.equal(resolveCombatLabTrackInsertionIndex(experiment.tracks, 'before_selected', 'track-b'), 1);
 assert.equal(resolveCombatLabTrackInsertionIndex(experiment.tracks, 'after_selected', 'track-a'), 1);
