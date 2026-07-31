@@ -57,7 +57,7 @@ const definitions: readonly CombatLabScenarioDefinitionV1[] = [
       'Сравните направление сопровождения, упреждение и точку выстрела.',
     ],
     program: [
-      step('moving-target-start', 0.1, { kind: 'move', unitId: 'moving-rifle-target', targetGrid: { x: 80, y: 55 } }),
+      step('moving-target-start', 0.1, { kind: 'move', unitId: 'moving-rifle-target', targetGrid: { x: 40, y: 27.5 } }),
       step('moving-target-shot', 1, fire('moving-rifle-shooter', 'moving-rifle-target', 'single', 0, 0.55)),
     ],
   }),

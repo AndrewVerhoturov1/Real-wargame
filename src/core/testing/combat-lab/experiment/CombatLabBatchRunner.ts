@@ -75,9 +75,12 @@ export function runCombatLabBatchPartitionWithRunner(
   const metricValues = new Map<string, number[]>();
   for (const metricId of selectedMetricIds(request)) metricValues.set(metricId, []);
   const failureReasons = new Map<string, number>();
+  const seeds: number[] = [];
+  const finalStateDigests: string[] = [];
   let representativeCandidates = createCombatLabRepresentativeCandidates();
   let completedRuns = 0;
   let successCount = 0;
+  let timeLimitStopCount = 0;
 
   for (const runIndex of runIndices) {
     if (options.shouldAbort?.()) throw new CombatLabBatchCancelledError(completedRuns, runIndices.length);
@@ -96,6 +99,9 @@ export function runCombatLabBatchPartitionWithRunner(
     }
     const record = toRunRecord(runIndex, result);
     completedRuns += 1;
+    seeds.push(record.seed);
+    finalStateDigests.push(record.finalStateDigest);
+    if (isTimeLimitStop(record.stopReason)) timeLimitStopCount += 1;
     if (record.success) successCount += 1;
     else failureReasons.set(record.stopReason, (failureReasons.get(record.stopReason) ?? 0) + 1);
     for (const [metricId, values] of metricValues) {
@@ -130,6 +136,9 @@ export function runCombatLabBatchPartitionWithRunner(
     failureReasons: Object.fromEntries([...failureReasons.entries()].sort(([left], [right]) => compareText(left, right))),
     representativeCandidates: representativeCandidateArray(representativeCandidates),
     firstFailures: representativeCandidates.firstFailures,
+    seeds,
+    finalStateDigests,
+    timeLimitStopCount,
   });
 }
 
@@ -141,6 +150,9 @@ export function combineCombatLabBatchPartials(
   const sourceDigest = digestCombatLabExperiment(request.experiment);
   let completedRuns = 0;
   let successCount = 0;
+  let timeLimitStopCount = 0;
+  const seeds: number[] = [];
+  const finalStateDigests: string[] = [];
   const failureReasons = new Map<string, number>();
   const representativeSources: CombatLabRepresentativeCandidatesV1[] = [];
 
@@ -148,6 +160,9 @@ export function combineCombatLabBatchPartials(
     assertPartialIdentity(request, sourceDigest, partial);
     completedRuns += partial.completedRuns;
     successCount += partial.successCount;
+    timeLimitStopCount += partial.timeLimitStopCount;
+    seeds.push(...partial.seeds);
+    finalStateDigests.push(...partial.finalStateDigests);
     for (const [reason, count] of Object.entries(partial.failureReasons)) {
       failureReasons.set(reason, (failureReasons.get(reason) ?? 0) + count);
     }
@@ -171,6 +186,9 @@ export function combineCombatLabBatchPartials(
     failureReasons: Object.fromEntries([...failureReasons.entries()].sort(([left], [right]) => compareText(left, right))),
     representativeCandidates: representativeCandidateArray(mergedCandidates),
     firstFailures: mergedCandidates.firstFailures,
+    seeds,
+    finalStateDigests,
+    timeLimitStopCount,
   });
 }
 
@@ -209,6 +227,13 @@ export function mergeCombatLabBatchPartials(
     metrics,
     failureReasons: combined.failureReasons,
     representatives,
+    diagnostics: Object.freeze({
+      completedRuns: combined.completedRuns,
+      failureCount: combined.failureCount,
+      timeLimitStopCount: combined.timeLimitStopCount,
+      uniqueSeedCount: new Set(combined.seeds).size,
+      uniqueFinalStateDigestCount: new Set(combined.finalStateDigests).size,
+    }),
   });
 }
 
@@ -283,6 +308,12 @@ function validateSeed(seed: number, label: string): void {
   }
 }
 
+function isTimeLimitStop(reason: string): boolean {
+  return reason === 'combat_lab_batch_maximum_time'
+    || reason === 'combat_lab_stop_time_reached'
+    || reason === 'combat_lab_runner_guard_exhausted';
+}
+
 function toRunRecord(runIndex: number, result: CombatLabExperimentRunResultV1): CombatLabBatchRunRecordV1 {
   return Object.freeze({
     runIndex,
@@ -327,6 +358,9 @@ function assertPartialIdentity(
   if (partial.successCount + partial.failureCount !== partial.completedRuns) {
     throw new Error('Combat Lab partial result counts are inconsistent.');
   }
+  if (partial.seeds.length !== partial.completedRuns || partial.finalStateDigests.length !== partial.completedRuns) {
+    throw new Error('Combat Lab partial diagnostics count does not match completed runs.');
+  }
 }
 
 function freezePartial(partial: CombatLabBatchPartialResultV1): CombatLabBatchPartialResultV1 {
@@ -336,6 +370,8 @@ function freezePartial(partial: CombatLabBatchPartialResultV1): CombatLabBatchPa
     failureReasons: Object.freeze(partial.failureReasons),
     representativeCandidates: Object.freeze([...partial.representativeCandidates]),
     firstFailures: Object.freeze(partial.firstFailures),
+    seeds: Object.freeze([...partial.seeds]),
+    finalStateDigests: Object.freeze([...partial.finalStateDigests]),
   });
 }
 

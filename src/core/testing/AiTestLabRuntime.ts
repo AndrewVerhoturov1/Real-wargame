@@ -1,7 +1,7 @@
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 
-export const AI_TEST_TIME_SCALES = [0.25, 0.5, 1, 2, 4, 10] as const;
+export const AI_TEST_TIME_SCALES = [0.1, 0.25, 0.5, 1, 2, 4, 10] as const;
 export type AiTestTimeScale = (typeof AI_TEST_TIME_SCALES)[number];
 
 type PausableSimulationState = SimulationState & { paused?: boolean };

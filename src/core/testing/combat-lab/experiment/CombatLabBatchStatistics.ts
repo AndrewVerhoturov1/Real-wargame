@@ -16,12 +16,16 @@ export function summarizeCombatLabDistribution(
   }
   const values = sourceValues.map(requireFinite).sort((left, right) => left - right);
   const sum = values.reduce((total, value) => total + value, 0);
+  const mean = canonicalNumber(sum / values.length);
+  const variance = values.reduce((total, value) => total + (value - mean) ** 2, 0) / values.length;
   return Object.freeze({
     count: values.length,
+    sampleCount: values.length,
     minimum: values[0]!,
     maximum: values[values.length - 1]!,
-    mean: canonicalNumber(sum / values.length),
+    mean,
     median: percentileLinear(values, 0.5),
+    standardDeviation: canonicalNumber(Math.sqrt(variance)),
     p05: percentileLinear(values, 0.05),
     p95: percentileLinear(values, 0.95),
     histogram: buildHistogram(values, maximumBucketCount),

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [extension, hosts, tabs, editor, main, css, layoutEnhancements, visualSession] = await Promise.all([
+const [extension, hosts, tabs, editor, main, css, layoutEnhancements, visualSession, sharedRuntime] = await Promise.all([
   readFile('src/combat-lab/CombatLabExtension.ts', 'utf8'),
   readFile('src/combat-lab/ui/CombatLabWorkspaceHosts.ts', 'utf8'),
   readFile('src/combat-lab/ui/CombatLabWorkspaceTabs.ts', 'utf8'),
@@ -10,6 +10,7 @@ const [extension, hosts, tabs, editor, main, css, layoutEnhancements, visualSess
   readFile('src/combat-lab/combat-lab-workspace.css', 'utf8'),
   readFile('src/ui/TacticalWorkspaceLayoutEnhancements.ts', 'utf8'),
   readFile('src/combat-lab/runtime/CombatLabVisualSession.ts', 'utf8'),
+  readFile('src/core/testing/AiTestLabRuntime.ts', 'utf8'),
 ]);
 
 const expectedTabs = [
@@ -57,9 +58,9 @@ assert.match(layoutEnhancements, /advancedControls\?\.classList\.add\('combat-la
   'Stage 10 advanced controls must publish the stable combat-lab-advanced DOM contract.');
 assert.match(layoutEnhancements, /metricsPanel\?\.classList\.add\('combat-lab-metrics-panel'\)/,
   'Stage 10 metrics panel must publish the stable combat-lab-metrics-panel DOM contract.');
-assert.match(visualSession, /COMBAT_LAB_VISUAL_SPEEDS\s*=\s*\[0\.25, 0\.5, 1, 2, 4, 10\]/,
-  'Combat Lab visual speeds must match the shared header controls exactly.');
-assert.doesNotMatch(visualSession, /COMBAT_LAB_VISUAL_SPEEDS\s*=\s*\[[^\]]*0\.1/,
-  'The removed 0.1 speed must not return outside the shared header contract.');
+assert.match(sharedRuntime, /AI_TEST_TIME_SCALES\s*=\s*\[0\.1,\s*0\.25,\s*0\.5,\s*1,\s*2,\s*4,\s*10\]/,
+  'The shared header controls must publish the approved seven speeds.');
+assert.match(visualSession, /COMBAT_LAB_VISUAL_SPEEDS\s*=\s*AI_TEST_TIME_SCALES/,
+  'Combat Lab visual speeds must use the shared header control source.');
 
 console.log('Combat Lab Stage 10 UI integration contract passed.');
