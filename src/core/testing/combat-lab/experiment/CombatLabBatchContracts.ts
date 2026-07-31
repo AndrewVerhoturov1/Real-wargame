@@ -54,10 +54,12 @@ export interface CombatLabDistributionBucketV1 {
 
 export interface CombatLabDistributionSummaryV1 {
   readonly count: number;
+  readonly sampleCount: number;
   readonly minimum: number;
   readonly maximum: number;
   readonly mean: number;
   readonly median: number;
+  readonly standardDeviation: number;
   readonly p05: number;
   readonly p95: number;
   readonly histogram: readonly CombatLabDistributionBucketV1[];
@@ -74,6 +76,14 @@ export interface CombatLabRepresentativeRunV1 {
   readonly finalStateDigest: string;
 }
 
+export interface CombatLabBatchDiagnosticsV1 {
+  readonly completedRuns: number;
+  readonly failureCount: number;
+  readonly timeLimitStopCount: number;
+  readonly uniqueSeedCount: number;
+  readonly uniqueFinalStateDigestCount: number;
+}
+
 export interface CombatLabBatchResultV1 extends CombatLabBatchIdentityV1 {
   readonly schemaVersion: 1;
   readonly experimentId: string;
@@ -84,6 +94,7 @@ export interface CombatLabBatchResultV1 extends CombatLabBatchIdentityV1 {
   readonly metrics: Readonly<Record<string, CombatLabDistributionSummaryV1>>;
   readonly failureReasons: Readonly<Record<string, number>>;
   readonly representatives: readonly CombatLabRepresentativeRunV1[];
+  readonly diagnostics: CombatLabBatchDiagnosticsV1;
 }
 
 export interface CombatLabBatchRunRecordV1 extends CombatLabRepresentativeRunV1 {}
@@ -98,6 +109,9 @@ export interface CombatLabBatchPartialResultV1 extends CombatLabBatchIdentityV1 
   readonly failureReasons: Readonly<Record<string, number>>;
   readonly representativeCandidates: readonly CombatLabBatchRunRecordV1[];
   readonly firstFailures: Readonly<Record<string, CombatLabBatchRunRecordV1>>;
+  readonly seeds: readonly number[];
+  readonly finalStateDigests: readonly string[];
+  readonly timeLimitStopCount: number;
 }
 
 export class CombatLabBatchCancelledError extends Error {
