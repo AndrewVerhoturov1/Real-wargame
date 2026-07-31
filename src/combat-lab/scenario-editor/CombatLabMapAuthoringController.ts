@@ -8,6 +8,8 @@ import type {
 } from '../../core/testing/combat-lab/experiment';
 import type { GameApplicationContext } from '../../game/GameApplicationTypes';
 import type { CameraController } from '../../input/CameraController';
+import type { CombatLabMapToolCoordinator } from '../map-tools/CombatLabMapToolCoordinator';
+import type { CombatLabSelectionControllerV1 } from '../selection/CombatLabSelectionController';
 import type { CombatLabActionDescriptorV1 } from './CombatLabActionCatalog';
 import { getCombatLabActionDescriptor } from './CombatLabActionCatalog';
 import { CombatLabExperimentDraft } from './CombatLabExperimentDraft';
@@ -17,6 +19,8 @@ import {
   markerAt,
 } from './CombatLabEditorFactories';
 import { CombatLabMapContextMenu, type CombatLabMapContextMenuItemV1 } from './CombatLabMapContextMenu';
+import { CombatLabMarkerManager } from './CombatLabMarkerManager';
+import type { CombatLabMapInteractionModeV1 } from './CombatLabScenarioEditorPanel';
 
 export type CombatLabMapPickRequestV1 =
   | { readonly kind: 'point_marker'; readonly suggestedTitleRu: string }
@@ -27,11 +31,14 @@ export interface CombatLabMapAuthoringControllerOptions {
   readonly context: GameApplicationContext;
   readonly state: SimulationState;
   readonly draft: CombatLabExperimentDraft;
-  readonly getMode: () => 'scenario_editor' | 'manual_control';
+  readonly mapTools: CombatLabMapToolCoordinator;
+  readonly selection: CombatLabSelectionControllerV1;
+  readonly getMode: () => CombatLabMapInteractionModeV1;
   readonly getSelectedActorRoleId: () => string | null;
   readonly onExperimentChanged: (experiment: CombatLabExperimentV1) => void;
   readonly onMessage?: (messageRu: string, error: boolean) => void;
   readonly onSelectHelperRole?: (roleId: string) => void;
+  readonly onMarkerPreviewChanged?: (marker: ReturnType<CombatLabMarkerManager['getSelectedMarker']>) => void;
 }
 
 interface CombatLabBoardAuthoringInternals {
@@ -50,6 +57,7 @@ export class CombatLabMapAuthoringController {
   private readonly canvas: HTMLCanvasElement;
   private readonly camera: CameraController;
   private readonly menu = new CombatLabMapContextMenu();
+  private readonly markerManager: CombatLabMarkerManager;
   private pendingPick: CombatLabMapPickRequestV1 | null = null;
   private destroyed = false;
 
@@ -60,10 +68,22 @@ export class CombatLabMapAuthoringController {
     }
     this.canvas = internals.app.canvas;
     this.camera = internals.camera;
+    this.markerManager = CombatLabMarkerManager.create({
+      draft: options.draft,
+      mapTools: options.mapTools,
+      selection: options.selection,
+      onExperimentChanged: options.onExperimentChanged,
+      onPreviewChanged: (marker) => {
+        options.onMarkerPreviewChanged?.(marker);
+        options.context.forceRender();
+      },
+      onMessage: (messageRu, error) => this.message(messageRu, error),
+    });
     this.canvas.addEventListener('contextmenu', this.handleContextMenu, true);
     this.canvas.addEventListener('pointerdown', this.handlePointerDown, true);
+    this.canvas.addEventListener('pointermove', this.handlePointerMove, true);
     this.canvas.addEventListener('pointerup', this.handlePointerUp, true);
-    this.canvas.addEventListener('pointercancel', this.handlePointerUp, true);
+    this.canvas.addEventListener('pointercancel', this.handlePointerCancel, true);
     window.addEventListener('keydown', this.handleKeyDown, true);
   }
 
@@ -71,12 +91,17 @@ export class CombatLabMapAuthoringController {
     return new CombatLabMapAuthoringController(options);
   }
 
+  getMarkerManager(): CombatLabMarkerManager {
+    return this.markerManager;
+  }
+
   requestPick(request: CombatLabMapPickRequestV1): void {
     if (this.destroyed) return;
-    if (this.options.getMode() !== 'scenario_editor') {
-      this.message('Переключитесь в режим «Редактор сценария».', true);
+    if (this.options.getMode() !== 'program_authoring') {
+      this.message('Переключитесь в режим «Редактор программы».', true);
       return;
     }
+    this.options.mapTools.cancel();
     this.menu.close();
     this.pendingPick = request;
     this.canvas.dataset.combatLabMapPick = request.kind;
@@ -84,8 +109,9 @@ export class CombatLabMapAuthoringController {
   }
 
   syncMode(): void {
-    if (this.destroyed || this.options.getMode() === 'scenario_editor') return;
+    if (this.destroyed || this.options.getMode() === 'program_authoring') return;
     this.cancelActiveAuthoring(false);
+    this.options.mapTools.cancel();
   }
 
   destroy(): void {
@@ -95,14 +121,16 @@ export class CombatLabMapAuthoringController {
     delete this.canvas.dataset.combatLabMapPick;
     this.canvas.removeEventListener('contextmenu', this.handleContextMenu, true);
     this.canvas.removeEventListener('pointerdown', this.handlePointerDown, true);
+    this.canvas.removeEventListener('pointermove', this.handlePointerMove, true);
     this.canvas.removeEventListener('pointerup', this.handlePointerUp, true);
-    this.canvas.removeEventListener('pointercancel', this.handlePointerUp, true);
+    this.canvas.removeEventListener('pointercancel', this.handlePointerCancel, true);
     window.removeEventListener('keydown', this.handleKeyDown, true);
+    this.markerManager.destroy();
     this.menu.destroy();
   }
 
   private readonly handleContextMenu = (event: MouseEvent): void => {
-    if (this.options.getMode() !== 'scenario_editor') {
+    if (this.options.getMode() !== 'program_authoring') {
       this.cancelActiveAuthoring(false);
       return;
     }
@@ -111,7 +139,14 @@ export class CombatLabMapAuthoringController {
   };
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
-    if (this.options.getMode() !== 'scenario_editor') {
+    const temporaryMode = this.options.mapTools.getMode();
+    if ((temporaryMode === 'move_marker' || temporaryMode === 'resize_circle_marker') && event.button === 0) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.previewMapTool(event);
+      return;
+    }
+    if (this.options.getMode() !== 'program_authoring') {
       this.cancelActiveAuthoring(false);
       return;
     }
@@ -131,10 +166,32 @@ export class CombatLabMapAuthoringController {
     this.menu.open(event.clientX, event.clientY, this.buildMenuItems(point, target));
   };
 
-  private readonly handlePointerUp = (event: PointerEvent): void => {
-    if (this.options.getMode() !== 'scenario_editor' || event.button !== 2) return;
+  private readonly handlePointerMove = (event: PointerEvent): void => {
+    const mode = this.options.mapTools.getMode();
+    if (mode !== 'move_marker' && mode !== 'resize_circle_marker') return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    this.previewMapTool(event);
+  };
+
+  private readonly handlePointerUp = (event: PointerEvent): void => {
+    const temporaryMode = this.options.mapTools.getMode();
+    if ((temporaryMode === 'move_marker' || temporaryMode === 'resize_circle_marker') && event.button === 0) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.previewMapTool(event);
+      this.options.mapTools.confirm();
+      return;
+    }
+    if (this.options.getMode() !== 'program_authoring' || event.button !== 2) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+
+  private readonly handlePointerCancel = (event: PointerEvent): void => {
+    if (this.options.mapTools.getMode() !== 'move_marker' && this.options.mapTools.getMode() !== 'resize_circle_marker') return;
+    event.preventDefault();
+    this.options.mapTools.cancel();
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
@@ -145,20 +202,43 @@ export class CombatLabMapAuthoringController {
     this.cancelActiveAuthoring(true);
   };
 
+  private previewMapTool(event: { readonly clientX: number; readonly clientY: number }): void {
+    const point = this.resolvePoint(event);
+    this.options.mapTools.preview({ xMetres: point.xMetres, yMetres: point.yMetres });
+  }
+
   private resolvePoint(event: { readonly clientX: number; readonly clientY: number }): AuthoredPoint {
     const world = this.camera.screenToWorld(event);
     const grid = clampGridPositionToMap(this.options.state.map, worldToGrid(this.options.state.map, world));
-    return { gridX: grid.x, gridY: grid.y, xMetres: grid.x * this.options.state.map.metersPerCell, yMetres: grid.y * this.options.state.map.metersPerCell };
+    return {
+      gridX: grid.x,
+      gridY: grid.y,
+      xMetres: grid.x * this.options.state.map.metersPerCell,
+      yMetres: grid.y * this.options.state.map.metersPerCell,
+    };
   }
 
   private completePick(request: CombatLabMapPickRequestV1, point: AuthoredPoint): void {
     try {
       if (request.kind === 'point_marker' || request.kind === 'circle_marker') {
+        let markerId: string | null = null;
         const committed = this.commitComposite((draft) => {
           const experiment = draft.getExperiment();
-          draft.addMarker(markerAt(experiment, request.kind === 'circle_marker' ? 'circle' : 'point', request.suggestedTitleRu, point.xMetres, point.yMetres, request.kind === 'circle_marker' ? request.defaultRadiusMetres : 5));
+          const marker = markerAt(
+            experiment,
+            request.kind === 'circle_marker' ? 'circle' : 'point',
+            request.suggestedTitleRu,
+            point.xMetres,
+            point.yMetres,
+            request.kind === 'circle_marker' ? request.defaultRadiusMetres : 5,
+          );
+          markerId = marker.markerId;
+          draft.addMarker(marker);
         });
-        if (committed) this.message(request.kind === 'circle_marker' ? 'Круглая область создана.' : 'Точечная метка создана.', false);
+        if (committed && markerId) {
+          this.markerManager.select(markerId);
+          this.message(request.kind === 'circle_marker' ? 'Круглая область создана.' : 'Точечная метка создана.', false);
+        }
       } else {
         const unit = findUnitAtGridPosition(this.options.state.units, { x: point.gridX, y: point.gridY });
         if (!unit) throw new Error('В этой точке нет бойца.');
@@ -192,7 +272,7 @@ export class CombatLabMapAuthoringController {
 
   private enemyItems(target: UnitModel, actorRole: CombatLabExperimentRoleV1, actorUnit: UnitModel): readonly CombatLabMapContextMenuItemV1[] {
     const ids = ['fire-single', 'fire-short', 'fire-long'] as const;
-    const items = ids.map((id) => {
+    const items: CombatLabMapContextMenuItemV1[] = ids.map((id) => {
       const descriptor = getCombatLabActionDescriptor(id);
       const availability = fireModeAvailability(actorUnit, descriptor.fireMode ?? 'single');
       return this.targetCatalogItem(descriptor, actorRole, target, availability);
@@ -235,7 +315,12 @@ export class CombatLabMapAuthoringController {
           if (!targetRole || !targetTrack || !targetStep) return;
           this.commitComposite((draft) => {
             const base = createCombatLabScenarioStep(draft.getExperiment(), actorRole.roleId, 'wait');
-            appendStep(draft, actorRole.roleId, { ...base, titleRu: `Ждать: ${targetStep.titleRu}`, action: { kind: 'wait', durationSeconds: null }, completion: { kind: 'condition', condition: { kind: 'step_state', trackId: targetTrack.trackId, stepId: targetStep.stepId, state: 'completed' } } });
+            appendStep(draft, actorRole.roleId, {
+              ...base,
+              titleRu: `Ждать: ${targetStep.titleRu}`,
+              action: { kind: 'wait', durationSeconds: null },
+              completion: { kind: 'condition', condition: { kind: 'step_state', trackId: targetTrack.trackId, stepId: targetStep.stepId, state: 'completed' } },
+            });
           });
         },
       },
@@ -305,7 +390,7 @@ export class CombatLabMapAuthoringController {
   }
 
   private commitComposite(mutator: (draft: CombatLabExperimentDraft) => void): boolean {
-    if (this.options.getMode() !== 'scenario_editor') {
+    if (this.options.getMode() !== 'program_authoring') {
       this.cancelActiveAuthoring(false);
       this.message('Действие не добавлено: включено ручное управление.', true);
       return false;
@@ -370,10 +455,14 @@ function nextRoleId(experiment: CombatLabExperimentV1, prefix: string): string {
   throw new Error('Достигнут предел идентификаторов бойцов.');
 }
 
-function disabledItem(id: string, labelRu: string, reasonRu: string): CombatLabMapContextMenuItemV1 { return { id, labelRu, disabled: true, reasonRu, onSelect: () => undefined }; }
+function disabledItem(id: string, labelRu: string, reasonRu: string): CombatLabMapContextMenuItemV1 {
+  return { id, labelRu, disabled: true, reasonRu, onSelect: () => undefined };
+}
 
 function fireModeAvailability(unit: UnitModel, mode: 'single' | 'short_burst' | 'long_burst' | 'suppress'): { enabled: boolean; reasonRu: string | null } {
   const weapon = unit.infantryCombatRuntime.primaryWeapon;
   if (!weapon) return { enabled: false, reasonRu: 'У бойца нет оружия.' };
-  return weapon.resolved.weapon.availableFireModes.includes(mode) ? { enabled: true, reasonRu: null } : { enabled: false, reasonRu: 'Оружие не поддерживает этот режим огня.' };
+  return weapon.resolved.weapon.availableFireModes.includes(mode)
+    ? { enabled: true, reasonRu: null }
+    : { enabled: false, reasonRu: 'Оружие не поддерживает этот режим огня.' };
 }
