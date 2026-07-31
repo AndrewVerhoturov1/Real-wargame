@@ -10,7 +10,7 @@ import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
 import { collectGameApplicationElements, GameApplication } from '../game/GameApplication';
 import type { GameApplicationContext, GamePauseController } from '../game/GameApplicationTypes';
 import { installAppShellMenu } from '../shared/AppShellMenu';
-import { createCombatLabFoundationExtension } from './CombatLabFoundationBridge';
+import { CombatLabExtension } from './CombatLabExtension';
 import { CombatLabVisualSession } from './runtime/CombatLabVisualSession';
 
 let application: GameApplication | null = null;
@@ -32,7 +32,7 @@ async function startCombatLab(): Promise<void> {
       state: session.state,
       elements: collectGameApplicationElements(),
       pauseController: createSessionPauseController(session, extensionRoot),
-      installExtension: (context: GameApplicationContext) => createCombatLabFoundationExtension(
+      installExtension: (context) => CombatLabExtension.create(
         extensionRoot,
         session,
         createCombatLabRenderContext(context),
