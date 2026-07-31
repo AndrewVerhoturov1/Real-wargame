@@ -6,6 +6,7 @@ import type {
   CombatLabExperimentV1,
 } from '../../core/testing/combat-lab';
 import { CombatLabDiagnosticOverlayRenderer } from './CombatLabDiagnosticOverlayRenderer';
+import { CombatLabParticipantMapPreviewRenderer } from './CombatLabParticipantMapPreviewRenderer';
 import {
   CombatLabScenarioAuthoringOverlayRenderer,
   type CombatLabScenarioAuthoringOverlaySelectionV1,
@@ -40,6 +41,7 @@ type CombatLabDebugWindow = Window & {
 export class CombatLabRenderer {
   private readonly overlay: CombatLabDiagnosticOverlayRenderer;
   private readonly authoringOverlay: CombatLabScenarioAuthoringOverlayRenderer;
+  private readonly participantPreviewOverlay: CombatLabParticipantMapPreviewRenderer;
   private readonly removeLabTicker: () => void;
   private readonly removeViewportStabilizer: () => void;
   private boundRevision: number;
@@ -53,6 +55,7 @@ export class CombatLabRenderer {
     const world = context.getWorldContainer();
     this.overlay = new CombatLabDiagnosticOverlayRenderer(world, session);
     this.authoringOverlay = new CombatLabScenarioAuthoringOverlayRenderer(world);
+    this.participantPreviewOverlay = new CombatLabParticipantMapPreviewRenderer(world);
     this.boundRevision = session.revision;
     this.keepProductionTickerPaused();
     this.removeLabTicker = context.addTickerListener(this.tick);
@@ -80,6 +83,7 @@ export class CombatLabRenderer {
   setAuthoredExperiment(experiment: CombatLabExperimentV1): void {
     if (this.destroyed) return;
     this.authoringOverlay.setExperiment(experiment);
+    this.participantPreviewOverlay.setExperiment(experiment);
     this.context.forceRender();
   }
 
@@ -92,6 +96,7 @@ export class CombatLabRenderer {
   clearAuthoringOverlay(): void {
     if (this.destroyed) return;
     this.authoringOverlay.clear();
+    this.participantPreviewOverlay.clear();
     this.context.forceRender();
   }
 
@@ -111,6 +116,7 @@ export class CombatLabRenderer {
     this.destroyed = true;
     this.removeViewportStabilizer();
     this.removeLabTicker();
+    this.participantPreviewOverlay.destroy();
     this.authoringOverlay.destroy();
     this.overlay.destroy();
   }
