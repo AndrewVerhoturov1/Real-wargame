@@ -31,6 +31,8 @@ export interface CombatLabParticipantScenePatchV1 {
   readonly viewRangeCells?: number;
   readonly soldierTraits?: Partial<SoldierTraits>;
   readonly soldierCondition?: Partial<SoldierCondition>;
+  readonly stress?: number;
+  readonly suppression?: number;
   /** Omitted means preserve; null means explicitly clear the published loadout and all weapon/ammo runtime. */
   readonly loadoutRef?: DefinitionRef | null;
   readonly loadedRounds?: number;
