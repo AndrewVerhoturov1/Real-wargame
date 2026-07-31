@@ -22,13 +22,17 @@ const module = await import(`data:text/javascript;base64,${Buffer.from(js).toStr
 const { CombatLabSelectionController } = module;
 
 const state = { selectedUnitId: null, selectedUnitIds: [] };
+let resolveCalls = 0;
 const participants = new Map([
   ['unit-a', { kind: 'participant', roleId: 'role-a', unitId: 'unit-a' }],
   ['unit-b', { kind: 'participant', roleId: 'role-b', unitId: 'unit-b' }],
 ]);
 const controller = CombatLabSelectionController.create({
   state,
-  resolveParticipantByUnitId: (unitId) => participants.get(unitId) ?? null,
+  resolveParticipantByUnitId: (unitId) => {
+    resolveCalls += 1;
+    return participants.get(unitId) ?? null;
+  },
 });
 
 assert.deepEqual(controller.get(), { kind: 'none' });
@@ -59,13 +63,34 @@ controller.syncFromState();
 assert.deepEqual(controller.get(), participantA, 'Production map selection must enter the same controller.');
 assert.equal(published.length, 3);
 
+const resolvedAfterStateChange = resolveCalls;
+controller.syncFromState();
+assert.equal(resolveCalls, resolvedAfterStateChange, 'Unchanged per-frame sync must not rescan participant roles.');
+controller.reconcileFromState();
+assert.equal(resolveCalls, resolvedAfterStateChange + 1, 'Forced reconciliation must resolve the current role mapping.');
+assert.equal(published.length, 3, 'Equal forced reconciliation must not republish selection.');
+
+participants.set('unit-a', { kind: 'participant', roleId: 'role-a-remapped', unitId: 'unit-a' });
+const beforeBoundedSync = resolveCalls;
+controller.syncFromState();
+assert.equal(resolveCalls, beforeBoundedSync, 'Role remapping must not turn the ordinary hot path into a role scan.');
+assert.deepEqual(controller.get(), participantA, 'Ordinary sync waits for explicit draft reconciliation when the unit ID is unchanged.');
+controller.reconcileFromState();
+assert.deepEqual(controller.get(), { kind: 'participant', roleId: 'role-a-remapped', unitId: 'unit-a' });
+assert.equal(published.length, 4, 'Changed role mapping must publish exactly once.');
+
+participants.delete('unit-a');
+controller.reconcileFromState();
+assert.deepEqual(controller.get(), { kind: 'none' }, 'Removed participant must clear the canonical selection.');
+assert.equal(published.length, 5);
+
 controller.select({ kind: 'marker', markerId: 'marker-1' });
 assert.equal(state.selectedUnitId, null, 'Non-participant selection must clear production unit selection.');
 assert.deepEqual(state.selectedUnitIds, []);
 
 unsubscribe();
 controller.select({ kind: 'scene' });
-assert.equal(published.length, 4, 'Unsubscribed listener must not receive later changes.');
+assert.equal(published.length, 6, 'Unsubscribed listener must not receive later changes.');
 controller.destroy();
 controller.select({ kind: 'none' });
 assert.deepEqual(controller.get(), { kind: 'scene' }, 'Destroyed controller must ignore writes.');
