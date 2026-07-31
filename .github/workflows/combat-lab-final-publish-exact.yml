@@ -1,0 +1,63 @@
+name: Combat Lab Final Publish Exact
+
+on:
+  pull_request:
+    branches:
+      - ci/combat-lab-final-publish-base-20260731t113500z-aab8781
+
+permissions:
+  contents: write
+
+jobs:
+  publish-exact-product-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout temporary harness
+        uses: actions/checkout@v4
+        with:
+          path: harness
+
+      - name: Checkout exact integration parent
+        uses: actions/checkout@v4
+        with:
+          ref: integration/20260731-combat-lab-final-assembly-visual-qa
+          fetch-depth: 0
+          path: product
+
+      - name: Apply and publish exact reviewed patch
+        shell: bash
+        working-directory: product
+        env:
+          EXPECTED_PARENT: aab878113abb876f066745debd6d04fe3246fd94
+          EXPECTED_TREE: 4e6803fa99c7fe6caab9f358293c6d1ccf25ac69
+          TARGET_BRANCH: integration/20260731-combat-lab-final-assembly-visual-qa
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PARENT"
+          remote_sha="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_sha" = "$EXPECTED_PARENT"
+
+          base64 --decode ../harness/ci/final-product.patch.gz.b64 | gunzip > "$RUNNER_TEMP/final-product.patch"
+          git config user.name 'OpenAI Combat Lab Integrator'
+          git config user.email 'actions@users.noreply.github.com'
+          git am --committer-date-is-author-date "$RUNNER_TEMP/final-product.patch"
+
+          actual_tree="$(git rev-parse HEAD^{tree})"
+          echo "Expected tree: $EXPECTED_TREE"
+          echo "Actual tree:   $actual_tree"
+          test "$actual_tree" = "$EXPECTED_TREE"
+          git diff --check "$EXPECTED_PARENT..HEAD"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+
+      - name: Record published identity
+        shell: bash
+        working-directory: product
+        run: |
+          {
+            echo '## Exact final integration publication'
+            echo
+            echo "- commit: $(git rev-parse HEAD)"
+            echo "- tree: $(git rev-parse HEAD^{tree})"
+            echo '- target: integration/20260731-combat-lab-final-assembly-visual-qa'
+          } >> "$GITHUB_STEP_SUMMARY"
