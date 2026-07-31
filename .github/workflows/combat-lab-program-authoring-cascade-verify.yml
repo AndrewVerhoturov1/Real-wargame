@@ -1,0 +1,27 @@
+name: Combat Lab Program Authoring Cascade Verify
+
+on:
+  push:
+    branches:
+      - worker/20260731-combat-lab-program-authoring
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  marker-cascade-red:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Marker authoring behavior
+        run: node scripts/combat_lab_marker_authoring_behavior_smoke.mjs
