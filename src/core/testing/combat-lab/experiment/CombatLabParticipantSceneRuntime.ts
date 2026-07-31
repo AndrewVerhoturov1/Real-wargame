@@ -3,6 +3,7 @@ import {
   readAiGraphCatalogFromScene,
   writeAiGraphCatalogToScene,
 } from '../../../ai/AiGraphCatalog';
+import { createBehaviorSettings } from '../../../behavior/BehaviorModel';
 import { normalizeUnitSide, type UnitData } from '../../../units/UnitModel';
 import {
   createUnitManualBrainBinding,
@@ -102,6 +103,12 @@ export function readCombatLabParticipantInitialDraft(
     facingDegrees: (unit.facingRadians * 180) / Math.PI,
     runtimeMetersPerCell: experiment.sceneSnapshot.map.metersPerCell / normalized.sourceToRuntimeCellScale,
     posture: unit.behaviorRuntime.posture,
+    behaviorProfile: unit.behaviorProfile,
+    speedCellsPerSecond: unit.speedCellsPerSecond / normalized.sourceToRuntimeCellScale,
+    viewAngleDegrees: (unit.viewAngleRadians * 180) / Math.PI,
+    viewRangeCells: unit.viewRangeCells / normalized.sourceToRuntimeCellScale,
+    soldierTraits: Object.freeze({ ...unit.soldier.traits }),
+    soldierCondition: Object.freeze({ ...unit.soldier.condition }),
     loadoutRef: runtime.ammoInventory.loadoutRef ? Object.freeze({ ...runtime.ammoInventory.loadoutRef }) : null,
     loadedRounds: runtime.primaryWeapon?.roundsInWeapon ?? 0,
     reserves: Object.freeze(runtime.ammoInventory.reserves.map((entry) => Object.freeze({
@@ -156,6 +163,24 @@ export function updateCombatLabParticipantInitialState(
     unit.facingRadians = degreesToRadians(normalizeDegrees(patch.facingDegrees));
   }
   if (patch.posture !== undefined) applyPosture(unit, patch.posture);
+  if (patch.behaviorProfile !== undefined) {
+    unit.behaviorProfile = patch.behaviorProfile;
+    unit.behaviorSettings = createBehaviorSettings(patch.behaviorProfile);
+  }
+  if (patch.speedCellsPerSecond !== undefined) {
+    assertPositiveFinite(patch.speedCellsPerSecond, 'Скорость бойца должна быть больше нуля.');
+    unit.speedCellsPerSecond = patch.speedCellsPerSecond * normalized.sourceToRuntimeCellScale;
+  }
+  if (patch.viewAngleDegrees !== undefined) {
+    assertPositiveFinite(patch.viewAngleDegrees, 'Угол обзора должен быть больше нуля.');
+    unit.viewAngleRadians = degreesToRadians(Math.min(360, patch.viewAngleDegrees));
+  }
+  if (patch.viewRangeCells !== undefined) {
+    assertPositiveFinite(patch.viewRangeCells, 'Дальность обзора должна быть больше нуля.');
+    unit.viewRangeCells = patch.viewRangeCells * normalized.sourceToRuntimeCellScale;
+  }
+  if (patch.soldierTraits !== undefined) Object.assign(unit.soldier.traits, patch.soldierTraits);
+  if (patch.soldierCondition !== undefined) Object.assign(unit.soldier.condition, patch.soldierCondition);
   if (patch.loadoutRef === null) clearPublishedLoadout(unit);
   else if (patch.loadoutRef !== undefined) applyPublishedLoadout(unit, patch.loadoutRef, options.catalogRegistry);
   applyAmmoAndAid(unit, patch);
@@ -207,6 +232,13 @@ export function createCombatLabParticipant(
     x: input.x,
     y: input.y,
     facingDegrees: normalizeDegrees(input.facingDegrees ?? 0),
+    speedCellsPerSecond: input.speedCellsPerSecond,
+    viewAngleDegrees: input.viewAngleDegrees,
+    viewRangeCells: input.viewRangeCells,
+    behaviorProfile: input.behaviorProfile,
+    soldier: input.soldierTraits || input.soldierCondition
+      ? { traits: input.soldierTraits, condition: input.soldierCondition }
+      : undefined,
     heldItem: heldItemForType(input.unitType),
     initialState: { posture },
     runtime: { posture },
@@ -318,6 +350,10 @@ function installGraphDefinition(experiment: CombatLabExperimentV1, graph: Parame
     catalog,
   ) as unknown as CombatLabExperimentV1['sceneSnapshot'];
   return { ...experiment, sceneSnapshot };
+}
+
+function assertPositiveFinite(value: number, message: string): void {
+  if (!Number.isFinite(value) || value <= 0) throw new CombatLabParticipantSceneError('combat_lab_participant_value_invalid', message);
 }
 
 function healthSummary(slots: readonly { readonly severity: string }[], bloodState: string): string {
