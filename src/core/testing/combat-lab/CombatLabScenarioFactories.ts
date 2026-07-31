@@ -9,10 +9,15 @@ import {
 import { createInitialState } from '../../simulation/SimulationState';
 import type { UnitData, UnitModel } from '../../units/UnitModel';
 import type { CombatLabBuiltScenarioV1, CombatLabScenarioDefinitionV1 } from './CombatLabContracts';
+import {
+  COMBAT_LAB_METRES_PER_CELL,
+  combatLabCellSizePixelsForPhysicalScale,
+  combatLabMapCellsForMetres,
+  combatLabMetresToGrid,
+} from './CombatLabGridScale';
 
 const MAP_WIDTH_METRES = 230;
 const MAP_HEIGHT_METRES = 90;
-const METRES_PER_CELL = 1;
 const DISTANCE_STAND_SHOOTER_X = 10;
 const DISTANCE_STAND_SHOOTER_Y = 40;
 
@@ -26,8 +31,8 @@ interface UnitFixture {
   readonly id: string;
   readonly titleRu: string;
   readonly side: 'blue' | 'red';
-  readonly x: number;
-  readonly y: number;
+  readonly xMetres: number;
+  readonly yMetres: number;
   readonly facingDegrees: number;
   readonly loadout?: LoadoutId;
 }
@@ -37,21 +42,21 @@ export function buildCombatLabScenarioState(
   seed: number,
 ): CombatLabBuiltScenarioV1 {
   const fixtures = fixturesForFactory(definition.stateFactoryId);
-  const commonYOffset = seededCommonOffset(seed);
+  const commonYOffsetMetres = seededCommonOffset(seed);
   const unitsData: UnitData[] = fixtures.map((fixture) => ({
     id: fixture.id,
     side: fixture.side,
     aiControl: 'manual',
-    x: fixture.x,
-    y: fixture.y + commonYOffset,
+    x: combatLabMetresToGrid(fixture.xMetres),
+    y: combatLabMetresToGrid(fixture.yMetres + commonYOffsetMetres),
     type: 'infantry_squad',
     facingDegrees: fixture.facingDegrees,
   }));
   const state = createInitialState({
-    width: MAP_WIDTH_METRES,
-    height: MAP_HEIGHT_METRES,
-    cellSize: 5,
-    metersPerCell: METRES_PER_CELL,
+    width: combatLabMapCellsForMetres(MAP_WIDTH_METRES),
+    height: combatLabMapCellsForMetres(MAP_HEIGHT_METRES),
+    cellSize: combatLabCellSizePixelsForPhysicalScale(),
+    metersPerCell: COMBAT_LAB_METRES_PER_CELL,
     defaultTerrain: 'field',
     defaultHeight: 0,
     objects: [],
@@ -221,8 +226,8 @@ function applyScenarioInitialConditions(factoryId: string, units: UnitModel[]): 
   }
 }
 
-function fixture(id: string, titleRu: string, side: 'blue' | 'red', x: number, y: number, facingDegrees: number, loadout?: LoadoutId): UnitFixture {
-  return { id, titleRu, side, x, y, facingDegrees, loadout };
+function fixture(id: string, titleRu: string, side: 'blue' | 'red', xMetres: number, yMetres: number, facingDegrees: number, loadout?: LoadoutId): UnitFixture {
+  return { id, titleRu, side, xMetres, yMetres, facingDegrees, loadout };
 }
 
 function wound(

@@ -24,6 +24,7 @@ import type {
 const BUILT_IN_EXPORTED_AT = '1970-01-01T00:00:00.000Z';
 const DEFAULT_BATCH_RUN_COUNT = 100;
 const DEFAULT_REPRESENTATIVE_RUN_COUNT = 5;
+export const COMBAT_LAB_DEFAULT_MAXIMUM_SIMULATION_SECONDS = 120;
 
 export function buildCombatLabBuiltInExperiment(
   scenarioId: CombatLabScenarioId,
@@ -71,7 +72,7 @@ export function buildCombatLabBuiltInExperiment(
     enabled: true,
     steps: trackSteps.get(role.roleId) ?? [],
   }));
-  const maximumSimulationSeconds = Math.min(600, Math.max(0.1, definition.defaultStopCondition.maximumSimulationSeconds));
+  const stepTimeoutSeconds = Math.min(600, Math.max(0.1, definition.defaultStopCondition.maximumSimulationSeconds));
   const experiment: CombatLabExperimentV1 = {
     schemaVersion: 1,
     experimentId: `built-in:${scenarioId}`,
@@ -85,7 +86,7 @@ export function buildCombatLabBuiltInExperiment(
     tracks,
     defaults: {
       seed: normalizedSeed,
-      stepTimeoutSeconds: maximumSimulationSeconds,
+      stepTimeoutSeconds,
       failurePolicy: 'stop_experiment',
       repeat: { kind: 'once', maximumAttempts: 1, retryDelaySeconds: 0 },
       accuracyOverrides: null,
@@ -93,12 +94,12 @@ export function buildCombatLabBuiltInExperiment(
     successCondition: { kind: 'always' },
     stopCondition: {
       kind: definition.defaultStopCondition.kind,
-      maximumSimulationSeconds,
+      maximumSimulationSeconds: COMBAT_LAB_DEFAULT_MAXIMUM_SIMULATION_SECONDS,
     },
     batchDefaults: {
       runCount: DEFAULT_BATCH_RUN_COUNT,
-      seedStrategy: { kind: 'fixed', seed: normalizedSeed },
-      maximumSimulationSeconds,
+      seedStrategy: { kind: 'sequential', firstSeed: normalizedSeed },
+      maximumSimulationSeconds: COMBAT_LAB_DEFAULT_MAXIMUM_SIMULATION_SECONDS,
       workerCount: 1,
       representativeRunCount: DEFAULT_REPRESENTATIVE_RUN_COUNT,
       metricIds: [...definition.supportedMetrics],

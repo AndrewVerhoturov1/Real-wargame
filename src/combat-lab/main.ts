@@ -1,4 +1,5 @@
 import '../game/GameStyles';
+import './ui/combat-lab-ui-tokens.css';
 import './combat-lab.css';
 import './combat-lab-workspace.css';
 import './combat-lab-ui-polish.css';

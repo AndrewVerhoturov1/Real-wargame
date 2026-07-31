@@ -16,6 +16,8 @@ assert.match(builtIns, /nextSourceStep\?\.command\.kind === 'cancel_fire'/);
 assert.match(builtIns, /anchor: 'step_start'/);
 assert.match(builtIns, /BUILT_IN_EXPORTED_AT/);
 assert.match(builtIns, /deepFreeze\(/);
+assert.match(builtIns, /COMBAT_LAB_DEFAULT_MAXIMUM_SIMULATION_SECONDS\s*=\s*120/);
+assert.match(builtIns, /seedStrategy:\s*\{\s*kind:\s*'sequential'/);
 for (const scenarioId of [
   'rifle-distance-baseline',
   'rifle-moving-target',
@@ -27,4 +29,8 @@ for (const scenarioId of [
   'combat-save-load-boundaries',
 ]) assert.match(registry, new RegExp(scenarioId), `Missing built-in source scenario ${scenarioId}`);
 assert.doesNotMatch(builtIns, /runCombatLabScenario\s*=|function runCombatLabScenario/, 'Existing runner must remain separate and intact.');
+
+await import('./combat_lab_two_metre_grid_contract_smoke.mjs');
+await import('./combat_lab_experiment_duration_behavior_smoke.mjs');
+await import('./combat_lab_movement_distance_regression_smoke.mjs');
 console.log('Combat Lab built-in experiments smoke passed.');

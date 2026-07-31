@@ -26,6 +26,7 @@ export interface CombatLabScenePanelOptions {
   readonly draft: CombatLabExperimentDraft;
   readonly onExperimentChanged: (experiment: CombatLabExperimentV1) => void;
   readonly getSelectedUnitId: () => string | null;
+  readonly onSelectRole?: (roleId: string) => void;
   readonly host?: HTMLElement;
   readonly fileCodec?: CombatLabExperimentFileCodecV1;
   readonly storage?: Storage;
@@ -59,6 +60,7 @@ export class CombatLabScenePanel {
       state: options.state,
       draft: options.draft,
       getSelectedUnitId: options.getSelectedUnitId,
+      onSelectRole: options.onSelectRole,
       onExperimentChanged: (experiment) => this.changed(experiment, 'Роль сохранена.'),
       onError: (messageRu) => this.showMessage(messageRu, true),
     });
