@@ -259,7 +259,7 @@ function renderUnitPanel(
 function createGameWorkbenchUnitAdapter(
   state: SimulationState,
   drafts: GameEditorDrafts,
-  selected: UnitModel | null,
+  selected: UnitModel | null | undefined,
   onChanged: () => void,
 ): ProductionUnitEditorAdapterV1 {
   return {
