@@ -1,0 +1,264 @@
+name: Combat Lab Final Visual QA
+
+on:
+  pull_request:
+    branches:
+      - ci/combat-lab-final-visual-base-20260731t122000z-1b09ee7
+
+permissions:
+  contents: read
+
+jobs:
+  deployed-visual-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PRODUCT_SHA: 1b09ee727b413174e86627e76cc08af23c12c1b3
+      CANONICAL_BRANCH: integration/20260731-combat-lab-final-assembly-visual-qa
+      EXPECTED_VERCEL_PROJECT_NAME: repo
+    steps:
+      - name: Checkout exact product
+        uses: actions/checkout@v4
+        with:
+          ref: 1b09ee727b413174e86627e76cc08af23c12c1b3
+          fetch-depth: 1
+          path: product
+
+      - name: Checkout visual harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          path: harness
+
+      - name: Verify exact product identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git -C product rev-parse HEAD)"
+          echo "Expected product SHA: $PRODUCT_SHA"
+          echo "Actual product SHA:   $actual_sha"
+          test "$actual_sha" = "$PRODUCT_SHA"
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            product/package-lock.json
+            harness/package-lock.json
+
+      - name: Install product dependencies
+        working-directory: product
+        run: npm ci --no-audit --no-fund
+
+      - name: Run exact Preview verification gate
+        id: gate
+        working-directory: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/preview-verification.json"
+          npm run verify:preview -- --report "$report"
+          echo "report=$report" >> "$GITHUB_OUTPUT"
+
+      - name: Pull permanent Vercel project settings
+        working-directory: product
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel@56.4.1 pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Verify permanent Vercel project link
+        working-directory: product
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: >-
+          node scripts/verify_vercel_project_link.mjs
+          --file .vercel/project.json
+          --expected-org-id "$VERCEL_ORG_ID"
+          --expected-project-id "$VERCEL_PROJECT_ID"
+          --expected-project-name "$EXPECTED_VERCEL_PROJECT_NAME"
+
+      - name: Build exact Vercel output
+        working-directory: product
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          REAL_WARGAME_BRANCH: ${{ env.CANONICAL_BRANCH }}
+          REAL_WARGAME_COMMIT_SHA: ${{ env.PRODUCT_SHA }}
+        run: npx --yes vercel@56.4.1 build --token="$VERCEL_TOKEN"
+
+      - name: Add exact deployment identity
+        working-directory: product
+        run: >-
+          node scripts/write_deployment_source.mjs
+          --root .vercel/output/static
+          --ref "$CANONICAL_BRANCH"
+          --sha "$PRODUCT_SHA"
+          --report "${{ steps.gate.outputs.report }}"
+
+      - name: Verify prebuilt output pages
+        working-directory: product
+        run: npm run verify:deployment-pages -- --root .vercel/output/static --require-source
+
+      - name: Publish exact Preview
+        id: deploy
+        working-directory: product
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          deployment_url="$(npx --yes vercel@56.4.1 deploy --prebuilt --yes --token="$VERCEL_TOKEN")"
+          deployment_url="$(printf '%s\n' "$deployment_url" | tail -n 1 | tr -d '\r')"
+          [[ "$deployment_url" =~ ^https://[^[:space:]]+$ ]]
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for READY
+        working-directory: product
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel@56.4.1 inspect "${{ steps.deploy.outputs.url }}" --wait --token="$VERCEL_TOKEN"
+
+      - name: Read deployment identity
+        id: deployment
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/vercel-e2e
+          deployment_host="${DEPLOYMENT_URL#https://}"
+          response="artifacts/vercel-e2e/deployment.json"
+          curl --fail --silent --show-error --get \
+            --url "https://api.vercel.com/v13/deployments/$deployment_host" \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --data-urlencode "teamId=$VERCEL_ORG_ID" \
+            --output "$response"
+          RESPONSE="$response" node <<'NODE'
+          const fs = require('node:fs');
+          const deployment = JSON.parse(fs.readFileSync(process.env.RESPONSE, 'utf8'));
+          if (deployment.projectId !== process.env.VERCEL_PROJECT_ID) throw new Error('Unexpected Vercel project.');
+          if (deployment.readyState !== 'READY') throw new Error(`Deployment is ${deployment.readyState ?? 'unknown'}.`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `id=${deployment.id}\nstatus=${deployment.readyState}\n`);
+          NODE
+
+      - name: Verify published source metadata
+        working-directory: product
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          npx --yes vercel@56.4.1 curl /deployment-source.json --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > ../artifacts/vercel-e2e/deployment-source.json
+          SOURCE_FILE=../artifacts/vercel-e2e/deployment-source.json node <<'NODE'
+          const fs = require('node:fs');
+          const source = JSON.parse(fs.readFileSync(process.env.SOURCE_FILE, 'utf8'));
+          if (source.ref !== process.env.CANONICAL_BRANCH || source.sourceSha !== process.env.PRODUCT_SHA) {
+            throw new Error('Published source identity does not match the exact integration product.');
+          }
+          NODE
+
+      - name: Install visual harness dependencies
+        working-directory: harness
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Chromium
+        working-directory: harness
+        run: npx playwright install --with-deps chromium
+
+      - name: Run deployed browser scenarios
+        working-directory: harness
+        env:
+          TARGET_URL: ${{ steps.deploy.outputs.url }}
+          EXPECTED_PRODUCT_SHA: ${{ env.PRODUCT_SHA }}
+          CANONICAL_FEATURE_BRANCH: ${{ env.CANONICAL_BRANCH }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: npx playwright test --config ci/playwright.combat-lab-final-visual.config.ts
+
+      - name: Build contact sheet
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/vercel-e2e
+          python -m pip install --quiet pillow
+          python <<'PY'
+          from pathlib import Path
+          from PIL import Image, ImageDraw, ImageFont
+          import math
+
+          root = Path('artifacts/vercel-e2e')
+          images = sorted(root.glob('*.png'))
+          output = root / 'contact-sheet.png'
+          if not images:
+              canvas = Image.new('RGB', (1200, 300), 'white')
+              ImageDraw.Draw(canvas).text((40, 120), 'No screenshots were produced.', fill='black')
+              canvas.save(output)
+              raise SystemExit(0)
+
+          cell_w, cell_h, label_h, margin, cols = 480, 300, 34, 18, 3
+          rows = math.ceil(len(images) / cols)
+          canvas = Image.new('RGB', (margin + cols * (cell_w + margin), margin + rows * (cell_h + label_h + margin)), 'white')
+          draw = ImageDraw.Draw(canvas)
+          font = ImageFont.load_default()
+          for index, file in enumerate(images):
+              image = Image.open(file).convert('RGB')
+              image.thumbnail((cell_w, cell_h))
+              x = margin + (index % cols) * (cell_w + margin)
+              y = margin + (index // cols) * (cell_h + label_h + margin)
+              canvas.paste(image, (x + (cell_w - image.width) // 2, y + (cell_h - image.height) // 2))
+              draw.text((x, y + cell_h + 8), file.name, fill='black', font=font)
+          canvas.save(output)
+          PY
+
+      - name: Copy verification report
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts/vercel-e2e
+          if [[ -n "${{ steps.gate.outputs.report }}" && -f "${{ steps.gate.outputs.report }}" ]]; then
+            cp "${{ steps.gate.outputs.report }}" artifacts/vercel-e2e/preview-verification.json
+          fi
+
+      - name: Upload visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-final-visual-qa-${{ env.PRODUCT_SHA }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/vercel-e2e
+            playwright-report
+            test-results/vercel-e2e
+
+      - name: Publish run summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Combat Lab Final Visual QA'
+            echo
+            echo "- product SHA: $PRODUCT_SHA"
+            echo "- canonical branch: $CANONICAL_BRANCH"
+            echo "- deployment ID: ${{ steps.deployment.outputs.id }}"
+            echo "- Preview URL: ${{ steps.deploy.outputs.url }}"
+            echo "- Vercel status: ${{ steps.deployment.outputs.status }}"
+            echo "- workflow result: ${{ job.status }}"
+            echo '- evidence artifact: combat-lab-final-visual-qa-'"$PRODUCT_SHA"
+          } >> "$GITHUB_STEP_SUMMARY"
