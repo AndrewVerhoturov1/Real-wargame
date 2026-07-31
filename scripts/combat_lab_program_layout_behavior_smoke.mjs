@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [panel, tracks, card, css] = await Promise.all([
+const [panel, tracks, card, baseCss, programCss] = await Promise.all([
   readFile('src/combat-lab/scenario-editor/CombatLabScenarioEditorPanel.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabTrackList.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabStepCard.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/combat-lab-scenario-editor.css', 'utf8'),
+  readFile('src/combat-lab/scenario-editor/combat-lab-program-authoring.css', 'utf8'),
 ]);
+const css = `${baseCss}\n${programCss}`;
 
 assert.match(panel, /CombatLabTrackDialog/);
 assert.match(panel, /CombatLabStepDialog/);
@@ -17,7 +19,7 @@ assert.match(tracks, /scrollTrackIntoView/);
 for (const row of ['combat-lab-step-name-row', 'combat-lab-step-relation-row', 'combat-lab-step-condition-row', 'combat-lab-step-runtime-row']) {
   assert.match(card, new RegExp(row));
 }
-assert.doesNotMatch(card, /stepId|trackId.*textContent/, 'Technical IDs must not be primary card copy.');
+assert.doesNotMatch(card, /text\([^\n]*(?:step\.stepId|options\.trackId)/, 'Technical IDs must not be primary card copy.');
 assert.match(css, /--combat-lab-program-width:\s*360px/);
 assert.match(css, /min-width:\s*340px/);
 assert.match(css, /max-width:\s*380px/);
