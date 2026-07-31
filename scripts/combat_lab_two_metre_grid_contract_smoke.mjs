@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 
-const [scaleSource, factories, registry, builtIns, executor, summary, extension] = await Promise.all([
+const [scaleSource, factories, registry, builtIns, executor, summary, application] = await Promise.all([
   readFile('src/core/testing/combat-lab/CombatLabGridScale.ts', 'utf8'),
   readFile('src/core/testing/combat-lab/CombatLabScenarioFactories.ts', 'utf8'),
   readFile('src/core/testing/combat-lab/CombatLabScenarioRegistry.ts', 'utf8'),
   readFile('src/core/testing/combat-lab/experiment/CombatLabBuiltInExperiments.ts', 'utf8'),
   readFile('src/core/testing/combat-lab/experiment/CombatLabScenarioExecutor.ts', 'utf8'),
   readFile('src/combat-lab/ui/CombatLabExperimentSettingsSummary.ts', 'utf8'),
-  readFile('src/combat-lab/CombatLabExtension.ts', 'utf8'),
+  readFile('src/game/GameApplication.ts', 'utf8'),
 ]);
 
 const js = ts.transpileModule(scaleSource, {
@@ -28,7 +28,8 @@ assert.match(factories, /combatLabMetresToGrid\(fixture\.yMetres\s*\+\s*commonYO
 assert.match(registry, /targetGrid:\s*\{\s*x:\s*40,\s*y:\s*27\.5\s*\}/);
 assert.match(builtIns, /command\.targetGrid\.x\s*\*\s*scene\.map\.metersPerCell/);
 assert.match(executor, /target\.xMetres\s*\/\s*metresPerCell/);
-assert.match(summary, /Сетка:\s*2×2 м/);
-assert.match(extension, /hideCombatLabVisualGrid/);
+assert.match(summary, /COMBAT_LAB_METRES_PER_CELL/);
+assert.match(application, /gridButton\.textContent\s*=\s*'Сетка: выкл'/);
+assert.match(application, /gridButton\.setAttribute\('aria-pressed',\s*'false'\)/);
 
 console.log('Combat Lab two-metre grid contract smoke passed.');
