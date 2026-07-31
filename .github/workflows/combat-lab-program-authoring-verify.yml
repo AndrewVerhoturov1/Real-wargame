@@ -28,10 +28,12 @@ jobs:
         run: npm ci
       - name: Foundation selection behavior
         run: node scripts/combat_lab_selection_controller_behavior_smoke.mjs
-      - name: Foundation map mode behavior
-        run: node scripts/combat_lab_map_tool_mode_behavior_smoke.mjs
       - name: Foundation map transaction behavior
         run: node scripts/combat_lab_map_tool_transaction_behavior_smoke.mjs
+      - name: Foundation composition behavior
+        run: node scripts/combat_lab_foundation_composition_behavior_smoke.mjs
+      - name: Foundation workspace services behavior
+        run: node scripts/combat_lab_workspace_services_behavior_smoke.mjs
       - name: Program authoring behaviors
         run: |
           node scripts/combat_lab_program_layout_behavior_smoke.mjs
