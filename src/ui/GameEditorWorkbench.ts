@@ -40,6 +40,7 @@ import {
 } from '../core/units/UnitAiBrainBinding';
 import type { UnitModel } from '../core/units/UnitModel';
 import {
+  createProductionUnitEditorPositionScale,
   createProductionUnitEditorSection,
   type ProductionUnitEditorAdapterV1,
   type ProductionUnitEditorPatchV1,
@@ -264,6 +265,7 @@ function createGameWorkbenchUnitAdapter(
 ): ProductionUnitEditorAdapterV1 {
   return {
     mode: 'live',
+    positionScale: createProductionUnitEditorPositionScale(state.map.metersPerCell),
     read: () => selected ? snapshotFromLiveUnit(selected) : snapshotFromUnitDraft(drafts.unit),
     update: (patch) => {
       if (selected) applyProductionPatchToLiveUnit(state, selected, patch);
