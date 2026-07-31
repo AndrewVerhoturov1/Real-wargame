@@ -17,6 +17,13 @@ export interface ProductionUnitEditorLoadoutOptionV1 {
   readonly magazineCapacity: number;
 }
 
+export interface ProductionUnitEditorPositionScaleV1 {
+  readonly coordinateConvention: 'cell_centre';
+  readonly metersPerCell: number;
+  toDisplayMetres(storageCells: number): number;
+  toStorageCells(displayMetres: number): number;
+}
+
 export interface ProductionUnitEditorSnapshotV1 {
   readonly roleId: string | null;
   readonly unitId: string;
@@ -70,6 +77,7 @@ export interface ProductionUnitEditorPatchV1 {
 
 export interface ProductionUnitEditorAdapterV1 {
   readonly mode: 'live' | 'experiment_draft' | 'local_dialog_draft';
+  readonly positionScale: ProductionUnitEditorPositionScaleV1;
   read(): ProductionUnitEditorSnapshotV1 | null;
   update(patch: ProductionUnitEditorPatchV1): void;
   listGraphOptions(): readonly ProductionUnitEditorGraphOptionV1[];
@@ -125,6 +133,26 @@ const CONDITION_FIELDS: ReadonlyArray<readonly [keyof SoldierCondition, string]>
   ['stealth', 'Скрытность'],
 ];
 
+export function createProductionUnitEditorPositionScale(
+  metersPerCell: number,
+): ProductionUnitEditorPositionScaleV1 {
+  if (!Number.isFinite(metersPerCell) || metersPerCell <= 0) {
+    throw new Error('Масштаб карты metersPerCell должен быть больше нуля.');
+  }
+  return Object.freeze({
+    coordinateConvention: 'cell_centre' as const,
+    metersPerCell,
+    toDisplayMetres: (storageCells: number) => roundThree((storageCells + 0.5) * metersPerCell),
+    toStorageCells: (displayMetres: number) => roundThree(displayMetres / metersPerCell - 0.5),
+  });
+}
+
+export function formatProductionUnitEditorGraphOptionLabel(
+  option: Pick<ProductionUnitEditorGraphOptionV1, 'graphId' | 'titleRu'>,
+): string {
+  return `${option.titleRu} · ${option.graphId}`;
+}
+
 export function createProductionUnitEditorSection(
   adapter: ProductionUnitEditorAdapterV1,
   options: ProductionUnitEditorSectionOptionsV1 = {},
@@ -151,6 +179,7 @@ export function createProductionUnitEditorSection(
     catch (error) { adapter.onError?.(error instanceof Error ? error.message : 'Не удалось изменить бойца.'); }
   };
   const apply = (patch: ProductionUnitEditorPatchV1) => report(() => adapter.update(patch));
+  const positionScale = adapter.positionScale;
 
   root.append(
     section('Основное',
@@ -161,8 +190,12 @@ export function createProductionUnitEditorSection(
       selectField('Поза', POSTURE_OPTIONS, snapshot.posture, (posture) => apply({ posture })),
     ),
     section('Размещение',
-      numberField('X, клеток сцены', snapshot.x, -100000, 100000, 0.1, (x) => apply({ x })),
-      numberField('Y, клеток сцены', snapshot.y, -100000, 100000, 0.1, (y) => apply({ y })),
+      numberField('X, м', positionScale.toDisplayMetres(snapshot.x), -1000000, 1000000, 0.1, (xMetres) => apply({
+        x: positionScale.toStorageCells(xMetres),
+      })),
+      numberField('Y, м', positionScale.toDisplayMetres(snapshot.y), -1000000, 1000000, 0.1, (yMetres) => apply({
+        y: positionScale.toStorageCells(yMetres),
+      })),
       numberField('Направление, °', snapshot.facingDegrees, -3600, 3600, 1, (facingDegrees) => apply({ facingDegrees })),
       options.placementButtons === false ? empty('') : buttonRow(
         actionButton('Поставить на карте', () => adapter.beginPlacement?.()),
@@ -189,11 +222,7 @@ export function createProductionUnitEditorSection(
       numberField('Осторожность', snapshot.soldierTraits.caution, 0, 100, 1, (caution) => apply({ soldierTraits: { caution } })),
     ),
     createBrainSection(adapter, snapshot, apply),
-    section('Технические данные',
-      readOnlyField('roleId', snapshot.roleId ?? '—'),
-      readOnlyField('unitId', snapshot.unitId),
-      readOnlyField('Режим данных', adapter.mode),
-    ),
+    createTechnicalDetails(snapshot, adapter.mode),
   );
   return root;
 }
@@ -245,17 +274,33 @@ function createBrainSection(
   mode.append(new Option('Ручное управление', 'manual'), new Option('Graph v2', 'graph'));
   mode.value = snapshot.aiBrain.kind;
   const graph = document.createElement('select');
-  for (const entry of graphs) graph.append(new Option(entry.titleRu, entry.graphId));
-  if (snapshot.aiBrain.kind === 'graph') graph.value = snapshot.aiBrain.graphId;
+  graph.append(new Option('Выберите граф Graph v2', ''));
+  for (const entry of graphs) graph.append(new Option(formatProductionUnitEditorGraphOptionLabel(entry), entry.graphId));
+  if (snapshot.aiBrain.kind === 'graph') {
+    const selectedExists = graphs.some((entry) => entry.graphId === snapshot.aiBrain.graphId);
+    if (!selectedExists) {
+      const missing = new Option(`Граф не найден · ${snapshot.aiBrain.graphId}`, snapshot.aiBrain.graphId);
+      missing.disabled = true;
+      graph.append(missing);
+    }
+    graph.value = snapshot.aiBrain.graphId;
+  }
   graph.disabled = mode.value !== 'graph';
   mode.addEventListener('change', () => {
-    graph.disabled = mode.value !== 'graph';
     if (mode.value === 'manual') {
+      graph.disabled = true;
       apply({ aiBrain: { schemaVersion: 1, kind: 'manual' } });
       return;
     }
-    const selected = graphs.find((entry) => entry.graphId === graph.value) ?? graphs[0];
-    if (selected) apply({
+    const selected = graphs.find((entry) => entry.graphId === graph.value);
+    if (!selected) {
+      mode.value = snapshot.aiBrain.kind;
+      graph.disabled = snapshot.aiBrain.kind !== 'graph';
+      adapter.onError?.('Выберите точный граф Graph v2. Другой граф автоматически не подставляется.');
+      return;
+    }
+    graph.disabled = false;
+    apply({
       aiBrain: { schemaVersion: 1, kind: 'graph', graphId: selected.graphId },
       aiGraphDefinition: selected.graph,
     });
@@ -269,6 +314,24 @@ function createBrainSection(
     });
   });
   return section('Мозг', field('Управление', mode), field('Граф Graph v2', graph));
+}
+
+function createTechnicalDetails(
+  snapshot: ProductionUnitEditorSnapshotV1,
+  mode: ProductionUnitEditorAdapterV1['mode'],
+): HTMLDetailsElement {
+  const details = document.createElement('details');
+  details.className = 'production-unit-editor__technical-details';
+  details.open = false;
+  const summary = document.createElement('summary');
+  summary.textContent = 'Технические сведения';
+  details.append(
+    summary,
+    readOnlyField('roleId', snapshot.roleId ?? '—'),
+    readOnlyField('unitId', snapshot.unitId),
+    readOnlyField('Режим данных', mode),
+  );
+  return details;
 }
 
 function section(title: string, ...children: HTMLElement[]): HTMLElement {
@@ -373,4 +436,8 @@ function empty(value: string): HTMLElement {
 
 function refKey(ref: DefinitionRef): string {
   return `${ref.definitionId}@${ref.revision}`;
+}
+
+function roundThree(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }
