@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
+await import('./combat_lab_selection_controller_behavior_smoke.mjs');
+await import('./combat_lab_map_tool_transaction_behavior_smoke.mjs');
+await import('./combat_lab_participant_mutation_port_behavior_smoke.mjs');
+await import('./combat_lab_workspace_services_behavior_smoke.mjs');
 await import('./combat_lab_foundation_composition_behavior_smoke.mjs');
 
 const [
