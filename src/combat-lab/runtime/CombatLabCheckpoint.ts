@@ -3,6 +3,7 @@ import { replaceSceneAtRuntimeResolution } from '../../core/simulation/Resolutio
 import type { SimulationState } from '../../core/simulation/SimulationState';
 import {
   buildExportedScene,
+  installSceneBrainData,
   normalizeImportedScene,
   restoreImportedInfantryCombatState,
   type ExportedSceneData,
@@ -36,6 +37,7 @@ export function createCombatLabCheckpoint(
 export function restoreExportedScene(state: SimulationState, payload: ExportedSceneData): void {
   const scene = normalizeImportedScene(payload);
   replaceSceneAtRuntimeResolution(state, scene.map, scene.units, scene.pressureZones);
+  installSceneBrainData(state, payload);
   restoreImportedInfantryCombatState(state, scene);
   state.movementProfiles = createMovementProfileRegistry(scene.movementProfiles);
   state.editor.selectedObjectId = null;
