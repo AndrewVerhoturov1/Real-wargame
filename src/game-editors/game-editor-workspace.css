@@ -1,0 +1,88 @@
+:root {
+  --game-editor-navigation-height: 54px;
+}
+
+.game-editor-shell {
+  min-width: 0;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: #10151d;
+  color: #e8edf4;
+}
+
+.game-editor-navigation {
+  position: relative;
+  z-index: 20;
+  min-width: 0;
+  border-bottom: 1px solid rgba(152, 174, 203, 0.22);
+  background: rgba(16, 21, 29, 0.98);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+}
+
+.game-editor-navigation-tabs {
+  min-height: var(--game-editor-navigation-height);
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 7px 10px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.game-editor-navigation-tabs button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 13px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #b9c5d4;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.game-editor-navigation-tabs button:hover {
+  border-color: rgba(152, 174, 203, 0.28);
+  background: rgba(90, 113, 143, 0.14);
+  color: #f4f7fb;
+}
+
+.game-editor-navigation-tabs button.active,
+.game-editor-navigation-tabs button[aria-selected='true'] {
+  border-color: rgba(117, 170, 231, 0.48);
+  background: rgba(66, 119, 180, 0.24);
+  color: #ffffff;
+}
+
+.game-editor-navigation-tabs button:focus-visible {
+  outline: 2px solid #86bdf5;
+  outline-offset: 2px;
+}
+
+.game-editor-workspace {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.game-editor-workspace > #ai-node-editor-root {
+  min-height: 100%;
+}
+
+@media (max-width: 1100px) {
+  :root {
+    --game-editor-navigation-height: 50px;
+  }
+
+  .game-editor-navigation-tabs {
+    padding-inline: 7px;
+  }
+
+  .game-editor-navigation-tabs button {
+    padding-inline: 10px;
+  }
+}
