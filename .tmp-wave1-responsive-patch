@@ -1,0 +1,19 @@
+tested_sha=1efc5961b06298e1b390d443f9c2a214a822f214
+browser_exit=1
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: 1100x760 /ai-node-editor.html: horizontal overflow
+
+false !== true
+
+    at file:///home/runner/work/Real-wargame/Real-wargame/scripts/.tmp-wave1-browser-verification.mjs:30:14 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: 'strictEqual'
+}
+
+Node.js v20.20.2
