@@ -45,6 +45,21 @@ jobs:
               "assert.match(visibilityFieldSource, /let currentVisibilityQuality = 0/);",
               "assert.match(visibilityFieldSource, /const quality = new Uint8Array/);\nassert.match(visibilityFieldSource, /zone\\[localIndex\\] = VISIBILITY_ZONE_CODE\\.unseen/);",
           )
+          simple_replace(
+              'scripts/attention_profiles_smoke.ts',
+              "assert.match(visibilityFieldSource, /Deny by default/);\n",
+              "",
+          )
+          simple_replace(
+              'scripts/environment_materials_smoke.ts',
+              "const mainSource = readFileSync('src/main.ts', 'utf8');",
+              "const gameApplicationSource = readFileSync('src/game/GameApplication.ts', 'utf8');",
+          )
+          simple_replace(
+              'scripts/environment_materials_smoke.ts',
+              "assert.match(mainSource, /requestedInitialEnvironmentProfileId[\\s\\S]*hasProfile\\(requestedInitialEnvironmentProfileId\\)/, 'an explicit map profile ID must be activated when its registry entry exists');",
+              "assert.match(gameApplicationSource, /requestedEnvironmentProfileId[\\s\\S]*hasProfile\\(requestedEnvironmentProfileId\\)[\\s\\S]*setActiveProfile\\(requestedEnvironmentProfileId\\)/, 'an explicit map profile ID must be activated when its registry entry exists');",
+          )
 
           environment = Path('scripts/environment_materials_smoke.ts')
           lines = environment.read_text(encoding='utf-8').splitlines()
@@ -123,5 +138,5 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
-          git commit -m "test(editors): align migrated contracts and record verification [skip ci]"
+          git commit -m "test(editors): finalize migrated contracts and record verification [skip ci]"
           git push
