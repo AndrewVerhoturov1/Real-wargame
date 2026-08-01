@@ -1,0 +1,157 @@
+.gameplay-tuning-editor {
+  display: grid;
+  grid-template-columns: minmax(230px, 320px) minmax(0, 1fr);
+  min-width: 0;
+  min-height: 100%;
+  gap: 14px;
+}
+
+.gameplay-tuning-editor-list-panel,
+.gameplay-tuning-editor-form-panel {
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  background: rgba(15, 23, 32, 0.92);
+}
+
+.gameplay-tuning-editor-list-panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+}
+
+.gameplay-tuning-editor-list-heading,
+.gameplay-tuning-editor-form-heading,
+.gameplay-tuning-editor-save-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gameplay-tuning-editor-list-heading h2,
+.gameplay-tuning-editor-list-heading p,
+.gameplay-tuning-editor-form-heading h2,
+.gameplay-tuning-editor-form-heading p {
+  margin: 0;
+}
+
+.gameplay-tuning-editor-list-heading p,
+.gameplay-tuning-editor-form-heading p,
+.gameplay-tuning-editor-field small,
+.gameplay-tuning-editor-kicker,
+.gameplay-tuning-editor-list button span {
+  color: rgba(213, 222, 232, 0.68);
+}
+
+.gameplay-tuning-editor-list-heading p,
+.gameplay-tuning-editor-form-heading p {
+  margin-top: 5px;
+  line-height: 1.4;
+}
+
+.gameplay-tuning-editor-list {
+  display: grid;
+  gap: 6px;
+  max-height: min(52vh, 560px);
+  overflow: auto;
+}
+
+.gameplay-tuning-editor-list button {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  text-align: left;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 7px;
+  background: rgba(23, 33, 44, 0.74);
+  color: inherit;
+}
+
+.gameplay-tuning-editor-list button.active,
+.gameplay-tuning-editor-list button:focus-visible {
+  border-color: rgba(197, 218, 238, 0.72);
+  background: rgba(39, 54, 68, 0.96);
+}
+
+.gameplay-tuning-editor-list-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.gameplay-tuning-editor-form-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gameplay-tuning-editor-form-heading,
+.gameplay-tuning-editor-save-bar {
+  padding: 14px 16px;
+  background: rgba(11, 18, 25, 0.72);
+}
+
+.gameplay-tuning-editor-form-heading {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.gameplay-tuning-editor-save-bar {
+  align-items: center;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.gameplay-tuning-editor-save-bar button:first-of-type {
+  margin-left: auto;
+}
+
+.gameplay-tuning-editor-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px 22px;
+}
+
+.gameplay-tuning-editor-field {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(23, 33, 44, 0.56);
+}
+
+.gameplay-tuning-editor-field-label {
+  font-weight: 650;
+}
+
+.gameplay-tuning-editor-field-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.gameplay-tuning-editor-field input {
+  width: 100%;
+  min-width: 0;
+}
+
+.gameplay-tuning-editor-field small {
+  line-height: 1.35;
+}
+
+@media (max-width: 900px) {
+  .gameplay-tuning-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .gameplay-tuning-editor-list {
+    max-height: 220px;
+  }
+}
