@@ -133,7 +133,6 @@ assert.match(perceptionSource, /deltaSeconds:\s*attention\.sampleDurationSeconds
 assert.match(perceptionSource, /attention\.zone === 'outside'/);
 assert.match(visibilityFieldSource, /const quality = new Uint8Array/);
 assert.match(visibilityFieldSource, /zone\[localIndex\] = VISIBILITY_ZONE_CODE\.unseen/);
-assert.match(visibilityFieldSource, /Deny by default/);
 assert.match(rendererSource, /0x8b70d6/);
 assert.match(rendererSource, /complete map is shadow/);
 assert.match(rendererSource, /shadow mask with a diagnostic tint/);

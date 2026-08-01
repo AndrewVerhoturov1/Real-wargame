@@ -1,4 +1,4 @@
-commit=67ad929fcdc729d15f136d19a334de3c0d55250b
+commit=3754c8603458f868f026564fd31b8faa90cfc075
 runner_node=v22.23.1
 runner_npm=10.9.8
 
@@ -18,129 +18,7 @@ exit=0
 exit=0
 
 ## npm run movement-profiles:smoke
-exit=1
---- output tail ---
-  '/**\n' +
-  ' * Historical flat-navigation metadata retained for migration contract checks.\n' +
-  ' * This mount replaces the former registerAiEditorSection integration.\n' +
-  ' */\n' +
-  'export const MOVEMENT_PROFILE_EDITOR_LEGACY_METADATA = {\n' +
-  "  labelRu: 'Профили движения',\n" +
-  '  order: 30,\n' +
-  '} as const;\n' +
-  '\n' +
-  'export function mountMovementProfileEditor(context: GameEditorMountContext): GameEditorInstallation {\n' +
-  '  const panel = context.host;\n' +
-  '  let selectorRegistry = getMovementProfileRegistry();\n' +
-  '  let destroyed = false;\n' +
-  '\n' +
-  '  setMovementProfileSelectorProvider({\n' +
-  '    listProfiles: () => selectorRegistry.listProfiles().map((profile) => ({\n' +
-  '      id: profile.id,\n' +
-  '      nameRu: profile.nameRu,\n' +
-  '      revision: profile.revision,\n' +
-  '    })),\n' +
-  '  });\n' +
-  '  const unsubscribe = subscribeMovementProfileRegistry((next) => {\n' +
-  '    selectorRegistry = next;\n' +
-  '  });\n' +
-  '  renderMovementProfiles(panel);\n' +
-  '\n' +
-  '  const requestedProfileId = context.request.profileId;\n' +
-  '  if (requestedProfileId) {\n' +
-  '    panel.querySelector<HTMLButtonElement>(`[data-movement-profile-id="${cssEscape(requestedProfileId)}"]`)?.click();\n' +
-  '  }\n' +
-  '\n' +
-  '  return {\n' +
-  '    beforeClose: requestMovementProfileEditorLeave,\n' +
-  '    destroy(): void {\n' +
-  '      if (destroyed) return;\n' +
-  '      destroyed = true;\n' +
-  '      unsubscribe();\n' +
-  '      setMovementProfileSelectorProvider(null);\n' +
-  '      disposeMovementProfileEditorPanel();\n' +
-  '      panel.replaceChildren();\n' +
-  '    },\n' +
-  '  };\n' +
-  '}\n' +
-  '\n' +
-  'function cssEscape(value: string): string {\n' +
-  "  return typeof CSS !== 'undefined' && CSS.escape\n" +
-  '    ? CSS.escape(value)\n' +
-  "    : value.replace(/[^a-zA-Z0-9_-]/g, '\\\\$&');\n" +
-  '}\n'
-
-    at file:///home/runner/work/Real-wargame/Real-wargame/.tmp-movement-profiles-smoke/movement-profiles-smoke.mjs?run=1785567441218:1086:8 {
-  generatedMessage: true,
-  code: 'ERR_ASSERTION',
-  actual: "import type { GameEditorInstallation, GameEditorMountContext } from '../game-editors/GameEditorTypes';\n" +
-    'import {\n' +
-    '  getMovementProfileRegistry,\n' +
-    '  subscribeMovementProfileRegistry,\n' +
-    "} from './MovementProfileBrowserStorage';\n" +
-    'import {\n' +
-    '  disposeMovementProfileEditorPanel,\n' +
-    '  renderMovementProfiles,\n' +
-    '  requestMovementProfileEditorLeave,\n' +
-    "} from './MovementProfileEditorPanel';\n" +
-    "import { setMovementProfileSelectorProvider } from './MovementProfileSelectorProvider';\n" +
-    '\n' +
-    '/**\n' +
-    ' * Historical flat-navigation metadata retained for migration contract checks.\n' +
-    ' * This mount replaces the former registerAiEditorSection integration.\n' +
-    ' */\n' +
-    'export const MOVEMENT_PROFILE_EDITOR_LEGACY_METADATA = {\n' +
-    "  labelRu: 'Профили движения',\n" +
-    '  order: 30,\n' +
-    '} as const;\n' +
-    '\n' +
-    'export function mountMovementProfileEditor(context: GameEditorMountContext): GameEditorInstallation {\n' +
-    '  const panel = context.host;\n' +
-    '  let selectorRegistry = getMovementProfileRegistry();\n' +
-    '  let destroyed = false;\n' +
-    '\n' +
-    '  setMovementProfileSelectorProvider({\n' +
-    '    listProfiles: () => selectorRegistry.listProfiles().map((profile) => ({\n' +
-    '      id: profile.id,\n' +
-    '      nameRu: profile.nameRu,\n' +
-    '      revision: profile.revision,\n' +
-    '    })),\n' +
-    '  });\n' +
-    '  const unsubscribe = subscribeMovementProfileRegistry((next) => {\n' +
-    '    selectorRegistry = next;\n' +
-    '  });\n' +
-    '  renderMovementProfiles(panel);\n' +
-    '\n' +
-    '  const requestedProfileId = context.request.profileId;\n' +
-    '  if (requestedProfileId) {\n' +
-    '    panel.querySelector<HTMLButtonElement>(`[data-movement-profile-id="${cssEscape(requestedProfileId)}"]`)?.click();\n' +
-    '  }\n' +
-    '\n' +
-    '  return {\n' +
-    '    beforeClose: requestMovementProfileEditorLeave,\n' +
-    '    destroy(): void {\n' +
-    '      if (destroyed) return;\n' +
-    '      destroyed = true;\n' +
-    '      unsubscribe();\n' +
-    '      setMovementProfileSelectorProvider(null);\n' +
-    '      disposeMovementProfileEditorPanel();\n' +
-    '      panel.replaceChildren();\n' +
-    '    },\n' +
-    '  };\n' +
-    '}\n' +
-    '\n' +
-    'function cssEscape(value: string): string {\n' +
-    "  return typeof CSS !== 'undefined' && CSS.escape\n" +
-    '    ? CSS.escape(value)\n' +
-    "    : value.replace(/[^a-zA-Z0-9_-]/g, '\\\\$&');\n" +
-    '}\n',
-  expected: /registerAiEditorSection|AiEditorSectionRegistry/,
-  operator: 'doesNotMatch',
-  diff: 'simple'
-}
-
-Node.js v22.23.1
---- end output tail ---
+exit=0
 
 ## npm run combat-catalog-editor:smoke
 exit=0
@@ -148,121 +26,121 @@ exit=0
 ## npm run attention-profiles:smoke
 exit=1
 --- output tail ---
-    '  runtime.diagnostics.candidateCellCount = field.candidateCellCount;\n' +
-    '  runtime.diagnostics.evaluatedTargetCellCount = field.evaluatedTargetCellCount;\n' +
-    '  runtime.diagnostics.skippedOutsideAttentionCellCount = field.skippedOutsideAttentionCellCount;\n' +
-    '  runtime.diagnostics.geometryTraversedCellCount = field.geometryTraversedCellCount;\n' +
-    '  runtime.diagnostics.geometryRayCount = field.geometryRayCount;\n' +
-    '  runtime.diagnostics.cachedFieldCount = runtime.fieldsByUnit.size;\n' +
-    '  return field;\n' +
-    '}\n' +
+    '  installUnitAiBrainBindingFromData,\n' +
+    '  serializeUnitAiBrainBinding,\n' +
+    "} from '../core/units/UnitAiBrainBinding';\n" +
+    "import type { UnitData } from '../core/units/UnitModel';\n" +
+    "import { getEnvironmentProfileRegistry, saveEnvironmentProfileRegistry } from './EnvironmentProfileStorage';\n" +
     '\n' +
-    'export function getVisibilityFieldDiagnostics(state: SimulationState): VisibilityFieldDiagnostics {\n' +
-    '  const runtime = getRuntime(state);\n' +
-    '  return { ...runtime.diagnostics, cachedFieldCount: runtime.fieldsByUnit.size };\n' +
-    '}\n' +
+    'export type ExportedSceneData = CoreExportedSceneData & {\n' +
+    '  readonly aiGraphCatalog?: AiGraphCatalogV1;\n' +
+    '};\n' +
     '\n' +
-    "export function invalidateSelectedUnitVisibilityField(state: SimulationState, reason = 'manual'): void {\n" +
-    '  const runtime = getRuntime(state);\n' +
-    '  runtime.fieldsByUnit.clear();\n' +
-    '  runtime.lastObserverPositionByUnit.clear();\n' +
-    '  runtime.diagnostics.lastBuildReason = reason;\n' +
-    "  runtime.diagnostics.lastKey = '';\n" +
-    '  runtime.diagnostics.cachedFieldCount = 0;\n' +
-    '  runtime.diagnostics.candidateCellCount = 0;\n' +
-    '  runtime.diagnostics.evaluatedTargetCellCount = 0;\n' +
-    '  runtime.diagnostics.skippedOutsideAttentionCellCount = 0;\n' +
-    '  runtime.diagnostics.geometryTraversedCellCount = 0;\n' +
-    '  runtime.diagnostics.geometryRayCount = 0;\n' +
-    '}\n' +
+    'export {\n' +
+    '  normalizeSceneSnapshot as normalizeImportedScene,\n' +
+    '  restoreSceneSnapshotCombatState as restoreImportedInfantryCombatState,\n' +
+    "} from '../core/simulation/SceneSnapshot';\n" +
     '\n' +
-    'export function sampleSelectedUnitVisibilityField(\n' +
-    '  field: SelectedUnitVisibilityField,\n' +
-    '  cellX: number,\n' +
-    '  cellY: number,\n' +
-    '): number {\n' +
-    '  const index = localFieldIndex(field, cellX, cellY);\n' +
-    '  return index < 0 ? 0 : field.quality[index] ?? 0;\n' +
-    '}\n' +
-    '\n' +
-    'export function sampleSelectedUnitVisibilityZone(\n' +
-    '  field: SelectedUnitVisibilityField,\n' +
-    '  cellX: number,\n' +
-    '  cellY: number,\n' +
-    '): VisibilityZoneCode {\n' +
-    '  const index = localFieldIndex(field, cellX, cellY);\n' +
-    '  if (index < 0) return VISIBILITY_ZONE_CODE.unseen;\n' +
-    '  return (field.zone[index] ?? VISIBILITY_ZONE_CODE.unseen) as VisibilityZoneCode;\n' +
-    '}\n' +
-    '\n' +
-    'export function heatmapTargetHeightMeters(posture: HeatmapTargetPosture): number {\n' +
-    '  return soldierPostureHeightMeters(posture);\n' +
-    '}\n' +
-    '\n' +
-    'function buildVisibilityField(\n' +
-    '  state: SimulationState,\n' +
-    '  unit: UnitModel,\n' +
-    '  mask: VisibilityCandidateMask,\n' +
-    '  geometry: ReturnType<typeof getVisibilityGeometryField>,\n' +
-    '  calculationKey: string,\n' +
-    '  revision: number,\n' +
-    '  heatmapTargetPosture: HeatmapTargetPosture,\n' +
-    '): SelectedUnitVisibilityField {\n' +
-    '  const quality = new Uint8Array(mask.width * mask.height);\n' +
-    '  const zone = new Uint8Array(mask.zone);\n' +
-    '  const blocker = new Uint8Array(mask.width * mask.height);\n' +
-    '  const evaluated = new Uint8Array(mask.width * mask.height);\n' +
-    '  const observerCondition = observerVisibilityCondition({\n' +
-    '    fatigue: unit.soldier.condition.fatigue,\n' +
-    '    confusion: unit.soldier.condition.confusion,\n' +
-    '    health: unit.soldier.condition.health,\n' +
-    '    suppression: unit.behaviorRuntime.suppression,\n' +
-    '  });\n' +
-    '\n' +
-    '  for (let localIndex = 0; localIndex < mask.candidate.length; localIndex += 1) {\n' +
-    '    if (mask.candidate[localIndex] !== 1) continue;\n' +
-    '    const localX = localIndex % mask.width;\n' +
-    '    const localY = Math.floor(localIndex / mask.width);\n' +
-    '    const mapX = mask.minCellX + localX;\n' +
-    '    const mapY = mask.minCellY + localY;\n' +
-    '    const mapIndex = mapY * state.map.width + mapX;\n' +
-    '    if (geometry.evaluated[mapIndex] !== 1) continue;\n' +
-    '    evaluated[localIndex] = 1;\n' +
-    '    const visualTransmission = (geometry.visualTransmission[mapIndex] ?? 0) / 255;\n' +
-    '    const hardBlocked = geometry.hardBlocked[mapIndex] === 1;\n' +
-    '    const zoneCode = (mask.zone[localIndex] ?? VISIBILITY_ZONE_CODE.unseen) as VisibilityZoneCode;\n' +
-    '    const evaluatedQuality = evaluateCellVisibilityQuality({\n' +
-    '      blocked: hardBlocked || visualTransmission <= MIN_VISUAL_TRANSMISSION,\n' +
-    '      visualTransmission,\n' +
-    '      distanceMeters: mask.distanceMeters[localIndex] ?? 0,\n' +
-    '      attentionWeight: (mask.attentionWeight[localIndex] ?? 0) / 255,\n' +
-    '      observerCondition,\n' +
-    '      vision: unit.attentionSettings.vision,\n' +
-    '      minimumVisibilityQuality: zoneCode === VISIBILITY_ZONE_CODE.near\n' +
-    '        ? unit.attentionSettings.nearMinimumVisibilityQuality\n' +
-    '        : 0,\n' +
-    '    });\n' +
-    '    if (!evaluatedQuality.blocked && evaluatedQuality.quality01 > 0) {\n' +
-    '      quality[localIndex] = Math.round(evaluatedQuality.quality01 * 255);\n' +
-    '    } else {\n' +
-    '      zone[localIndex] = VISIBILITY_ZONE_CODE.unseen;\n' +
-    '    }\n' +
-    '    blocker[localIndex] = evaluatedQuality.blocked ? geometry.blockerKind[mapIndex] || 1 : 0;\n' +
+    'export async function loadSceneJsonFromFile(state: SimulationState, file: File): Promise<void> {\n' +
+    '  const text = await file.text();\n' +
+    '  let parsed: unknown;\n' +
+    '  try {\n' +
+    '    parsed = JSON.parse(text) as unknown;\n' +
+    '  } catch {\n' +
+    "    throw new Error('Файл не похож на правильный JSON.');\n" +
     '  }\n' +
     '\n' +
-    '  return {\n' +
-    '    observerId: unit.id,\n' +
-    '    originCellX: Math.floor(unit.position.x),\n' +
-    '    originCellY: Math.floor(unit.position.y),\n' +
-    '    minCellX: mask.minCellX,\n' +
-    '    minCellY: mask.minCellY,\n' +
-    '    width: mask.width,\n' +
-    '    height: mask.height,\n' +
-    '    quality,\n' +
-    '    zone,\n' +
-    '    blocker,\n' +
-    '    evaluate'... 2792 more characters,
-  expected: /Deny by default/,
+    '  const restored = restoreSimulationStateFromSceneSnapshot(state, parsed, {\n' +
+    '    fallbackEnvironmentProfiles: getEnvironmentProfileRegistry().toData(),\n' +
+    '  });\n' +
+    '  installSceneBrainData(state, parsed);\n' +
+    '  saveEnvironmentProfileRegistry(restored.environmentProfileRegistry);\n' +
+    '  saveMovementProfileRegistry(restored.movementProfileRegistry);\n' +
+    '\n' +
+    '  const runtimeMessage = restored.restoredRuntimeCount > 0\n' +
+    '    ? ` Runtime восстановлен у бойцов: ${restored.restoredRuntimeCount}.`\n' +
+    '    : restored.resetRuntimeCount > 0\n' +
+    '      ? ` Runtime сброшен у бойцов: ${restored.resetRuntimeCount}.`\n' +
+    "      : ' Старый формат сцены загружен без активного действия ИИ.';\n" +
+    '  const basisMessage = restored.persistentBasis.ok\n' +
+    '    ? ` Статическая тактическая основа загружена из предрасчёта (${formatBytes(restored.persistentBasis.decodedBytes)}, ${restored.persistentBasis.decodeMs} мс).`\n' +
+    '    : restored.scene.staticTacticalPositionArtifact === undefined\n' +
+    "      ? ' Предрасчёт статической тактической основы отсутствует; запущено штатное построение.'\n" +
+    '      : ` Предрасчёт статической тактической основы отклонён (${restored.persistentBasis.reason}); запущено штатное построение.`;\n' +
+    '  state.editor.lastMessage = `JSON сцены загружен в сетку ${state.map.metersPerCell} м: карта ${state.map.width}×${state.map.height}, юнитов ${state.units.length}, зон ${state.pressureZones.length}.${runtimeMessage}${basisMessage}`;\n' +
+    '}\n' +
+    '\n' +
+    'export function downloadCurrentSceneJson(state: SimulationState): void {\n' +
+    '  const scene = buildExportedScene(state);\n' +
+    '  const json = JSON.stringify(scene, null, 2);\n' +
+    "  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });\n" +
+    '  const url = URL.createObjectURL(blob);\n' +
+    "  const link = document.createElement('a');\n" +
+    '  link.href = url;\n' +
+    '  link.download = `real-wargame-scene-${buildTimestampForFileName()}.json`;\n' +
+    '  link.click();\n' +
+    '  URL.revokeObjectURL(url);\n' +
+    '\n' +
+    '  const basisMessage = scene.staticTacticalPositionArtifact\n' +
+    '    ? ` Предрасчёт статической тактической основы приложен (${formatBytes(scene.staticTacticalPositionArtifact.payload.byteLength)} без base64).`\n' +
+    "    : ' Готового актуального предрасчёта нет; сцена сохранена без него.';\n" +
+    '  state.editor.lastMessage = `JSON испытательной сцены скачан: ${state.map.metersPerCell} м/клетка.${basisMessage}`;\n' +
+    '}\n' +
+    '\n' +
+    'export function buildExportedScene(state: SimulationState): ExportedSceneData {\n' +
+    '  const core = buildSceneSnapshot(state, {\n' +
+    '    exportedAt: new Date().toISOString(),\n' +
+    '    environmentProfiles: getEnvironmentProfileRegistry().toData(),\n' +
+    '    staticTacticalPositionArtifact: buildStaticTacticalPositionArtifactForExport(state),\n' +
+    '  });\n' +
+    '  const unitsById = new Map(state.units.map((unit) => [unit.id, unit] as const));\n' +
+    '  const withBrains: CoreExportedSceneData = {\n' +
+    '    ...core,\n' +
+    '    units: core.units.map((record) => {\n' +
+    "      const id = typeof record.id === 'string' ? record.id : '';\n" +
+    '      const unit = unitsById.get(id);\n' +
+    '      return unit ? { ...record, aiBrain: serializeUnitAiBrainBinding(unit.aiBrain) } : record;\n' +
+    '    }),\n' +
+    '  };\n' +
+    '  return writeAiGraphCatalogToScene(\n' +
+    '    withBrains as unknown as Record<string, unknown>,\n' +
+    '    getInstalledAiGraphCatalog(state),\n' +
+    '  ) as unknown as ExportedSceneData;\n' +
+    '}\n' +
+    '\n' +
+    'export function installSceneBrainData(state: SimulationState, payload: unknown): void {\n' +
+    '  installAiGraphCatalog(state, readAiGraphCatalogFromScene(payload));\n' +
+    '  if (!isRecord(payload) || !Array.isArray(payload.units)) return;\n' +
+    '  const dataById = new Map<string, UnitData>();\n' +
+    '  for (const value of payload.units) {\n' +
+    "    if (!isRecord(value) || typeof value.id !== 'string') continue;\n" +
+    '    dataById.set(value.id, value as unknown as UnitData);\n' +
+    '  }\n' +
+    '  for (const unit of state.units) {\n' +
+    '    const data = dataById.get(unit.id);\n' +
+    '    if (data) installUnitAiBrainBindingFromData(unit, data);\n' +
+    '  }\n' +
+    '}\n' +
+    '\n' +
+    'function buildTimestampForFileName(): string {\n' +
+    '  return new Date()\n' +
+    '    .toISOString()\n' +
+    "    .replaceAll(':', '-')\n" +
+    "    .replaceAll('.', '-')\n" +
+    "    .replace('T', '_')\n" +
+    "    .replace('Z', '');\n" +
+    '}\n' +
+    '\n' +
+    'function formatBytes(bytes: number): string {\n' +
+    '  if (bytes < 1024) return `${bytes} Б`;\n' +
+    '  if (bytes < 1024 * 1024) return `${Math.round(bytes / 102.4) / 10} КБ`;\n' +
+    '  return `${Math.round(bytes / 1024 / 102.4) / 10} МБ`;\n' +
+    '}\n' +
+    '\n' +
+    'function isRecord(value: unknown): value is Record<string, unknown> {\n' +
+    "  return typeof value === 'object' && value !== null && !Array.isArray(value);\n" +
+    '}',
+  expected: /nearAwarenessRangeMeters:\s*unit\.attentionSettings\.nearAwarenessRangeMeters/,
   operator: 'match',
   diff: 'simple'
 }
@@ -274,63 +152,7 @@ Node.js v22.23.1
 exit=0
 
 ## npm run environment-materials:smoke
-exit=1
---- output tail ---
-
-> real-wargame@0.1.0 environment-materials:smoke
-> node scripts/environment_materials_smoke.mjs
-
-node:internal/modules/run_main:123
-    triggerUncaughtException(
-    ^
-
-AssertionError [ERR_ASSERTION]: an explicit map profile ID must be activated when its registry entry exists
-    at file:///home/runner/work/Real-wargame/Real-wargame/.tmp-environment-materials-smoke/environment-materials-smoke.mjs?run=1785567445414:4107:8
-    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
-    at async file:///home/runner/work/Real-wargame/Real-wargame/scripts/environment_materials_smoke.mjs:22:3 {
-  generatedMessage: false,
-  code: 'ERR_ASSERTION',
-  actual: "import './game/GameStyles';\n" +
-    "import mapData from './data/maps/test_map.json';\n" +
-    "import pressureZoneData from './data/pressure_zones/test_pressure_zones.json';\n" +
-    "import unitsData from './data/units/test_units.json';\n" +
-    "import type { TacticalMapData } from './core/map/MapModel';\n" +
-    "import type { PressureZoneData } from './core/pressure/PressureZone';\n" +
-    "import { createResolutionAwareInitialState } from './core/simulation/ResolutionAwareScene';\n" +
-    "import type { UnitData } from './core/units/UnitModel';\n" +
-    "import { collectGameApplicationElements, GameApplication } from './game/GameApplication';\n" +
-    "import { installAppShellMenu } from './shared/AppShellMenu';\n" +
-    '\n' +
-    'let application: GameApplication | null = null;\n' +
-    '\n' +
-    "installAppShellMenu({ mode: 'game' });\n" +
-    'void bootstrap();\n' +
-    '\n' +
-    'async function bootstrap(): Promise<void> {\n' +
-    '  const state = createResolutionAwareInitialState(\n' +
-    '    mapData as TacticalMapData,\n' +
-    '    unitsData as UnitData[],\n' +
-    '    pressureZoneData as PressureZoneData[],\n' +
-    '  );\n' +
-    '  application = await GameApplication.create({\n' +
-    "    mode: 'game',\n" +
-    '    state,\n' +
-    '    elements: collectGameApplicationElements(),\n' +
-    '  });\n' +
-    '}\n' +
-    '\n' +
-    "window.addEventListener('beforeunload', () => {\n" +
-    '  application?.destroy();\n' +
-    '  application = null;\n' +
-    '});\n',
-  expected: /requestedInitialEnvironmentProfileId[\s\S]*hasProfile\(requestedInitialEnvironmentProfileId\)/,
-  operator: 'match',
-  diff: 'simple'
-}
-
-Node.js v22.23.1
---- end output tail ---
+exit=0
 
 ## npm run build
 exit=0

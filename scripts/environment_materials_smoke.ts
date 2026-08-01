@@ -184,8 +184,8 @@ const sharedRegistrySource = readFileSync('src/game-editors/createDefaultGameEdi
 const environmentIntegrationSource = readFileSync('src/ai-node-editor/EnvironmentProfileEditorIntegration.ts', 'utf8');
 const movementIntegrationSource = readFileSync('src/ai-node-editor/MovementProfileEditorIntegration.ts', 'utf8');
 const panelSource = readFileSync('src/ai-node-editor/EnvironmentProfileEditorPanel.ts', 'utf8');
-const mainSource = readFileSync('src/main.ts', 'utf8');
-assert.match(mainSource, /requestedInitialEnvironmentProfileId[\s\S]*hasProfile\(requestedInitialEnvironmentProfileId\)/, 'an explicit map profile ID must be activated when its registry entry exists');
+const gameApplicationSource = readFileSync('src/game/GameApplication.ts', 'utf8');
+assert.match(gameApplicationSource, /requestedEnvironmentProfileId[\s\S]*hasProfile\(requestedEnvironmentProfileId\)[\s\S]*setActiveProfile\(requestedEnvironmentProfileId\)/, 'an explicit map profile ID must be activated when its registry entry exists');
 assert.match(environmentIntegrationSource, /mountEnvironmentProfileEditor/, 'environment editor must expose a direct mount');
 assert.match(environmentIntegrationSource, /const panel = context\.host/, 'environment editor must mount into the supplied host');
 assert.match(movementIntegrationSource, /mountMovementProfileEditor/, 'movement editor must expose a direct mount');
