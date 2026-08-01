@@ -5,13 +5,134 @@
     {
       "name": "TypeScript",
       "command": "\"npm\" \"run\" \"typecheck\"",
-      "status": "failed",
-      "exitCode": 2,
+      "status": "passed",
+      "exitCode": 0,
       "signal": null,
-      "durationMs": 8249,
-      "stdout": "\n> real-wargame@0.1.0 typecheck\n> tsc --noEmit\n\nsrc/ai-node-editor/GameplayTuningProfileEditor.ts(187,50): error TS2540: Cannot assign to 'conditionProfileId' because it is a read-only property.\nsrc/ai-node-editor/GameplayTuningProfileEditor.ts(187,50): error TS2540: Cannot assign to 'perceptionProfileId' because it is a read-only property.\n",
+      "durationMs": 8981,
+      "stdout": "\n> real-wargame@0.1.0 typecheck\n> tsc --noEmit\n\n",
       "stderr": "",
-      "error": "Check failed: TypeScript exited with 2."
+      "error": null
+    },
+    {
+      "name": "isolated process runner contract",
+      "command": "\"/opt/hostedtoolcache/node/20.20.2/x64/bin/node\" \"/home/runner/work/Real-wargame/Real-wargame/scripts/isolated_process_runner_smoke.mjs\"",
+      "status": "passed",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 261,
+      "stdout": "Isolated process runner contract passed.\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "Preview verification contract",
+      "command": "\"/opt/hostedtoolcache/node/20.20.2/x64/bin/node\" \"/home/runner/work/Real-wargame/Real-wargame/scripts/verify_preview_contract_smoke.mjs\"",
+      "status": "passed",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 34,
+      "stdout": "Preview verification contract passed.\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "Preview deployment configuration contract",
+      "command": "\"/opt/hostedtoolcache/node/20.20.2/x64/bin/node\" \"/home/runner/work/Real-wargame/Real-wargame/scripts/preview_deployment_config_smoke.mjs\"",
+      "status": "passed",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 33,
+      "stdout": "Preview deployment configuration contract passed.\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "Vercel project link contract",
+      "command": "\"/opt/hostedtoolcache/node/20.20.2/x64/bin/node\" \"/home/runner/work/Real-wargame/Real-wargame/scripts/verify_vercel_project_link_smoke.mjs\"",
+      "status": "passed",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 112,
+      "stdout": "Vercel project link contract passed.\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "deployment source contract",
+      "command": "\"/opt/hostedtoolcache/node/20.20.2/x64/bin/node\" \"/home/runner/work/Real-wargame/Real-wargame/scripts/write_deployment_source_smoke.mjs\"",
+      "status": "passed",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 75,
+      "stdout": "Deployment source writer contract passed.\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "deployment pages contract",
+      "command": "\"/opt/hostedtoolcache/node/20.20.2/x64/bin/node\" \"/home/runner/work/Real-wargame/Real-wargame/scripts/deployment_pages_smoke_contract.mjs\"",
+      "status": "passed",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 109,
+      "stdout": "Deployment pages contract passed.\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "manual Vercel policy contract",
+      "command": "\"/opt/hostedtoolcache/node/20.20.2/x64/bin/node\" \"/home/runner/work/Real-wargame/Real-wargame/scripts/manual_vercel_deploy_skill_smoke.mjs\"",
+      "status": "passed",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 33,
+      "stdout": "Manual Vercel deployment skill contract passed.\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "manual Vercel workflow contract",
+      "command": "\"/opt/hostedtoolcache/node/20.20.2/x64/bin/node\" \"/home/runner/work/Real-wargame/Real-wargame/scripts/manual_vercel_preview_workflow_smoke.mjs\"",
+      "status": "passed",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 33,
+      "stdout": "Manual Vercel Preview workflow contract passed.\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "Combat Lab shared renderer contract",
+      "command": "\"/opt/hostedtoolcache/node/20.20.2/x64/bin/node\" \"/home/runner/work/Real-wargame/Real-wargame/scripts/combat_lab_shared_renderer_contract_smoke.mjs\"",
+      "status": "passed",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 35,
+      "stdout": "Combat Lab shared full-game renderer contract passed.\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "Combat Lab full game contract",
+      "command": "\"/opt/hostedtoolcache/node/20.20.2/x64/bin/node\" \"/home/runner/work/Real-wargame/Real-wargame/scripts/combat_lab_full_game_contract_smoke.mjs\"",
+      "status": "passed",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 38,
+      "stdout": "Combat Lab full-game application contract passed.\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "Combat Lab 1440x900 workspace layout contract",
+      "command": "\"/opt/hostedtoolcache/node/20.20.2/x64/bin/node\" \"/home/runner/work/Real-wargame/Real-wargame/scripts/combat_lab_workspace_layout_smoke.mjs\"",
+      "status": "failed",
+      "exitCode": 1,
+      "signal": null,
+      "durationMs": 37,
+      "stdout": "",
+      "stderr": "node:internal/modules/run_main:123\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: Combat Lab must expose exactly six workspace tabs.\n\n7 !== 6\n\n    at file:///home/runner/work/Real-wargame/Real-wargame/scripts/combat_lab_workspace_layout_smoke.mjs:46:8\n    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)\n    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: 7,\n  expected: 6,\n  operator: 'strictEqual'\n}\n\nNode.js v20.20.2\n",
+      "error": "Check failed: Combat Lab 1440x900 workspace layout contract exited with 1."
     }
   ],
   "skippedChecks": []
