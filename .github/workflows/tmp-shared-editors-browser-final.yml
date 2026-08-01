@@ -1,0 +1,303 @@
+name: Temporary Shared Editors Browser Final
+
+on:
+  push:
+    branches:
+      - compiler/20260731-shared-game-editors-integration
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    if: contains(github.event.head_commit.message, '[shared-editors-browser-final]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Establish clean exact browser HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mapfile -t TEMP_FILES < <(git ls-files \
+            '.github/workflows/tmp-shared-editors-*.yml' \
+            'reports/.tmp-shared-editors-*' \
+            'reports/compiler-final/*')
+          if [ "${#TEMP_FILES[@]}" -gt 0 ]; then
+            git rm -f -- "${TEMP_FILES[@]}"
+            git commit -m "chore(integration): remove browser verification scaffolding"
+            git push origin HEAD:compiler/20260731-shared-game-editors-integration
+          fi
+          test -z "$(git status --short)"
+          git rev-parse HEAD | tee /tmp/shared-editors-browser-head.txt
+      - name: Prepare browser acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run build
+          npm install --no-save --package-lock=false playwright@1.54.2
+          npx playwright install --with-deps chromium
+      - name: Run browser acceptance at four resolutions
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/tmp/shared-editors-browser-final
+          rm -rf "$OUT"
+          mkdir -p "$OUT/screenshots" "$OUT/logs"
+          cp /tmp/shared-editors-browser-head.txt "$OUT/tested-head.txt"
+          cat > .tmp-shared-editors-browser-final.mjs <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { chromium } from 'playwright';
+
+          const out = '/tmp/shared-editors-browser-final';
+          const shots = path.join(out, 'screenshots');
+          const base = 'http://127.0.0.1:4173';
+          const sizes = [[1440, 900], [1366, 768], [1100, 760], [1920, 1080]];
+          const editorIds = [
+            'behaviorGraph', 'tacticalPositions', 'routeProfiles', 'environmentProfiles',
+            'movementProfiles', 'weapons', 'attentionProfiles', 'perceptionProfiles',
+            'soldierData', 'soldierArchetypes', 'conditionProfiles', 'directionalTerrain',
+          ];
+          const evidence = {
+            testedHead: fs.readFileSync(path.join(out, 'tested-head.txt'), 'utf8').trim(),
+            sizes: [], consoleErrors: [], pageErrors: [], requestFailures: [],
+            lifecycle: null, frameSamples: null, longTasks: [],
+            runControls: false, graphReturn: false, escapeOrder: false,
+          };
+          const ensure = (condition, message) => { if (!condition) throw new Error(message); };
+          const percentile = (values, p) => {
+            const sorted = [...values].sort((a, b) => a - b);
+            return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * p) - 1)] ?? 0;
+          };
+          const browser = await chromium.launch({ headless: true });
+          try {
+            for (const [width, height] of sizes) {
+              const label = `${width}x${height}`;
+              const context = await browser.newContext({ viewport: { width, height } });
+              await context.addInitScript(() => {
+                window.__sharedEditorsLongTasks = [];
+                try {
+                  new PerformanceObserver((list) => {
+                    for (const entry of list.getEntries()) {
+                      window.__sharedEditorsLongTasks.push({ startTime: entry.startTime, duration: entry.duration });
+                    }
+                  }).observe({ type: 'longtask', buffered: true });
+                } catch {}
+              });
+              const page = await context.newPage();
+              page.on('console', (message) => {
+                if (message.type() === 'error') evidence.consoleErrors.push({ label, text: message.text() });
+              });
+              page.on('pageerror', (error) => evidence.pageErrors.push({ label, text: String(error) }));
+              page.on('requestfailed', (request) => {
+                const error = request.failure()?.errorText ?? '';
+                if (error !== 'net::ERR_ABORTED') evidence.requestFailures.push({ label, url: request.url(), error });
+              });
+              const noOverflow = async (stage) => {
+                const value = await page.evaluate(() => ({
+                  viewport: document.documentElement.clientWidth,
+                  html: document.documentElement.scrollWidth,
+                  body: document.body.scrollWidth,
+                }));
+                ensure(value.html <= value.viewport + 1 && value.body <= value.viewport + 1,
+                  `${label} ${stage}: horizontal overflow ${JSON.stringify(value)}`);
+              };
+              const menuCycle = async (prefix) => {
+                const trigger = page.locator('.app-shell-menu-trigger');
+                await trigger.waitFor({ state: 'visible' });
+                ensure(await page.locator('[data-app-shell-menu-root="true"]').count() === 1,
+                  `${label} ${prefix}: expected one menu root`);
+                await trigger.click();
+                const dialog = page.locator('.app-modal-dialog[role="dialog"]');
+                await dialog.waitFor({ state: 'visible' });
+                await page.keyboard.press('Escape');
+                await dialog.waitFor({ state: 'detached' });
+                ensure(await page.evaluate(() => document.activeElement?.classList.contains('app-shell-menu-trigger') === true),
+                  `${label} ${prefix}: menu focus was not restored`);
+              };
+
+              await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
+              await page.locator('.app-shell-menu-trigger').waitFor({ state: 'visible' });
+              await noOverflow('game');
+              await menuCycle('game');
+
+              await page.goto(`${base}/ai-node-editor.html`, { waitUntil: 'domcontentloaded' });
+              await page.locator('[data-game-editor-surface="ai-editor"]').waitFor({ state: 'visible' });
+              ensure(await page.locator('[data-game-editor-id]').count() === 12, `${label} AI editor: expected 12 editors`);
+              ensure(await page.locator('[data-game-editor-return]').isHidden(), `${label} AI editor: unsafe direct return visible`);
+              await noOverflow('ai-editor');
+              if (width === 1440 || width === 1100) {
+                for (const id of editorIds) {
+                  await page.locator(`[data-game-editor-id="${id}"]`).click();
+                  await page.waitForFunction((value) =>
+                    document.querySelector('[data-game-editor-workspace]')?.dataset.activeGameEditor === value, id);
+                  await noOverflow(`ai-${id}`);
+                }
+              }
+              await menuCycle('ai-editor');
+
+              await page.goto(`${base}/combat-lab.html`, { waitUntil: 'domcontentloaded' });
+              await page.locator('.combat-lab-workspace').waitFor({ state: 'visible' });
+              await noOverflow('combat-lab');
+              const toolbar = page.locator('.combat-lab-experiment-run-toolbar');
+              await toolbar.waitFor({ state: 'visible' });
+              const start = toolbar.getByRole('button', { name: /Запустить/ }).first();
+              if (await start.isEnabled()) {
+                const transition = page.evaluate(() => new Promise((resolve) => {
+                  const element = document.querySelector('.combat-lab-experiment-run-toolbar');
+                  const initial = element?.dataset.status;
+                  const observer = new MutationObserver(() => {
+                    const status = element?.dataset.status;
+                    if (status && status !== initial) {
+                      observer.disconnect();
+                      resolve(status);
+                    }
+                  });
+                  if (element) observer.observe(element, { attributes: true, attributeFilter: ['data-status'] });
+                  setTimeout(() => { observer.disconnect(); resolve(element?.dataset.status ?? 'missing'); }, 5000);
+                }));
+                await start.click();
+                const transitionedTo = await transition;
+                ensure(transitionedTo !== 'missing', `${label}: run status element missing`);
+                const status = await toolbar.getAttribute('data-status');
+                if (status === 'running') {
+                  await toolbar.getByRole('button', { name: 'Пауза', exact: true }).click({ timeout: 1000 }).catch(() => {});
+                }
+                const reset = toolbar.getByRole('button', { name: 'Сбросить', exact: true });
+                if (await reset.isEnabled()) await reset.click({ timeout: 1000 }).catch(() => {});
+                evidence.runControls = true;
+              }
+
+              await page.locator('[data-combat-lab-tab="settings"]').click();
+              await page.locator('[data-combat-lab-game-editor-catalogue="true"]').waitFor({ state: 'visible' });
+              ensure(await page.locator('.combat-lab-game-editor-item').count() === 12, `${label} Combat Lab: expected 12 editors`);
+              ensure(await page.locator('[data-game-editor-group]').count() === 4, `${label} Combat Lab: expected four groups`);
+              await noOverflow('combat-lab-settings');
+              await page.screenshot({ path: path.join(shots, `combat-lab-${label}.png`), fullPage: true });
+
+              const perception = page.locator('[data-game-editor-id="perceptionProfiles"]');
+              await perception.click();
+              await page.locator('.app-modal-layer').waitFor({ state: 'visible' });
+              await noOverflow('perception-modal');
+              await page.keyboard.press('Escape');
+              await page.locator('.app-modal-layer').waitFor({ state: 'detached' });
+              ensure(await page.evaluate(() => document.activeElement?.dataset.gameEditorId === 'perceptionProfiles'),
+                `${label}: editor focus was not restored`);
+              await page.keyboard.press('Escape');
+              await page.locator('.app-shell-dialog').waitFor({ state: 'visible' });
+              await page.keyboard.press('Escape');
+              await page.locator('.app-shell-dialog').waitFor({ state: 'detached' });
+              evidence.escapeOrder = true;
+
+              if (width === 1440) {
+                await page.evaluate(() => { window.__sharedEditorsLongTasks.length = 0; });
+                const opens = [];
+                const closes = [];
+                const lifecycle = page.locator('[data-game-editor-id="conditionProfiles"]');
+                for (let index = 0; index < 20; index += 1) {
+                  let started = performance.now();
+                  await lifecycle.click();
+                  await page.locator('.app-modal-layer').waitFor({ state: 'visible' });
+                  opens.push(performance.now() - started);
+                  ensure(await page.locator('.app-modal-layer').count() === 1, 'modal layers accumulated');
+                  started = performance.now();
+                  await page.keyboard.press('Escape');
+                  await page.locator('.app-modal-layer').waitFor({ state: 'detached' });
+                  closes.push(performance.now() - started);
+                }
+                evidence.lifecycle = {
+                  cycles: 20,
+                  openP95Ms: percentile(opens, 0.95),
+                  openMaxMs: Math.max(...opens),
+                  closeP95Ms: percentile(closes, 0.95),
+                  closeMaxMs: Math.max(...closes),
+                };
+
+                await page.locator('[data-game-editor-id="behaviorGraph"]').click();
+                await page.waitForURL(/ai-node-editor\.html/);
+                const returnLink = page.locator('[data-game-editor-return]');
+                ensure(await returnLink.isVisible(), 'internal behavior graph return link missing');
+                await returnLink.click();
+                await page.waitForURL(/combat-lab\.html/);
+                evidence.graphReturn = true;
+
+                const frames = await page.evaluate(() => new Promise((resolve) => {
+                  const values = [];
+                  let previous = performance.now();
+                  const tick = (now) => {
+                    values.push(now - previous);
+                    previous = now;
+                    if (values.length >= 120) resolve(values);
+                    else requestAnimationFrame(tick);
+                  };
+                  requestAnimationFrame(tick);
+                }));
+                evidence.frameSamples = {
+                  count: frames.length,
+                  p95Ms: percentile(frames, 0.95),
+                  maxMs: Math.max(...frames),
+                };
+                evidence.longTasks = await page.evaluate(() => window.__sharedEditorsLongTasks ?? []);
+              }
+              evidence.sizes.push({ width, height, passed: true });
+              await context.close();
+            }
+          } finally {
+            await browser.close();
+          }
+          ensure(evidence.sizes.length === 4, 'not all four resolutions passed');
+          ensure(evidence.runControls, 'run controls were not exercised');
+          ensure(evidence.escapeOrder, 'Escape order was not exercised');
+          ensure(evidence.graphReturn, 'Graph v2 return was not exercised');
+          ensure(evidence.lifecycle?.cycles === 20, 'lifecycle stress incomplete');
+          ensure(evidence.lifecycle.openP95Ms <= 1000 && evidence.lifecycle.closeP95Ms <= 1000,
+            `lifecycle p95 too high: ${JSON.stringify(evidence.lifecycle)}`);
+          ensure(evidence.frameSamples?.p95Ms <= 100, `frame p95 too high: ${JSON.stringify(evidence.frameSamples)}`);
+          ensure(!evidence.longTasks.some((entry) => entry.duration >= 1000),
+            `long task >=1000ms: ${JSON.stringify(evidence.longTasks)}`);
+          ensure(evidence.consoleErrors.length === 0, `console errors: ${JSON.stringify(evidence.consoleErrors)}`);
+          ensure(evidence.pageErrors.length === 0, `page errors: ${JSON.stringify(evidence.pageErrors)}`);
+          ensure(evidence.requestFailures.length === 0, `request failures: ${JSON.stringify(evidence.requestFailures)}`);
+          fs.writeFileSync(path.join(out, 'browser-evidence.json'), JSON.stringify(evidence, null, 2));
+          NODE
+
+          npm run preview -- --host 127.0.0.1 --port 4173 > "$OUT/logs/preview-server.log" 2>&1 &
+          PREVIEW_PID=$!
+          npm run engine:dev > "$OUT/logs/ai-engine.log" 2>&1 &
+          ENGINE_PID=$!
+          cleanup() {
+            kill "$PREVIEW_PID" "$ENGINE_PID" >/dev/null 2>&1 || true
+            wait "$PREVIEW_PID" >/dev/null 2>&1 || true
+            wait "$ENGINE_PID" >/dev/null 2>&1 || true
+            rm -f .tmp-shared-editors-browser-final.mjs
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null \
+              && curl -fsS http://127.0.0.1:8787/engine/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:4173/ >/dev/null
+          curl -fsS http://127.0.0.1:8787/engine/health >/dev/null
+          node .tmp-shared-editors-browser-final.mjs > "$OUT/logs/browser-audit.log" 2>&1
+          test -z "$(git status --short)"
+          test "$(git rev-parse HEAD)" = "$(cat "$OUT/tested-head.txt")"
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-editors-browser-final-evidence
+          path: /tmp/shared-editors-browser-final
+          if-no-files-found: error
