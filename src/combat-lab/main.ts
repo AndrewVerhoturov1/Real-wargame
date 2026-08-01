@@ -7,19 +7,28 @@ import './combat-lab-ui-polish.css';
 import './combat-lab-header-final.css';
 import './ui/combat-lab-experiment-run.css';
 import './ui/combat-lab-batch-results.css';
+import './game-editors/combat-lab-game-editors.css';
 import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
 import { collectGameApplicationElements, GameApplication } from '../game/GameApplication';
 import type { GameApplicationContext, GamePauseController } from '../game/GameApplicationTypes';
+import { createDefaultGameEditorRegistry } from '../game-editors/createDefaultGameEditorRegistry';
 import { installAppShellMenu } from '../shared/AppShellMenu';
+import { getAppOverlayCoordinator } from '../shared/app-overlay/AppOverlayCoordinator';
 import { CombatLabExtension } from './CombatLabExtension';
+import { CombatLabGameEditors } from './game-editors/CombatLabGameEditors';
 import {
   installCombatLabQuickParameters,
   type CombatLabQuickParametersInstallationV1,
 } from './parameters/installCombatLabQuickParameters';
 import { CombatLabVisualSession } from './runtime/CombatLabVisualSession';
+import {
+  getCombatLabWorkspaceHosts,
+  getOnlyCombatLabWorkspaceRoot,
+} from './ui/CombatLabWorkspaceTabs';
 
 let application: GameApplication | null = null;
 let quickParametersInstallation: CombatLabQuickParametersInstallationV1 | null = null;
+let gameEditorsInstallation: CombatLabGameEditors | null = null;
 
 const shellMenuInstallation = installAppShellMenu({ mode: 'combat-lab' });
 void startCombatLab();
@@ -44,10 +53,20 @@ async function startCombatLab(): Promise<void> {
         createCombatLabRenderContext(context),
       ),
     });
+    const workspaceRoot = getOnlyCombatLabWorkspaceRoot();
+    const workspaceHosts = getCombatLabWorkspaceHosts(workspaceRoot);
+    gameEditorsInstallation = CombatLabGameEditors.create({
+      host: workspaceHosts.settings,
+      eventTarget: extensionRoot,
+      registry: createDefaultGameEditorRegistry(),
+      overlayCoordinator: getAppOverlayCoordinator(document),
+    });
     quickParametersInstallation = installCombatLabQuickParameters(extensionRoot, session);
   } catch (error) {
     quickParametersInstallation?.destroy();
     quickParametersInstallation = null;
+    gameEditorsInstallation?.destroy();
+    gameEditorsInstallation = null;
     application?.destroy();
     application = null;
     console.error(error);
@@ -60,11 +79,13 @@ async function startCombatLab(): Promise<void> {
 }
 
 window.addEventListener('beforeunload', () => {
-  shellMenuInstallation.destroy();
   quickParametersInstallation?.destroy();
   quickParametersInstallation = null;
+  gameEditorsInstallation?.destroy();
+  gameEditorsInstallation = null;
   application?.destroy();
   application = null;
+  shellMenuInstallation.destroy();
 });
 
 function createCombatLabRenderContext(context: GameApplicationContext): GameApplicationContext {

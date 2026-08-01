@@ -107,7 +107,9 @@ assert.match(extension, /CombatLabWorkspaceTabs\.create/);
 assert.match(workspaceTabs, /combat-lab-drawer/);
 assert.match(workspaceTabs, /combat-lab-drawer-toggle/);
 assert.match(workspaceTabs, /aria-expanded/);
-assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 6, 'Combat Lab must publish exactly six workspace tabs.');
+assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 7, 'Combat Lab must publish exactly seven workspace tabs.');
+assert.match(workspaceHosts, /tabId:\s*'settings',[^\n]*labelRu:\s*'Настройка игры'/);
+assert.match(workspaceHosts, /readonly settings:\s*HTMLElement/);
 assert.doesNotMatch(workspaceHosts, /labelRu:\s*'Стенд'/, 'The removed Stand tab must not return.');
 assert.match(extension, /installSharedSimulationControls/);
 assert.match(extension, /data-action="fire-contact"/);
@@ -150,12 +152,16 @@ assert.match(compactRouteCss, /\.route-cost-inspector-panel\s+\.unit-route-detai
 
 assert.match(labMain, /GameApplication\.create\(/);
 assert.match(labMain, /installAppShellMenu\(\{ mode: 'combat-lab' \}\)/);
+assert.match(labMain, /CombatLabGameEditors\.create\(/);
+assert.match(labMain, /workspaceHosts\.settings/);
 assert.match(labMain, /installCombatLabQuickParameters\(extensionRoot, session\)/);
 assert.match(quickParametersInstaller, /getOnlyCombatLabWorkspaceRoot\(\)/);
 assert.match(quickParametersInstaller, /getCombatLabWorkspaceHosts\(workspaceRoot\)/);
 assert.match(quickParametersInstaller, /getCombatLabWorkspaceServices\(workspaceRoot\)/);
 assert.doesNotMatch(quickParametersInstaller, /querySelector<HTMLElement>\('\[data-combat-lab-parameters-host=/);
 assert.match(quickParametersInstaller, /requestCombatLabResetAndStart\(extensionRoot, seed\)/);
+assert.match(quickParametersInstaller, /resolveCombatLabSelectedUnitProfileLinks/);
+assert.match(quickParametersInstaller, /requestCombatLabGameEditorOpen/);
 assert.doesNotMatch(quickParametersInstaller, /combat-lab:set-paused/);
 assert.doesNotMatch(quickParametersInstaller, /CombatLabExperimentDraft|CombatLabScenarioExecutor|CombatLabBatchClient/);
 assert.match(resetAndStart, /controller\.reset\(normalizeCombatLabResetAndStartSeed\(request\.seed\)\);\s*controller\.start\(\);/s);
