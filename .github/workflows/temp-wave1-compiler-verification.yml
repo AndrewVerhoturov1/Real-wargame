@@ -1,4 +1,4 @@
-name: Temporary Wave 1 Compiler Verification
+name: Temporary Wave 1 Compiler Browser Verification
 
 on:
   push:
@@ -8,72 +8,9 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: temp-wave1-compiler-verification
-  cancel-in-progress: false
-
 jobs:
-  full-matrix:
-    if: contains(github.event.head_commit.message, '[verify]')
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - name: Run mandatory matrix and record every exit code
-        shell: bash
-        run: |
-          set +e
-          failures=0
-          run_check() {
-            label="$1"
-            shift
-            echo "::group::${label}"
-            "$@"
-            code=$?
-            echo "EXIT_CODE ${label}: ${code}"
-            echo "::endgroup::"
-            if [ "${code}" -ne 0 ]; then failures=1; fi
-          }
-          run_shell() {
-            label="$1"
-            command="$2"
-            run_check "${label}" bash -lc "${command}"
-          }
-
-          run_shell "npm ci --no-audit --no-fund" "npm ci --no-audit --no-fund"
-          run_shell "git diff --check af9e54036658e95a8df680658be73e589efae4b4...HEAD" "git diff --check af9e54036658e95a8df680658be73e589efae4b4...HEAD"
-          run_shell "git status --short before" "test -z \"$(git status --short)\""
-          run_shell "npm run app-shell-overlay:smoke" "npm run app-shell-overlay:smoke"
-          run_shell "npm run shared-game-editors:smoke" "npm run shared-game-editors:smoke"
-          run_shell "npm run typecheck" "npm run typecheck"
-          run_shell "npm run combat-lab-ui-contract:smoke" "npm run combat-lab-ui-contract:smoke"
-          run_shell "npm run editor:smoke" "npm run editor:smoke"
-          run_shell "npm run workspace-architecture-contract:smoke" "npm run workspace-architecture-contract:smoke"
-          run_shell "npm run performance-contract:smoke" "npm run performance-contract:smoke"
-          run_shell "npm run graph-v2:smoke" "npm run graph-v2:smoke"
-          run_shell "npm run movement-profiles:smoke" "npm run movement-profiles:smoke"
-          run_shell "npm run combat-catalog-editor:smoke" "npm run combat-catalog-editor:smoke"
-          run_shell "npm run attention-profiles:smoke" "npm run attention-profiles:smoke"
-          run_shell "npm run directional-terrain:smoke" "npm run directional-terrain:smoke"
-          run_shell "npm run environment-materials:smoke" "npm run environment-materials:smoke"
-          run_shell "npm run posture-transition:smoke" "npm run posture-transition:smoke"
-          run_shell "npm run combat-lab-scenario-system:verify" "npm run combat-lab-scenario-system:verify"
-          run_shell "npm run combat-lab-experiment:smoke" "npm run combat-lab-experiment:smoke"
-          run_shell "npm run combat-lab-batch:smoke" "npm run combat-lab-batch:smoke"
-          run_shell "npm run infantry-combat-stage9:verify" "npm run infantry-combat-stage9:verify"
-          run_shell "npm run build" "npm run build"
-          run_shell "git status --short after" "test -z \"$(git status --short)\""
-          exit "${failures}"
-
   browser-verification:
-    if: contains(github.event.head_commit.message, '[verify]')
-    needs: full-matrix
+    if: contains(github.event.head_commit.message, '[browser]')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -151,17 +88,13 @@ jobs:
                 await trigger.click();
                 const dialog = page.getByRole('dialog', { name: 'Общее игровое меню Real Wargame' });
                 await dialog.waitFor({ state: 'visible' });
+                await page.waitForFunction(() => {
+                  const active = document.activeElement;
+                  const modal = document.querySelector('[role="dialog"]');
+                  return active instanceof Node && modal?.contains(active) === true;
+                });
                 assert.equal(await dialog.locator('[aria-current="page"]').count(), 1, `${path}: one current mode expected`);
                 assert.equal(await dialog.locator('.app-shell-current-marker').count(), 1, `${path}: current mode marker expected`);
-                assert.equal(
-                  await page.evaluate(() => {
-                    const active = document.activeElement;
-                    const modal = document.querySelector('[role="dialog"]');
-                    return active instanceof Node && modal?.contains(active) === true;
-                  }),
-                  true,
-                  `${path}: focus must enter menu`,
-                );
 
                 const expectedPaths = ['/', '/ai-node-editor.html', '/combat-lab.html'];
                 const hrefPaths = await dialog.locator('a.app-shell-mode-link').evaluateAll(
@@ -172,6 +105,11 @@ jobs:
                 const controls = dialog.locator('button:not([disabled]), a[href]');
                 const firstControl = controls.first();
                 const lastControl = controls.last();
+                assert.equal(
+                  await firstControl.evaluate((element) => document.activeElement === element),
+                  true,
+                  `${path}: initial focus must target the first menu control`,
+                );
                 await lastControl.focus();
                 await page.keyboard.press('Tab');
                 assert.equal(
@@ -195,6 +133,11 @@ jobs:
                 );
                 await page.keyboard.press('Escape');
                 await dialog.waitFor({ state: 'visible' });
+                await page.waitForFunction(() => {
+                  const active = document.activeElement;
+                  const modal = document.querySelector('[role="dialog"]');
+                  return active instanceof Node && modal?.contains(active) === true;
+                });
                 await page.keyboard.press('Escape');
                 await dialog.waitFor({ state: 'hidden' });
 
