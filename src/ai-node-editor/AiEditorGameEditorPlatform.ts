@@ -2,8 +2,9 @@ import { GameEditorWorkspace } from '../game-editors/GameEditorWorkspace';
 import { createDefaultGameEditorRegistry } from '../game-editors/createDefaultGameEditorRegistry';
 import type { GameEditorInstallation, GameEditorMountContext } from '../game-editors/GameEditorTypes';
 
-const graphRoot = document.getElementById('ai-node-editor-root');
-if (!(graphRoot instanceof HTMLElement)) throw new Error('AI node editor root is missing.');
+const graphRootElement = document.getElementById('ai-node-editor-root');
+if (!(graphRootElement instanceof HTMLElement)) throw new Error('AI node editor root is missing.');
+const graphRoot: HTMLElement = graphRootElement;
 
 const shell = document.createElement('main');
 shell.className = 'game-editor-shell';
