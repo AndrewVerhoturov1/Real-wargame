@@ -92,18 +92,12 @@ export function readCombatLabGameEditorOpenRequest(
 }
 
 function readUnitSourceProfileLinks(unit: UnitModel): readonly CombatLabSourceProfileLink[] {
-  const soldier = unit.soldier as unknown;
-  if (!isRecord(soldier) || !Array.isArray(soldier.sourceProfileLinks)) return [];
-  const links: CombatLabSourceProfileLink[] = [];
-  for (const candidate of soldier.sourceProfileLinks) {
-    if (!isRecord(candidate)) continue;
-    const editorId = stringId(candidate.editorId);
-    const profileId = stringId(candidate.profileId);
-    const labelRu = stringId(candidate.labelRu);
-    if (!editorId || !profileId || !labelRu) continue;
-    links.push(Object.freeze({ editorId, profileId, labelRu }));
-  }
-  return Object.freeze(links);
+  const sourceProfileLinks = unit.soldier.sourceProfileLinks ?? [];
+  return Object.freeze(sourceProfileLinks.map((link) => Object.freeze({
+    editorId: link.editorId,
+    profileId: link.profileId,
+    labelRu: link.labelRu,
+  })));
 }
 
 function firstId(...values: unknown[]): string | null {
@@ -126,6 +120,6 @@ function stringId(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
