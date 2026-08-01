@@ -43,7 +43,7 @@ export function isUnitCombatCapable(unit: UnitModel): boolean {
 }
 
 export function applyUnitHit(unit: UnitModel, input: UnitHitInput): UnitHitResult {
-  const conditionProfile = getActiveConditionProfileSnapshot();
+  const conditionProfile = conditionProfileFor(unit);
   const runtime = getCombatRuntime(unit);
   const previousCapability = runtime.capability;
   const recordedZone = normalizeLegacyCombatHitZone(input.zone) ?? 'arms';
@@ -90,15 +90,19 @@ export function applyUnitHit(unit: UnitModel, input: UnitHitInput): UnitHitResul
 export function getCombatMovementMultiplier(unit: UnitModel): number {
   const effective = getEffectiveCombatCapabilities(unit);
   const physicalMultiplier = effective.canMove ? effective.movementSpeedMultiplier : 0;
-  const profile = getActiveConditionProfileSnapshot();
+  const profile = conditionProfileFor(unit);
   return Math.min(legacyMovementMultiplier(getCombatRuntime(unit).capability, profile.wound), physicalMultiplier);
 }
 
 export function getCombatAimMultiplier(unit: UnitModel): number {
   const effective = getEffectiveCombatCapabilities(unit);
   const physicalMultiplier = effective.canUseWeapon ? effective.accuracyMultiplier : 0;
-  const profile = getActiveConditionProfileSnapshot();
+  const profile = conditionProfileFor(unit);
   return Math.min(legacyAimMultiplier(getCombatRuntime(unit).capability, profile.wound), physicalMultiplier);
+}
+
+function conditionProfileFor(unit: UnitModel): ReturnType<typeof getActiveConditionProfileSnapshot> {
+  return unit.soldier.conditionProfile ?? getActiveConditionProfileSnapshot();
 }
 
 function legacyMovementMultiplier(
