@@ -59,16 +59,21 @@ const activeFallbackContact = advanceVisualContact(null, {
 });
 assert.equal(activeFallbackContact.confidence, 20);
 
-const legacySoldier = createSoldierParameters('regular');
-delete legacySoldier.conditionProfile;
+const {
+  conditionProfile: _legacyConditionProfile,
+  ...legacySoldierWithoutConditionProfile
+} = createSoldierParameters('regular');
+const legacySoldier: SoldierParameters = legacySoldierWithoutConditionProfile;
 const legacyUnit = createUnit(legacySoldier);
 replaceCombatRuntime(legacyUnit, { capability: 'wounded' });
 assert.equal(getCombatMovementMultiplier(legacyUnit), 0.33);
 assert.equal(getCombatAimMultiplier(legacyUnit), 0.44);
 
-const snapshotSoldier = createSoldierParameters('regular');
-snapshotSoldier.perceptionProfile = activePerception;
-snapshotSoldier.conditionProfile = activeCondition;
+const snapshotSoldier: SoldierParameters = {
+  ...createSoldierParameters('regular'),
+  perceptionProfile: activePerception,
+  conditionProfile: activeCondition,
+};
 const snapshotUnit = createUnit(snapshotSoldier);
 replaceCombatRuntime(snapshotUnit, { capability: 'wounded' });
 
