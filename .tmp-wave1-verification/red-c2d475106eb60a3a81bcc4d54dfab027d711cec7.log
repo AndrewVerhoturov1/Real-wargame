@@ -1,0 +1,38 @@
+mode: red
+trigger_sha: c2d475106eb60a3a81bcc4d54dfab027d711cec7
+workflow_run_id: 30699295172
+workflow_attempt: 1
+exit_code: 0
+
+MODE: red
+TRIGGER_HEAD: c2d475106eb60a3a81bcc4d54dfab027d711cec7
+STARTED_UTC: 2026-08-01T12:16:24Z
+===== npm ci --no-audit --no-fund =====
+
+added 24 packages in 1s
+EXIT_CODE npm ci --no-audit --no-fund: 0
+
+> real-wargame@0.1.0 posture-transition:smoke
+> node scripts/posture_transition_smoke.mjs
+
+AssertionError [ERR_ASSERTION]: instant live posture writes: src/core/testing/combat-lab/experiment/CombatLabParticipantInitialRuntime.ts
++ actual - expected
+
++ [
++   'src/core/testing/combat-lab/experiment/CombatLabParticipantInitialRuntime.ts'
++ ]
+- []
+    at verifyNoInstantLivePostureWritesRemain (file:///home/runner/work/Real-wargame/Real-wargame/.tmp-posture-transition-smoke/posture-transition-smoke.mjs?run=1785586588087:35524:10)
+    at file:///home/runner/work/Real-wargame/Real-wargame/.tmp-posture-transition-smoke/posture-transition-smoke.mjs?run=1785586588087:35151:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async run (file:///home/runner/work/Real-wargame/Real-wargame/scripts/posture_transition_smoke.mjs:50:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [Array],
+  expected: [],
+  operator: 'deepStrictEqual'
+}
+EXPECTED_RED strengthened posture regression: 1
+FINISHED_UTC: 2026-08-01T12:17:26Z
+FINAL_RESULT: PASS
