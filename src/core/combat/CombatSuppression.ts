@@ -40,8 +40,6 @@ const MAX_RECENT_SHOTS = 16;
 const runtimeByUnit = new WeakMap<UnitModel, CombatSuppressionRuntime>();
 
 export function applyBallisticCombatEffects(state: SimulationState, input: BallisticCombatEffectInput): void {
-  const conditionProfile = getActiveConditionProfileSnapshot();
-  const suppressionProfile = conditionProfile.suppression;
   const metresPerCell = Math.max(0.001, state.map.metersPerCell);
   const startGrid = {
     x: input.origin.xMetres / metresPerCell,
@@ -63,6 +61,9 @@ export function applyBallisticCombatEffects(state: SimulationState, input: Balli
 
   for (const unit of candidates) {
     if (unit.id === input.shooterId || !isUnitCombatCapable(unit)) continue;
+    const suppressionProfile = (
+      unit.soldier.conditionProfile ?? getActiveConditionProfileSnapshot()
+    ).suppression;
     const unitMetres = {
       x: unit.position.x * metresPerCell,
       y: unit.position.y * metresPerCell,
@@ -178,7 +179,9 @@ export function applyBallisticCombatEffects(state: SimulationState, input: Balli
 export function getCombatSuppressionSnapshot(unit: UnitModel, nowSeconds: number): CombatSuppressionSnapshot {
   const runtime = runtimeByUnit.get(unit);
   if (!runtime) return { suppression: 0, recentShotCount: 0, lastEffectSeconds: -1 };
-  const suppressionProfile = getActiveConditionProfileSnapshot().suppression;
+  const suppressionProfile = (
+    unit.soldier.conditionProfile ?? getActiveConditionProfileSnapshot()
+  ).suppression;
   decayRuntime(runtime, nowSeconds, suppressionProfile.decayPerSecond);
   pruneRecentShots(runtime, nowSeconds);
   if (runtime.suppression <= 0 && runtime.recentShotTimes.length === 0) runtimeByUnit.delete(unit);
