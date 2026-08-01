@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - planning/20260802-unified-game-workspace-ux
+  pull_request:
+    branches:
+      - real-wargame-preview
   workflow_dispatch:
 
 permissions:
