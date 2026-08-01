@@ -51,6 +51,11 @@ jobs:
               "",
           )
           simple_replace(
+              'scripts/attention_profiles_smoke.ts',
+              "../src/ui/SceneExport.ts",
+              "../src/core/simulation/SceneSnapshot.ts",
+          )
+          simple_replace(
               'scripts/environment_materials_smoke.ts',
               "const mainSource = readFileSync('src/main.ts', 'utf8');",
               "const gameApplicationSource = readFileSync('src/game/GameApplication.ts', 'utf8');",
@@ -138,5 +143,5 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
-          git commit -m "test(editors): finalize migrated contracts and record verification [skip ci]"
+          git commit -m "test(editors): finish migrated contracts and record verification [skip ci]"
           git push
