@@ -1,36 +1,40 @@
+import './app-shell-menu.css';
+import {
+  getAppOverlayCoordinator,
+  type AppOverlayCoordinator,
+  type AppOverlayHandle,
+} from './app-overlay/AppOverlayCoordinator';
+
 export type AppShellMenuMode = 'game' | 'editor' | 'combat-lab' | 'launcher';
 
 export interface AppShellMenuOptions {
   mode: AppShellMenuMode;
 }
 
+export interface AppShellMenuInstallation {
+  destroy(): void;
+}
+
 const LAB_SHUTDOWN_URL = 'http://127.0.0.1:8799/lab/shutdown';
 const CLOSE_SIGNAL_KEY = 'real-wargame.lab.close-tabs';
 const NEW_GAME_SIGNAL_KEY = 'real-wargame.lab.new-game';
 const CLOSE_CHANNEL_NAME = 'real-wargame.lab.close-tabs';
-const STYLE_ID = 'real-wargame-app-shell-menu-style';
+const MENU_PRIORITY = 100;
 const MODE_BODY_CLASSES = ['app-shell-mode-game', 'app-shell-mode-editor', 'app-shell-mode-combat-lab', 'app-shell-mode-launcher'] as const;
+const installations = new WeakMap<Document, AppShellMenuController>();
 
-let closeChannel: BroadcastChannel | null = null;
-let closeListenerInstalled = false;
+export function installAppShellMenu(options: AppShellMenuOptions): AppShellMenuInstallation {
+  const existing = installations.get(document);
+  if (existing && !existing.isDestroyed()) {
+    existing.update(options);
+    return existing;
+  }
 
-export function installAppShellMenu(options: AppShellMenuOptions): void {
-  document.body.classList.add('with-app-shell-menu');
-  document.body.classList.remove(...MODE_BODY_CLASSES);
-  document.body.classList.add(`app-shell-mode-${options.mode}`);
-  installStyles();
-  installCloseListeners();
-  document.querySelector('.app-shell-menu')?.remove();
-
-  const menu = document.createElement('nav');
-  menu.className = `app-shell-menu app-shell-menu-${options.mode}`;
-  menu.setAttribute('aria-label', 'Режимы Real-Wargame');
-  menu.innerHTML = renderMenu(options.mode);
-  document.body.prepend(menu);
-
-  menu.querySelector<HTMLButtonElement>('[data-shell-action="new-game"]')?.addEventListener('click', startNewGame);
-  menu.querySelector<HTMLButtonElement>('[data-shell-action="refresh"]')?.addEventListener('click', () => window.location.reload());
-  menu.querySelector<HTMLButtonElement>('[data-shell-action="exit"]')?.addEventListener('click', exitLab);
+  const controller = new AppShellMenuController(document, options, () => {
+    installations.delete(document);
+  });
+  installations.set(document, controller);
+  return controller;
 }
 
 export function openGameTab(): void {
@@ -61,39 +65,183 @@ export function exitLab(): void {
   window.setTimeout(() => setShellStatus('Если вкладка не закрылась сама, её можно закрыть вручную.'), 1200);
 }
 
+class AppShellMenuController implements AppShellMenuInstallation {
+  private readonly coordinator: AppOverlayCoordinator;
+  private readonly root: HTMLElement;
+  private readonly trigger: HTMLButtonElement;
+  private closeChannel: BroadcastChannel | null = null;
+  private menuHandle: AppOverlayHandle | null = null;
+  private mode: AppShellMenuMode;
+  private destroyed = false;
+
+  private readonly onTriggerClick = (): void => {
+    if (this.menuHandle) this.menuHandle.close();
+    else this.openMenu();
+  };
+
+  private readonly onStorage = (event: StorageEvent): void => {
+    if (event.key === CLOSE_SIGNAL_KEY && event.newValue) closeThisTab();
+    if (event.key === NEW_GAME_SIGNAL_KEY && event.newValue && isGamePage()) {
+      window.location.href = gamePageUrl(event.newValue);
+    }
+  };
+
+  private readonly onCloseChannelMessage = (event: MessageEvent): void => {
+    if (event.data === 'close') closeThisTab();
+  };
+
+  constructor(
+    private readonly document: Document,
+    options: AppShellMenuOptions,
+    private readonly onDestroyed: () => void,
+  ) {
+    this.mode = options.mode;
+    this.coordinator = getAppOverlayCoordinator(document);
+    this.root = document.createElement('div');
+    this.root.className = 'app-shell-menu';
+    this.root.dataset.appShellMenuRoot = 'true';
+    this.root.innerHTML = '<button class="app-shell-menu-trigger" type="button" data-shell-action="open-menu" aria-haspopup="dialog">Меню</button>';
+    const trigger = this.root.querySelector<HTMLButtonElement>('.app-shell-menu-trigger');
+    if (!trigger) throw new Error('Не удалось создать кнопку общего меню.');
+    this.trigger = trigger;
+    document.body.prepend(this.root);
+    this.trigger.addEventListener('click', this.onTriggerClick);
+    this.installCloseListeners();
+    this.applyMode(options.mode);
+    this.coordinator.setEscapeFallback(() => this.openMenu());
+  }
+
+  update(options: AppShellMenuOptions): void {
+    if (this.destroyed) return;
+    this.menuHandle?.destroy();
+    this.menuHandle = null;
+    this.applyMode(options.mode);
+  }
+
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.menuHandle?.destroy();
+    this.menuHandle = null;
+    this.coordinator.destroy();
+    this.trigger.removeEventListener('click', this.onTriggerClick);
+    this.destroyCloseListeners();
+    this.root.remove();
+    this.document.body.classList.remove('with-app-shell-menu', ...MODE_BODY_CLASSES);
+    this.onDestroyed();
+  }
+
+  isDestroyed(): boolean {
+    return this.destroyed;
+  }
+
+  private applyMode(mode: AppShellMenuMode): void {
+    this.mode = mode;
+    this.document.body.classList.remove('with-app-shell-menu', ...MODE_BODY_CLASSES);
+    this.document.body.classList.add(`app-shell-mode-${mode}`);
+    this.trigger.setAttribute('aria-label', `Открыть общее меню Real Wargame. Текущий режим: ${modeTitle(mode)}`);
+  }
+
+  private openMenu(): void {
+    if (this.destroyed || this.menuHandle) return;
+    this.menuHandle = this.coordinator.openModal({
+      ariaLabel: 'Общее игровое меню Real Wargame',
+      priority: MENU_PRIORITY,
+      trigger: this.trigger,
+      render: (host) => this.renderMenu(host),
+      onClosed: () => {
+        this.menuHandle = null;
+      },
+    });
+  }
+
+  private renderMenu(host: HTMLElement): void {
+    host.innerHTML = renderMenu(this.mode);
+    host.addEventListener('click', (event) => this.handleMenuClick(event));
+  }
+
+  private handleMenuClick(event: Event): void {
+    const target = event.target instanceof Element
+      ? event.target.closest<HTMLElement>('[data-shell-action]')
+      : null;
+    const action = target?.dataset.shellAction;
+    if (!action) return;
+    if (action === 'close') {
+      this.menuHandle?.close();
+      return;
+    }
+    if (action === 'new-game') {
+      startNewGame();
+      return;
+    }
+    if (action === 'refresh') {
+      window.location.reload();
+      return;
+    }
+    if (action === 'exit') exitLab();
+  }
+
+  private installCloseListeners(): void {
+    window.addEventListener('storage', this.onStorage);
+    if (!('BroadcastChannel' in window)) return;
+    this.closeChannel = new BroadcastChannel(CLOSE_CHANNEL_NAME);
+    this.closeChannel.addEventListener('message', this.onCloseChannelMessage);
+  }
+
+  private destroyCloseListeners(): void {
+    window.removeEventListener('storage', this.onStorage);
+    this.closeChannel?.removeEventListener('message', this.onCloseChannelMessage);
+    this.closeChannel?.close();
+    this.closeChannel = null;
+  }
+}
+
 function renderMenu(mode: AppShellMenuMode): string {
-  const title = mode === 'editor'
-    ? 'Редактор ИИ солдата'
-    : mode === 'combat-lab'
-      ? 'Испытательный полигон'
-      : mode === 'launcher'
-        ? 'Запуск лаборатории'
-        : 'Тактическая карта';
-
-  const modeLinks = [
-    modeLink('/', 'game', 'Игра', mode),
-    modeLink('/ai-node-editor.html', 'editor', 'Редактор ИИ', mode),
-    modeLink('/combat-lab.html', 'combat-lab', 'Испытательный полигон', mode),
-  ].join('');
-
-  const secondaryActions = mode === 'game'
-    ? '<button type="button" data-shell-action="new-game">Новая игра</button>'
-    : '<button type="button" data-shell-action="refresh">Обновить</button>';
-
   return `
-    <strong class="app-shell-title">${title}</strong>
-    <div class="app-shell-mode-links">${modeLinks}</div>
-    <div class="app-shell-actions">
-      ${secondaryActions}
-      <button class="app-shell-exit-button" type="button" data-shell-action="exit">Выход</button>
+    <div class="app-shell-dialog">
+      <header class="app-shell-dialog-header">
+        <div>
+          <strong class="app-shell-dialog-brand">REAL WARGAME</strong>
+          <p class="app-shell-dialog-subtitle">${modeTitle(mode)}</p>
+        </div>
+        <button class="app-shell-close-button" type="button" data-shell-action="close" aria-label="Закрыть меню">×</button>
+      </header>
+      <nav class="app-shell-mode-links" aria-label="Режимы Real Wargame">
+        ${modeLink('/', 'game', 'Игра', mode)}
+        ${modeLink('/ai-node-editor.html', 'editor', 'Редактор ИИ', mode)}
+        ${modeLink('/combat-lab.html', 'combat-lab', 'Испытательный полигон', mode)}
+      </nav>
+      <div class="app-shell-menu-actions">
+        ${secondaryAction(mode)}
+        <button class="app-shell-exit-button" type="button" data-shell-action="exit">Выход</button>
+      </div>
+      <p class="app-shell-status" aria-live="polite"></p>
     </div>
-    <span class="app-shell-status" aria-live="polite"></span>
   `;
 }
 
-function modeLink(href: string, linkMode: Exclude<AppShellMenuMode, 'launcher'>, label: string, currentMode: AppShellMenuMode): string {
+function modeLink(
+  href: string,
+  linkMode: Exclude<AppShellMenuMode, 'launcher'>,
+  label: string,
+  currentMode: AppShellMenuMode,
+): string {
   const current = linkMode === currentMode;
-  return `<a href="${href}" data-shell-mode="${linkMode}"${current ? ' aria-current="page"' : ''}>${label}</a>`;
+  const marker = current ? '<span class="app-shell-current-marker">Текущий режим</span>' : '';
+  return `<a class="app-shell-mode-link" href="${href}" data-shell-mode="${linkMode}"${current ? ' aria-current="page"' : ''}><span>${label}</span>${marker}</a>`;
+}
+
+function secondaryAction(mode: AppShellMenuMode): string {
+  return mode === 'game'
+    ? '<button type="button" data-shell-action="new-game">Новая игра</button>'
+    : '<button type="button" data-shell-action="refresh">Обновить</button>';
+}
+
+function modeTitle(mode: AppShellMenuMode): string {
+  if (mode === 'editor') return 'Редактор ИИ солдата';
+  if (mode === 'combat-lab') return 'Испытательный полигон';
+  if (mode === 'launcher') return 'Запуск лаборатории';
+  return 'Тактическая карта';
 }
 
 function gamePageUrl(newGameStamp?: string): string {
@@ -108,29 +256,12 @@ function startNewGame(): void {
   window.location.href = gamePageUrl(stamp);
 }
 
-function installCloseListeners(): void {
-  if (closeListenerInstalled) return;
-  closeListenerInstalled = true;
-
-  if ('BroadcastChannel' in window) {
-    closeChannel = new BroadcastChannel(CLOSE_CHANNEL_NAME);
-    closeChannel.addEventListener('message', (event) => {
-      if (event.data === 'close') closeThisTab();
-    });
-  }
-
-  window.addEventListener('storage', (event) => {
-    if (event.key === CLOSE_SIGNAL_KEY && event.newValue) closeThisTab();
-    if (event.key === NEW_GAME_SIGNAL_KEY && event.newValue && isGamePage()) {
-      window.location.href = gamePageUrl(event.newValue);
-    }
-  });
-}
-
 function broadcastCloseTabs(): void {
   const stamp = String(Date.now());
   try {
-    closeChannel?.postMessage('close');
+    const channel = new BroadcastChannel(CLOSE_CHANNEL_NAME);
+    channel.postMessage('close');
+    channel.close();
   } catch {
     // Local close still runs below.
   }
@@ -142,74 +273,11 @@ function closeThisTab(): void {
 }
 
 function setShellStatus(message: string): void {
-  const status = document.querySelector<HTMLElement>('.app-shell-status');
-  if (status) status.textContent = message;
+  document.querySelectorAll<HTMLElement>('.app-shell-status').forEach((status) => {
+    status.textContent = message;
+  });
 }
 
 function isGamePage(): boolean {
   return window.location.pathname.endsWith('/') || window.location.pathname.endsWith('/index.html');
-}
-
-function installStyles(): void {
-  if (document.getElementById(STYLE_ID)) return;
-  const style = document.createElement('style');
-  style.id = STYLE_ID;
-  style.textContent = `
-    .app-shell-menu {
-      position: fixed;
-      top: 8px;
-      left: 50%;
-      z-index: 10000;
-      display: grid;
-      grid-template-columns: auto auto auto;
-      gap: 10px;
-      align-items: center;
-      max-width: calc(100vw - 20px);
-      padding: 7px 9px;
-      border: 1px solid rgba(255, 242, 168, 0.3);
-      border-radius: 14px;
-      color: #f6edcf;
-      background: rgba(10, 13, 9, 0.94);
-      box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
-      font-family: Arial, Helvetica, sans-serif;
-      transform: translateX(-50%);
-      backdrop-filter: blur(8px);
-    }
-    .app-shell-title { color: #fff2a8; white-space: nowrap; font-size: 12px; }
-    .app-shell-mode-links, .app-shell-actions { display: flex; gap: 5px; align-items: center; }
-    .app-shell-menu a, .app-shell-menu button {
-      min-height: 30px;
-      padding: 6px 9px;
-      border: 1px solid rgba(255, 242, 168, 0.25);
-      border-radius: 9px;
-      color: #d8d0b8;
-      background: rgba(255, 242, 168, 0.05);
-      font: inherit;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 1;
-      text-decoration: none;
-      cursor: pointer;
-    }
-    .app-shell-menu a:hover, .app-shell-menu button:hover { background: rgba(255, 242, 168, 0.14); }
-    .app-shell-menu a:focus-visible, .app-shell-menu button:focus-visible { outline: 2px solid #fff2a8; outline-offset: 2px; }
-    .app-shell-menu a[aria-current="page"] { color: #121612; border-color: #fff2a8; background: #fff2a8; }
-    .app-shell-exit-button { color: #ffb0a8 !important; }
-    .app-shell-status { grid-column: 1 / -1; min-height: 0; color: #d6ceb2; font-size: 11px; text-align: center; }
-    .app-shell-status:empty { display: none; }
-
-    .app-shell-mode-game .top-command-bar { top: 62px; }
-    .app-shell-mode-game .game-right-panel { top: 124px; max-height: calc(100vh - 238px); }
-    .app-shell-mode-game .map-scale-fixed-label { top: 126px; }
-    .app-shell-mode-editor .ai-editor-shell { height: calc(100vh - 54px); margin-top: 54px; }
-
-    @media (max-width: 900px) {
-      .app-shell-menu { left: 8px; right: 8px; grid-template-columns: 1fr; transform: none; }
-      .app-shell-title { display: none; }
-      .app-shell-mode-links, .app-shell-actions { justify-content: center; flex-wrap: wrap; }
-      .app-shell-mode-game .top-command-bar { top: 104px; }
-      .app-shell-mode-editor .ai-editor-shell { height: calc(100vh - 100px); margin-top: 100px; }
-    }
-  `;
-  document.head.append(style);
 }

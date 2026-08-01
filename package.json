@@ -156,8 +156,14 @@
     "environment-profile-revisions:smoke": "node scripts/environment_profile_revisions_smoke.mjs",
     "vegetation-chunk-raster:smoke": "node scripts/vegetation_chunk_raster_smoke.mjs",
     "infantry-combat-projectile:smoke": "node scripts/infantry_combat_projectile_runtime_smoke.mjs",
-    "infantry-combat-projectile:benchmark": "node scripts/infantry_combat_projectile_benchmark.mjs"
+    "infantry-combat-projectile:benchmark": "node scripts/infantry_combat_projectile_benchmark.mjs",
+    "app-shell-overlay:smoke": "node scripts/app_shell_overlay_smoke.mjs && node scripts/app_shell_overlay_behavior_smoke.mjs"
   },
-  "dependencies": { "pixi.js": "^8.19.0" },
-  "devDependencies": { "typescript": "^5.5.4", "vite": "^5.4.11" }
+  "dependencies": {
+    "pixi.js": "^8.19.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vite": "^5.4.11"
+  }
 }

@@ -11,7 +11,7 @@ import { installAppShellMenu } from './shared/AppShellMenu';
 
 let application: GameApplication | null = null;
 
-installAppShellMenu({ mode: 'game' });
+const shellMenuInstallation = installAppShellMenu({ mode: 'game' });
 void bootstrap();
 
 async function bootstrap(): Promise<void> {
@@ -28,6 +28,7 @@ async function bootstrap(): Promise<void> {
 }
 
 window.addEventListener('beforeunload', () => {
+  shellMenuInstallation.destroy();
   application?.destroy();
   application = null;
 });
