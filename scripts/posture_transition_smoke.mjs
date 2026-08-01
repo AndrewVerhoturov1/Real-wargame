@@ -33,7 +33,7 @@ async function run() {
     await writeFile(adaptedSmoke, source.replace(marker, `${marker}\n${compatibilityPaths}`));
     await writeFile(
       adaptedSuite,
-      "import './.tmp-posture-transition-smoke';\nimport './posture_transition_route_smoke';\nimport './player_posture_movement_sync_smoke';\n",
+      "import './.tmp-posture-transition-smoke';\nimport './posture_transition_route_smoke';\nimport './player_posture_movement_sync_smoke';\nimport './combat_lab_initial_posture_smoke';\n",
     );
     await build({
       root,
