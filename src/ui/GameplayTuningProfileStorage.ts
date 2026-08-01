@@ -1,4 +1,7 @@
-import { installSoldierArchetypeResolver } from '../core/behavior/BehaviorModel';
+import {
+  installSoldierArchetypeResolver,
+  installSoldierProfileSnapshotResolver,
+} from '../core/behavior/BehaviorModel';
 import {
   createDefaultGameplayTuningRegistry,
   GAMEPLAY_TUNING_FORMAT_VERSION,
@@ -23,7 +26,26 @@ replaceGameplayTuningRegistry(initialRegistry);
 restoreActiveConditionProfileId(readActiveConditionProfileId());
 installSoldierArchetypeResolver((profileId) => {
   const profile = getGameplayTuningRegistry().requireSoldierArchetype(profileId);
-  return Object.freeze({ traits: profile.traits, condition: profile.condition });
+  return Object.freeze({
+    archetypeId: profile.id,
+    perceptionProfileId: profile.perceptionProfileId,
+    conditionProfileId: profile.conditionProfileId,
+    traits: profile.traits,
+    condition: profile.condition,
+  });
+});
+installSoldierProfileSnapshotResolver((perceptionProfileId, conditionProfileId) => {
+  const registry = getGameplayTuningRegistry();
+  const perceptionProfile = registry.requirePerceptionProfile(
+    perceptionProfileId ?? registry.getActivePerceptionProfileId(),
+  );
+  const conditionProfile = registry.requireConditionProfile(conditionProfileId ?? 'standard');
+  return Object.freeze({
+    perceptionProfileId: perceptionProfile.id,
+    conditionProfileId: conditionProfile.id,
+    perceptionProfile,
+    conditionProfile,
+  });
 });
 
 export function loadGameplayTuningProfiles(
@@ -36,7 +58,7 @@ export function loadGameplayTuningProfiles(
     if (parsed.formatVersion !== GAMEPLAY_TUNING_FORMAT_VERSION) {
       return createDefaultGameplayTuningRegistry();
     }
-    return restoreBuiltInProfiles(new GameplayTuningRegistry(parsed));
+    return new GameplayTuningRegistry(parsed);
   } catch {
     return createDefaultGameplayTuningRegistry();
   }
@@ -46,7 +68,6 @@ export function saveGameplayTuningProfiles(
   registry: GameplayTuningRegistry = getGameplayTuningRegistry(),
   storage: Storage | null = resolveBrowserStorage(),
 ): void {
-  restoreBuiltInProfiles(registry);
   replaceGameplayTuningRegistry(registry);
   restoreActiveConditionProfileId(getActiveConditionProfileId());
   storage?.setItem(GAMEPLAY_TUNING_STORAGE_KEY, JSON.stringify(registry.exportBundle()));
@@ -58,7 +79,7 @@ export function replaceStoredGameplayTuningProfiles(
   bundle: Partial<GameplayTuningBundleV1>,
   storage: Storage | null = resolveBrowserStorage(),
 ): GameplayTuningRegistry {
-  const registry = restoreBuiltInProfiles(new GameplayTuningRegistry(bundle));
+  const registry = new GameplayTuningRegistry(bundle);
   saveGameplayTuningProfiles(registry, storage);
   return registry;
 }
@@ -78,20 +99,6 @@ export function resetGameplayTuningProfiles(
 export function subscribeGameplayTuningProfiles(listener: GameplayTuningListener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
-}
-
-function restoreBuiltInProfiles(registry: GameplayTuningRegistry): GameplayTuningRegistry {
-  const defaults = createDefaultGameplayTuningRegistry();
-  for (const profile of defaults.listPerceptionProfiles()) {
-    if (profile.builtIn) registry.resetPerceptionProfile(profile.id);
-  }
-  for (const profile of defaults.listSoldierArchetypes()) {
-    if (profile.builtIn) registry.resetSoldierArchetype(profile.id);
-  }
-  for (const profile of defaults.listConditionProfiles()) {
-    if (profile.builtIn) registry.resetConditionProfile(profile.id);
-  }
-  return registry;
 }
 
 function readActiveConditionProfileId(storage: Storage | null = resolveBrowserStorage()): string | null {
