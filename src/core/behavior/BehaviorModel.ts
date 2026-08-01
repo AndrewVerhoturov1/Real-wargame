@@ -1,9 +1,13 @@
-import type { AiRouteStatusState } from '../ai/AiRouteStatus';
-import type { SimulationAiFacts } from '../ai/events/SimulationAiEvents';
-import type { AiRuntimeSessionSnapshotV1 } from '../ai/runtime/AiRuntimeSession';
 import { createPhysicalActionCoordinatorState } from '../actions/PhysicalActionCoordinator';
 import type { PhysicalActionCoordinatorStateV1 } from '../actions/PhysicalActionCoordinatorTypes';
 import type { UnitPhysicalAction } from '../actions/PostureTransition';
+import type { AiRouteStatusState } from '../ai/AiRouteStatus';
+import type { SimulationAiFacts } from '../ai/events/SimulationAiEvents';
+import type { AiRuntimeSessionSnapshotV1 } from '../ai/runtime/AiRuntimeSession';
+import type {
+  ConditionProfileDefinition,
+  PerceptionProfileDefinition,
+} from '../tuning/GameplayTuningProfiles';
 
 export type UnitState = 'idle' | 'moving' | 'observing' | 'taking_cover' | 'stressed';
 export type UnitPosture = 'standing' | 'crouched' | 'prone';
@@ -45,6 +49,13 @@ export interface SoldierCondition {
 export interface SoldierParameters {
   traits: SoldierTraits;
   condition: SoldierCondition;
+  /** Stable source id copied into the unit at spawn. */
+  archetypeId?: string;
+  perceptionProfileId?: string;
+  conditionProfileId?: string;
+  /** Frozen authoritative snapshots; no registry lookup is needed during a simulation step. */
+  perceptionProfile?: PerceptionProfileDefinition;
+  conditionProfile?: ConditionProfileDefinition;
 }
 
 export interface UnitInitialState {
@@ -60,6 +71,9 @@ export interface UnitInitialState {
 }
 
 export interface SoldierParameterOverrides {
+  archetypeId?: string;
+  perceptionProfileId?: string;
+  conditionProfileId?: string;
   traits?: Partial<SoldierTraits>;
   condition?: Partial<SoldierCondition>;
 }
@@ -101,6 +115,16 @@ export interface UnitBehaviorRuntime {
 }
 
 export type SoldierArchetypeResolver = (profileId: string) => SoldierParameters | null;
+export interface SoldierProfileSnapshotResolution {
+  readonly perceptionProfileId: string;
+  readonly conditionProfileId: string;
+  readonly perceptionProfile: PerceptionProfileDefinition;
+  readonly conditionProfile: ConditionProfileDefinition;
+}
+export type SoldierProfileSnapshotResolver = (
+  perceptionProfileId?: string,
+  conditionProfileId?: string,
+) => SoldierProfileSnapshotResolution;
 
 export const DEFAULT_BEHAVIOR_PROFILE: BehaviorProfileId = 'regular';
 
@@ -271,9 +295,16 @@ export const SOLDIER_PARAMETERS_BY_PROFILE: Record<BehaviorProfileId, SoldierPar
 };
 
 let soldierArchetypeResolver: SoldierArchetypeResolver | null = null;
+let soldierProfileSnapshotResolver: SoldierProfileSnapshotResolver | null = null;
 
 export function installSoldierArchetypeResolver(resolver: SoldierArchetypeResolver | null): void {
   soldierArchetypeResolver = resolver;
+}
+
+export function installSoldierProfileSnapshotResolver(
+  resolver: SoldierProfileSnapshotResolver | null,
+): void {
+  soldierProfileSnapshotResolver = resolver;
 }
 
 export const POSTURE_MOVE_MULTIPLIER: Record<UnitPosture, number> = {
@@ -289,10 +320,7 @@ export const POSTURE_EXPOSURE_MULTIPLIER: Record<UnitPosture, number> = {
 };
 
 export function normalizeBehaviorProfileId(profileId?: string): BehaviorProfileId {
-  if (profileId && profileId in BEHAVIOR_PROFILES) {
-    return profileId as BehaviorProfileId;
-  }
-
+  if (profileId && profileId in BEHAVIOR_PROFILES) return profileId as BehaviorProfileId;
   return DEFAULT_BEHAVIOR_PROFILE;
 }
 
@@ -310,10 +338,21 @@ export function createSoldierParameters(
   profileId: string,
   overrides: SoldierParameterOverrides = {},
 ): SoldierParameters {
-  const resolved = soldierArchetypeResolver?.(profileId);
-  const base = resolved ?? SOLDIER_PARAMETERS_BY_PROFILE[normalizeBehaviorProfileId(profileId)];
+  const requestedArchetypeId = overrides.archetypeId ?? profileId;
+  const resolved = soldierArchetypeResolver?.(requestedArchetypeId);
+  const fallbackArchetypeId = normalizeBehaviorProfileId(profileId);
+  const base = resolved ?? SOLDIER_PARAMETERS_BY_PROFILE[fallbackArchetypeId];
+  const profileSnapshots = soldierProfileSnapshotResolver?.(
+    overrides.perceptionProfileId ?? resolved?.perceptionProfileId,
+    overrides.conditionProfileId ?? resolved?.conditionProfileId,
+  );
 
   return {
+    archetypeId: resolved?.archetypeId ?? requestedArchetypeId ?? fallbackArchetypeId,
+    perceptionProfileId: profileSnapshots?.perceptionProfileId,
+    conditionProfileId: profileSnapshots?.conditionProfileId,
+    perceptionProfile: profileSnapshots?.perceptionProfile,
+    conditionProfile: profileSnapshots?.conditionProfile,
     traits: {
       ...base.traits,
       ...overrides.traits,
