@@ -1,6 +1,7 @@
 import { clampPercent, POSTURE_EXPOSURE_MULTIPLIER } from '../behavior/BehaviorModel';
 import { evaluateSmallArmsCover } from '../cover/SmallArmsCoverEvaluation';
 import type { SimulationState } from '../simulation/SimulationState';
+import { getActiveConditionProfileSnapshot } from '../tuning/GameplayTuningRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import { isUnitCombatCapable } from './CombatDamage';
 import { recordCombatThreatEvidence, type CombatThreatEvidenceKind } from './CombatThreatEvidence';
@@ -36,10 +37,11 @@ const NEAR_MISS_RADIUS_METRES = 6;
 const NEAR_IMPACT_RADIUS_METRES = 10;
 const RECENT_SHOT_WINDOW_SECONDS = 4;
 const MAX_RECENT_SHOTS = 16;
-const SUPPRESSION_DECAY_PER_SECOND = 13;
 const runtimeByUnit = new WeakMap<UnitModel, CombatSuppressionRuntime>();
 
 export function applyBallisticCombatEffects(state: SimulationState, input: BallisticCombatEffectInput): void {
+  const conditionProfile = getActiveConditionProfileSnapshot();
+  const suppressionProfile = conditionProfile.suppression;
   const metresPerCell = Math.max(0.001, state.map.metersPerCell);
   const startGrid = {
     x: input.origin.xMetres / metresPerCell,
@@ -81,7 +83,7 @@ export function applyBallisticCombatEffects(state: SimulationState, input: Balli
     const nearImpactFactor = clamp01(1 - impactDistance / NEAR_IMPACT_RADIUS_METRES);
     if (!directHit && nearMissFactor <= 0 && nearImpactFactor <= 0) continue;
 
-    const runtime = getRuntime(unit, state.simulationTimeSeconds);
+    const runtime = getRuntime(unit, state.simulationTimeSeconds, suppressionProfile.decayPerSecond);
     pruneRecentShots(runtime, state.simulationTimeSeconds);
     const accumulationFactor = 1 + Math.min(0.75, runtime.recentShotTimes.length * 0.12);
     const weaponFactor = clamp(input.muzzleVelocityMetresPerSecond / 865, 0.55, 1.5);
@@ -97,10 +99,19 @@ export function applyBallisticCombatEffects(state: SimulationState, input: Balli
     const missSuppression = nearMissFactor * 42;
     const impactSuppression = nearImpactFactor * (input.hitType === 'unit' ? 36 : input.hitType === 'object' ? 30 : 25);
     const rawSuppression = Math.max(directSuppression, missSuppression, impactSuppression);
-    const suppression = rawSuppression * weaponFactor * postureFactor * resilienceFactor * coverFactor * accumulationFactor;
+    const suppression = rawSuppression
+      * weaponFactor
+      * postureFactor
+      * resilienceFactor
+      * coverFactor
+      * accumulationFactor
+      * suppressionProfile.gainMultiplier;
     if (suppression < 0.75) continue;
 
-    runtime.suppression = clampPercent(runtime.suppression + suppression);
+    runtime.suppression = Math.min(
+      suppressionProfile.maximumSuppression,
+      clampPercent(runtime.suppression + suppression),
+    );
     runtime.lastUpdatedSeconds = state.simulationTimeSeconds;
     runtime.lastEffectSeconds = state.simulationTimeSeconds;
     runtime.recentShotTimes.push(state.simulationTimeSeconds);
@@ -109,7 +120,10 @@ export function applyBallisticCombatEffects(state: SimulationState, input: Balli
     }
     unit.behaviorRuntime.suppression = Math.max(unit.behaviorRuntime.suppression, runtime.suppression);
 
-    const stress = suppression * (directHit ? 0.48 : 0.30) * clamp(1.18 - unit.soldier.traits.resilience / 220, 0.65, 1.12);
+    const stress = suppression
+      * (directHit ? 0.48 : 0.30)
+      * clamp(1.18 - unit.soldier.traits.resilience / 220, 0.65, 1.12)
+      * suppressionProfile.stressMultiplier;
     unit.behaviorRuntime.stress = clampPercent(unit.behaviorRuntime.stress + stress);
     unit.behaviorRuntime.lastEvent = directHit ? `combat_hit:${input.shotId}` : `combat_fire_pressure:${input.shotId}`;
     unit.behaviorRuntime.reason = directHit
@@ -164,7 +178,8 @@ export function applyBallisticCombatEffects(state: SimulationState, input: Balli
 export function getCombatSuppressionSnapshot(unit: UnitModel, nowSeconds: number): CombatSuppressionSnapshot {
   const runtime = runtimeByUnit.get(unit);
   if (!runtime) return { suppression: 0, recentShotCount: 0, lastEffectSeconds: -1 };
-  decayRuntime(runtime, nowSeconds);
+  const suppressionProfile = getActiveConditionProfileSnapshot().suppression;
+  decayRuntime(runtime, nowSeconds, suppressionProfile.decayPerSecond);
   pruneRecentShots(runtime, nowSeconds);
   if (runtime.suppression <= 0 && runtime.recentShotTimes.length === 0) runtimeByUnit.delete(unit);
   return {
@@ -178,7 +193,11 @@ export function clearCombatSuppression(unit: UnitModel): void {
   runtimeByUnit.delete(unit);
 }
 
-function getRuntime(unit: UnitModel, nowSeconds: number): CombatSuppressionRuntime {
+function getRuntime(
+  unit: UnitModel,
+  nowSeconds: number,
+  decayPerSecond: number,
+): CombatSuppressionRuntime {
   let runtime = runtimeByUnit.get(unit);
   if (!runtime) {
     runtime = {
@@ -189,15 +208,19 @@ function getRuntime(unit: UnitModel, nowSeconds: number): CombatSuppressionRunti
     };
     runtimeByUnit.set(unit, runtime);
   } else {
-    decayRuntime(runtime, nowSeconds);
+    decayRuntime(runtime, nowSeconds, decayPerSecond);
   }
   return runtime;
 }
 
-function decayRuntime(runtime: CombatSuppressionRuntime, nowSeconds: number): void {
+function decayRuntime(
+  runtime: CombatSuppressionRuntime,
+  nowSeconds: number,
+  decayPerSecond: number,
+): void {
   const elapsed = Math.max(0, nowSeconds - runtime.lastUpdatedSeconds);
   if (elapsed <= 0) return;
-  runtime.suppression = Math.max(0, runtime.suppression - SUPPRESSION_DECAY_PER_SECOND * elapsed);
+  runtime.suppression = Math.max(0, runtime.suppression - decayPerSecond * elapsed);
   runtime.lastUpdatedSeconds = nowSeconds;
 }
 
