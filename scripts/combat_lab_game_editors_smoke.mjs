@@ -75,6 +75,15 @@ expectExcludes('src/combat-lab/game-editors/CombatLabGameEditorOverlay.ts', [
   'new PIXI.Application',
 ]);
 
+expectIncludes('src/combat-lab/game-editors/combat-lab-game-editors.css', [
+  '.combat-lab-game-editor-workbench-close',
+  '.combat-lab-game-editor-workbench-content',
+  'overflow: auto',
+  '@media (max-width: 1100px), (max-height: 760px)',
+  'width: calc(100vw - 24px)',
+  'height: calc(100vh - 24px)',
+]);
+
 expectIncludes('src/game-editors/GameEditorReturnTarget.ts', [
   'getSafeGameEditorReturnTarget',
   "'/combat-lab.html'",
