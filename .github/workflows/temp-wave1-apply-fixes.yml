@@ -68,8 +68,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run app-shell-overlay:smoke
       - run: npm run posture-transition:smoke
-      - run: npm run infantry-combat-stage9:verify
-      - name: Commit exact product fixes
+      - name: Create clean local product commit
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -78,4 +77,8 @@ jobs:
             src/core/units/UnitModel.ts \
             src/core/testing/combat-lab/experiment/CombatLabParticipantInitialRuntime.ts
           git commit -m "fix(wave1): correct focus model and initial posture ownership"
-          git push origin HEAD:compiler/20260801-shared-game-editors-wave1
+          test -z "$(git status --short)"
+      - run: npm run infantry-combat-stage9:verify
+      - name: Push verified product commit
+        shell: bash
+        run: git push origin HEAD:compiler/20260801-shared-game-editors-wave1
