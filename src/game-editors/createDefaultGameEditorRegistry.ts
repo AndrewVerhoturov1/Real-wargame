@@ -1,5 +1,5 @@
-import '../ai-node-editor/CombatCatalogEditor';
 import { mountAttentionProfileEditor } from '../ai-node-editor/AttentionProfileEditorIntegration';
+import { mountCombatCatalogEditor } from '../ai-node-editor/CombatCatalogEditor';
 import { mountDirectionalTerrainProfileEditor } from '../ai-node-editor/DirectionalTerrainProfileEditor';
 import { mountEnvironmentProfileEditor } from '../ai-node-editor/EnvironmentProfileEditorIntegration';
 import { mountMovementProfileEditor } from '../ai-node-editor/MovementProfileEditorIntegration';
@@ -8,7 +8,6 @@ import {
   mountSoldierDataEditor,
 } from '../ai-node-editor/NavigationProfileEditor';
 import { mountTacticalPositionProfileEditor } from '../ai-node-editor/TacticalPositionProfileEditor';
-import { requireLegacyAiEditorSection } from '../ai-node-editor/AiEditorSectionRegistry';
 import { GameEditorRegistry } from './GameEditorRegistry';
 import type {
   GameEditorDefinition,
@@ -21,9 +20,6 @@ export interface DefaultGameEditorRegistryOptions {
   /** Existing graph root owned by the AI editor composition layer. */
   readonly mountBehaviorGraph?: (context: GameEditorMountContext) => GameEditorInstallation;
 }
-
-let reusableWeaponsPanel: HTMLElement | null = null;
-let weaponsParking: DocumentFragment | null = null;
 
 export function createDefaultGameEditorRegistry(
   options: DefaultGameEditorRegistryOptions = {},
@@ -86,7 +82,7 @@ export function createDefaultGameEditorRegistry(
       group: 'combat',
       order: 10,
       activationFor: () => 'embedded',
-      mount: mountWeaponsEditor,
+      mount: mountCombatCatalogEditor,
     },
     {
       id: 'environmentProfiles',
@@ -115,25 +111,4 @@ function behaviorGraphRoute(request: GameEditorOpenRequest): string {
   if (request.returnTo) search.set('returnTo', request.returnTo);
   if (request.selectedUnitId) search.set('selectedUnitId', request.selectedUnitId);
   return `${baseRoute}?${search.toString()}`;
-}
-
-function mountWeaponsEditor(context: GameEditorMountContext): GameEditorInstallation {
-  const capturedPanel = requireLegacyAiEditorSection('combatCatalogs');
-  const panel = reusableWeaponsPanel ?? document.createElement('div');
-  reusableWeaponsPanel = panel;
-  weaponsParking ??= document.createDocumentFragment();
-  panel.hidden = false;
-  context.host.replaceChildren(panel);
-  capturedPanel.render(panel);
-  let destroyed = false;
-  return {
-    beforeClose: capturedPanel.beforeLeave,
-    destroy(): void {
-      if (destroyed) return;
-      destroyed = true;
-      capturedPanel.onDeactivate?.();
-      panel.hidden = true;
-      weaponsParking?.append(panel);
-    },
-  };
 }
