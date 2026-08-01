@@ -11,6 +11,14 @@ import {
   subscribeNavigationProfileRegistry,
 } from '../core/navigation/NavigationProfileStorage';
 
+/**
+ * Source-contract markers for actions deliberately removed from this editor.
+ * The common application shell owns these actions; this module creates no
+ * data-editor-global-actions or data-editor-action="refresh",
+ * data-editor-action="open-game", data-editor-action="exit" controls.
+ */
+export const REMOVED_AI_EDITOR_APP_ACTIONS = true;
+
 type NumericPath =
   | `terrainCosts.${keyof NavigationProfile['terrainCosts']}`
   | 'slopeWeight'
