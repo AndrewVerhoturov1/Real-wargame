@@ -40,10 +40,10 @@ for (const token of [
 ]) {
   assert.ok(workspaceTabs.includes(token), `Combat Lab workspace tabs must contain ${token}`);
 }
-for (const tabId of ['scene', 'program', 'batch', 'parameters', 'metrics', 'journal']) {
+for (const tabId of ['scene', 'program', 'batch', 'parameters', 'settings', 'metrics', 'journal']) {
   assert.ok(workspaceHosts.includes(`tabId: '${tabId}'`), `Combat Lab must declare workspace tab ${tabId}`);
 }
-assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 6, 'Combat Lab must expose exactly six workspace tabs.');
+assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 7, 'Combat Lab must expose six Stage 10 tabs plus game settings.');
 
 assert.doesNotMatch(extension, /adoptSimulationSidebar/, 'Combat Lab must not reparent the production right inspector.');
 assert.doesNotMatch(extension, /['"]fighter['"]/, 'Combat Lab must not duplicate the fighter tab inside the laboratory dock.');
@@ -72,7 +72,6 @@ for (const token of [
   'body.app-shell-mode-combat-lab.workspace-editor #app',
   'left: calc(var(--combat-lab-dock-width)',
   'body.app-shell-mode-combat-lab .simulation-unit-bar',
-  'body.app-shell-mode-combat-lab .app-shell-menu',
   '.combat-lab-tab-list',
   'grid-template-columns: repeat(3, minmax(0, 1fr))',
   '.combat-lab-tab-panel',

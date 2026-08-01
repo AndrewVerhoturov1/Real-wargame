@@ -264,7 +264,7 @@ function verifyOccupationAndEditorContracts(): void {
   const controls = readFileSync('src/ui/TacticalPositionSettingsControls.ts', 'utf8');
   const schema = readFileSync('src/core/tactical/TacticalPositionSettingsSchema.ts', 'utf8');
   const aiEditor = readFileSync('src/ai-node-editor/TacticalPositionProfileEditor.ts', 'utf8');
-  const html = readFileSync('ai-node-editor.html', 'utf8');
+  const defaultRegistry = readFileSync('src/game-editors/createDefaultGameEditorRegistry.ts', 'utf8');
   const searchControls = readFileSync('src/ui/TacticalPositionSearchControls.ts', 'utf8');
   const workspaceBase = [
     readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8'),
@@ -281,8 +281,10 @@ function verifyOccupationAndEditorContracts(): void {
   assert.ok(schema.includes('proneSafetyAdvantageThreshold'));
   assert.ok(schema.includes('advanceToThreatWeight'));
   assert.ok(aiEditor.includes('TACTICAL_POSITION_SETTINGS_GROUPS'));
-  assert.ok(aiEditor.includes('Тактические позиции'));
-  assert.ok(html.includes('TacticalPositionProfileEditor.ts'));
+  assert.ok(aiEditor.includes('Профили позиций'));
+  assert.ok(defaultRegistry.includes('mountTacticalPositionProfileEditor'));
+  assert.ok(defaultRegistry.includes("id: 'tacticalPositions'"));
+  assert.ok(defaultRegistry.includes("labelRu: 'Тактические позиции'"));
   assert.ok(searchControls.includes('objectiveDraftByUnit'));
   assert.ok(searchControls.includes('{ forceRefresh: true }'));
   assert.equal(searchControls.includes('selectedObjective = request.objective'), false);
