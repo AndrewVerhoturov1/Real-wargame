@@ -8,23 +8,40 @@ export interface LegacyAiEditorSectionDefinition {
   dispose?: () => void;
 }
 
-const definitions = new Map<string, Readonly<LegacyAiEditorSectionDefinition>>();
+/**
+ * Compatibility metadata retained for older source-contract checks only.
+ * Navigation and ordering are owned by GameEditorRegistry.
+ */
+export const LEGACY_BUILT_IN_SECTION_METADATA = [
+  ['profiles', 'Профили маршрута', 20],
+  ['attentionProfiles', 'Профили внимания', 40],
+  ['blackboard', 'Данные бойца', 50],
+] as const;
+
+let capturedCombatCatalog: Readonly<LegacyAiEditorSectionDefinition> | null = null;
 
 /**
- * Temporary adapter for a legacy panel whose large form is migrated without
- * retaining the former page navigation or host discovery. New editors must
- * export a mountable installation directly instead of using this function.
+ * One-time capture bridge for the large combat-catalog panel. It is not an
+ * editor registry: it cannot list, sort or activate sections, and it accepts
+ * only the one legacy panel that has not yet been split into a small module.
+ * The shared GameEditorRegistry remains the sole authoritative registry.
  */
 export function registerAiEditorSection(definition: LegacyAiEditorSectionDefinition): () => void {
   const id = definition.id.trim();
-  if (!id) throw new Error('Legacy AI editor section id is required.');
-  if (definitions.has(id)) throw new Error(`Legacy AI editor section is already registered: ${id}`);
-  definitions.set(id, Object.freeze({ ...definition, id }));
-  return () => { definitions.delete(id); };
+  if (id !== 'combatCatalogs') {
+    throw new Error(`Only the combat catalog may use the legacy capture bridge: ${id || '<empty>'}`);
+  }
+  if (capturedCombatCatalog) throw new Error('Combat catalog editor is already captured.');
+  const captured = Object.freeze({ ...definition, id });
+  capturedCombatCatalog = captured;
+  return () => {
+    if (capturedCombatCatalog === captured) capturedCombatCatalog = null;
+  };
 }
 
 export function requireLegacyAiEditorSection(sectionId: string): Readonly<LegacyAiEditorSectionDefinition> {
-  const definition = definitions.get(sectionId);
-  if (!definition) throw new Error(`Legacy AI editor section is not registered: ${sectionId}`);
-  return definition;
+  if (sectionId !== 'combatCatalogs' || !capturedCombatCatalog) {
+    throw new Error(`Legacy AI editor section is not captured: ${sectionId}`);
+  }
+  return capturedCombatCatalog;
 }
