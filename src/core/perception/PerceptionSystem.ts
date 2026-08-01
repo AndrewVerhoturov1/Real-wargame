@@ -150,6 +150,7 @@ export function tickUnitPerception(
         nowSeconds: now,
         source: 'reported',
         explanationRu: ['Положение известно по сценарию или докладу, но визуально не подтверждено.'],
+        perceptionProfile: unit.soldier.perceptionProfile,
       });
       upsertPerceptionContact(unit.perceptionKnowledge, reported);
       updatedContacts.add(contactId);
@@ -173,9 +174,7 @@ export function tickUnitPerception(
     );
 
     // Deny by default: outside the canonical zone/range there is no current visual sample and no LOS work.
-    if (attention.zone === 'outside' || attention.weight <= 0) {
-      continue;
-    }
+    if (attention.zone === 'outside' || attention.weight <= 0) continue;
 
     const checkDue = attention.zone === 'near'
       ? true
@@ -255,6 +254,7 @@ export function tickUnitPerception(
         `Условная длительность взгляда: ${attention.sampleDurationSeconds.toFixed(2).replace('.', ',')} с.`,
         `Небольшая стабильная вариативность обнаружения: ×${detectionVariance.toFixed(2).replace('.', ',')}.`,
       ],
+      perceptionProfile: unit.soldier.perceptionProfile,
     });
     upsertPerceptionContact(unit.perceptionKnowledge, contact);
     updatedContacts.add(contactId);
@@ -388,9 +388,7 @@ function preserveFreshForwardContact(
   const freshnessSeconds = zone === 'rear'
     ? Math.max(0.1, checkIntervalSeconds * 1.25)
     : Math.min(1.5, Math.max(0.1, checkIntervalSeconds * 1.25));
-  if (nowSeconds - existing.lastObservedSeconds <= freshnessSeconds) {
-    updatedContacts.add(existingContactId);
-  }
+  if (nowSeconds - existing.lastObservedSeconds <= freshnessSeconds) updatedContacts.add(existingContactId);
 }
 
 function processSoundEvents(
@@ -444,6 +442,7 @@ function processSoundEvents(
         `Звук услышан на расстоянии около ${Math.round(distanceMeters)} м.`,
         `Направление приблизительное, неточность не меньше ${Math.round(uncertaintyMeters)} м.`,
       ],
+      perceptionProfile: unit.soldier.perceptionProfile,
     });
     upsertPerceptionContact(unit.perceptionKnowledge, contact);
     updatedContacts.add(contactId);
@@ -556,6 +555,7 @@ function decayContacts(
       deltaSeconds,
       nowSeconds: state.simulationTimeSeconds,
       metersPerCell: state.map.metersPerCell,
+      perceptionProfile: unit.soldier.perceptionProfile,
     });
     if (decayed) next.push(decayed);
     if (!decayed || decayed.confidence !== contact.confidence || decayed.uncertaintyCells !== contact.uncertaintyCells) changed = true;
