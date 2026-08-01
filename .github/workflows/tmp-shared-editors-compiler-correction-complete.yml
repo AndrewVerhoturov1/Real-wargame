@@ -1,0 +1,82 @@
+name: Temporary Shared Editors Compiler Correction Complete
+
+on:
+  push:
+    branches:
+      - compiler/20260731-shared-game-editors-integration
+
+permissions:
+  contents: write
+
+jobs:
+  correct:
+    if: contains(github.event.head_commit.message, '[compiler-correction-complete]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply complete correction package
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/tmp-shared-editors-compiler-correction-final.yml').read_text(encoding='utf-8')
+          marker = "          python - <<'PY'\n"
+          start = workflow.index(marker) + len(marker)
+          end = workflow.index("          PY\n", start)
+          embedded = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in workflow[start:end].splitlines()
+          )
+          exec(compile(embedded, 'embedded-compiler-correction.py', 'exec'), {})
+
+          path = Path('scripts/combat_lab_workspace_tabs_contract_smoke.mjs')
+          source = path.read_text(encoding='utf-8')
+          old = "  ['parameters', 'Параметры', 'Параметры бойцов'],\n  ['metrics', 'Метрики', 'Метрики текущего прогона'],\n"
+          new = "  ['parameters', 'Параметры', 'Параметры бойцов'],\n  ['settings', 'Настройка игры', 'Настройка игры'],\n  ['metrics', 'Метрики', 'Метрики текущего прогона'],\n"
+          if source.count(old) != 1:
+              raise SystemExit('workspace tabs contract: expected-list marker missing')
+          source = source.replace(old, new, 1)
+          old_count = "assert.equal((hosts.match(/tabId:/g) ?? []).length, 6, 'Exactly six workspace tab definitions are required.');\n"
+          new_count = "assert.equal((hosts.match(/tabId:/g) ?? []).length, 7, 'Integrated workspace requires six Stage 10 tabs plus game settings.');\n"
+          if source.count(old_count) != 1:
+              raise SystemExit('workspace tabs contract: count marker missing')
+          source = source.replace(old_count, new_count, 1)
+          old_host = "assert.match(extension, /hosts\\.parameters/);\nassert.match(extension, /hosts\\.metrics/);\n"
+          new_host = "assert.match(extension, /hosts\\.parameters/);\nassert.match(extension, /hosts\\.settings/);\nassert.match(extension, /hosts\\.metrics/);\n"
+          if source.count(old_host) != 1:
+              raise SystemExit('workspace tabs contract: settings-host marker missing')
+          path.write_text(source.replace(old_host, new_host, 1), encoding='utf-8')
+          PY
+      - name: Run focused correction gate
+        shell: bash
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run shared-game-editors:smoke
+          npm run combat-lab-game-editors:smoke
+          npm run combat-lab-scenario-system:verify
+          npm run build
+      - name: Commit correction package
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/ai-node-editor/GameplayTuningProfileEditor.ts \
+            src/game-editors/game-editor-workspace.css \
+            scripts/shared_game_editors_integration_smoke.mjs \
+            scripts/shared_game_editor_platform_smoke.mjs \
+            scripts/combat_lab_game_editors_smoke.mjs \
+            scripts/combat_lab_stage10_ui_integration_contract_smoke.mjs \
+            scripts/combat_lab_workspace_tabs_contract_smoke.mjs \
+            scripts/combat_lab_game_editors_behavior_smoke.ts
+          git commit -m "fix(integration): align shared editor contracts and return visibility"
+          git push origin HEAD:compiler/20260731-shared-game-editors-integration
