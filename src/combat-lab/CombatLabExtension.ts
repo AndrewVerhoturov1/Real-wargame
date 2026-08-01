@@ -164,6 +164,7 @@ export class CombatLabExtension implements GameApplicationExtension {
       state: session.state,
       draft: this.draft,
       host: this.layout.scenePanelHost,
+      parametersHost: this.layout.parametersPanelHost,
       getSelectedUnitId: () => session.state.selectedUnitId,
       onSelectRole: (roleId) => this.selectRoleUnit(roleId),
       onExperimentChanged: (experiment) => this.handleExperimentChanged(experiment, 'external'),

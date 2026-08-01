@@ -23,11 +23,16 @@ export function installCombatLabQuickParameters(
   const workspaceRoot = getOnlyCombatLabWorkspaceRoot();
   const workspaceHosts = getCombatLabWorkspaceHosts(workspaceRoot);
   const host = workspaceHosts.parameters;
+  const installationRoot = document.createElement('section');
+  installationRoot.className = 'combat-lab-quick-parameters-installation';
   const sourceProfilesHost = document.createElement('div');
   sourceProfilesHost.className = 'combat-lab-source-profile-links-host';
   const quickParametersHost = document.createElement('div');
   quickParametersHost.className = 'combat-lab-quick-parameters-host';
-  host.replaceChildren(sourceProfilesHost, quickParametersHost);
+  installationRoot.append(sourceProfilesHost, quickParametersHost);
+  const manualDivider = host.querySelector<HTMLElement>('.combat-lab-workspace-divider');
+  if (manualDivider) host.insertBefore(installationRoot, manualDivider);
+  else host.append(installationRoot);
 
   const programHost = workspaceHosts.program.querySelector<HTMLElement>('.combat-lab-stage10-program-host');
   const services = getCombatLabWorkspaceServices(workspaceRoot);
@@ -136,7 +141,7 @@ export function installCombatLabQuickParameters(
       profileButtonListeners.length = 0;
       workspaceRoot.removeEventListener('combat-lab-workspace-tab-change', handleTabChange);
       panel.destroy();
-      host.replaceChildren();
+      installationRoot.remove();
     },
   };
 }
