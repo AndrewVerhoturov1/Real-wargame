@@ -1,4 +1,5 @@
 import { getEffectiveCombatCapabilities } from '../infantry-combat/runtime/EffectiveCombatCapabilities';
+import { getActiveConditionProfileSnapshot } from '../tuning/GameplayTuningRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { HitZone } from './UnitHitShapes';
 
@@ -42,6 +43,7 @@ export function isUnitCombatCapable(unit: UnitModel): boolean {
 }
 
 export function applyUnitHit(unit: UnitModel, input: UnitHitInput): UnitHitResult {
+  const conditionProfile = getActiveConditionProfileSnapshot();
   const runtime = getCombatRuntime(unit);
   const previousCapability = runtime.capability;
   const recordedZone = normalizeLegacyCombatHitZone(input.zone) ?? 'arms';
@@ -71,7 +73,14 @@ export function applyUnitHit(unit: UnitModel, input: UnitHitInput): UnitHitResul
     unit.behaviorRuntime.reason = capability === 'dead' ? 'Боец погиб.' : 'Боец выведен из строя.';
     unit.behaviorRuntime.lastEvent = capability === 'dead' ? 'combat_unit_dead' : 'combat_unit_incapacitated';
   } else {
-    unit.behaviorRuntime.stress = Math.min(100, unit.behaviorRuntime.stress + (isLimbZone(recordedZone) ? 28 : 45));
+    unit.behaviorRuntime.stress = Math.min(
+      100,
+      unit.behaviorRuntime.stress + (
+        isLimbZone(recordedZone)
+          ? conditionProfile.wound.limbHitStressGain
+          : conditionProfile.wound.bodyHitStressGain
+      ),
+    );
     unit.behaviorRuntime.reason = capability === 'severely_wounded' ? 'Боец тяжело ранен.' : 'Боец ранен.';
     unit.behaviorRuntime.lastEvent = 'combat_unit_wounded';
   }
@@ -81,19 +90,24 @@ export function applyUnitHit(unit: UnitModel, input: UnitHitInput): UnitHitResul
 export function getCombatMovementMultiplier(unit: UnitModel): number {
   const effective = getEffectiveCombatCapabilities(unit);
   const physicalMultiplier = effective.canMove ? effective.movementSpeedMultiplier : 0;
-  return Math.min(legacyMovementMultiplier(getCombatRuntime(unit).capability), physicalMultiplier);
+  const profile = getActiveConditionProfileSnapshot();
+  return Math.min(legacyMovementMultiplier(getCombatRuntime(unit).capability, profile.wound), physicalMultiplier);
 }
 
 export function getCombatAimMultiplier(unit: UnitModel): number {
   const effective = getEffectiveCombatCapabilities(unit);
   const physicalMultiplier = effective.canUseWeapon ? effective.accuracyMultiplier : 0;
-  return Math.min(legacyAimMultiplier(getCombatRuntime(unit).capability), physicalMultiplier);
+  const profile = getActiveConditionProfileSnapshot();
+  return Math.min(legacyAimMultiplier(getCombatRuntime(unit).capability, profile.wound), physicalMultiplier);
 }
 
-function legacyMovementMultiplier(capability: CombatCapability): number {
+function legacyMovementMultiplier(
+  capability: CombatCapability,
+  wound: ReturnType<typeof getActiveConditionProfileSnapshot>['wound'],
+): number {
   switch (capability) {
-    case 'wounded': return 0.78;
-    case 'severely_wounded': return 0.42;
+    case 'wounded': return wound.woundedMovementMultiplier;
+    case 'severely_wounded': return wound.severelyWoundedMovementMultiplier;
     case 'incapacitated':
     case 'dead': return 0;
     case 'effective':
@@ -101,10 +115,13 @@ function legacyMovementMultiplier(capability: CombatCapability): number {
   }
 }
 
-function legacyAimMultiplier(capability: CombatCapability): number {
+function legacyAimMultiplier(
+  capability: CombatCapability,
+  wound: ReturnType<typeof getActiveConditionProfileSnapshot>['wound'],
+): number {
   switch (capability) {
-    case 'wounded': return 0.82;
-    case 'severely_wounded': return 0.52;
+    case 'wounded': return wound.woundedAimMultiplier;
+    case 'severely_wounded': return wound.severelyWoundedAimMultiplier;
     case 'incapacitated':
     case 'dead': return 0;
     case 'effective':
