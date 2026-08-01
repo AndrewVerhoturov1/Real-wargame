@@ -111,7 +111,7 @@ const editorSource = readFileSync(new URL('../src/ai-node-editor/AttentionProfil
 const perceptionSource = readFileSync(new URL('../src/core/perception/PerceptionSystem.ts', import.meta.url), 'utf8');
 const visibilityFieldSource = readFileSync(new URL('../src/core/visibility/SelectedUnitVisibilityField.ts', import.meta.url), 'utf8');
 const rendererSource = readFileSync(new URL('../src/rendering/PixiVisibilityHeatmapRenderer.ts', import.meta.url), 'utf8');
-const sceneExportSource = readFileSync(new URL('../src/ui/SceneExport.ts', import.meta.url), 'utf8');
+const sceneExportSource = readFileSync(new URL('../src/core/simulation/SceneSnapshot.ts', import.meta.url), 'utf8');
 for (const label of [
   'Внешний угол периферии',
   'Задний сектор:',
