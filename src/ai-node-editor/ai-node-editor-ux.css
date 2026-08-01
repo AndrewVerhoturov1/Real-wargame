@@ -6,7 +6,7 @@ body {
 }
 
 body {
-  min-width: 1180px;
+  min-width: 0;
 }
 
 .navigation-profile-tabs {
