@@ -98,6 +98,9 @@ const expectedIds = [
   'attentionProfiles',
   'soldierData',
   'directionalTerrain',
+  'perceptionProfiles',
+  'soldierArchetypes',
+  'conditionProfiles',
 ];
 for (const id of expectedIds) {
   const count = defaultRegistrySource.split(`id: '${id}'`).length - 1;
@@ -111,6 +114,9 @@ expectIncludes('src/game-editors/createDefaultGameEditorRegistry.ts', [
   'mountEnvironmentProfileEditor',
   "import { mountCombatCatalogEditor } from '../ai-node-editor/CombatCatalogEditor'",
   'mount: mountCombatCatalogEditor',
+  'mountPerceptionProfileEditor',
+  'mountSoldierArchetypeEditor',
+  'mountConditionProfileEditor',
 ]);
 expectExcludes('src/game-editors/createDefaultGameEditorRegistry.ts', [
   "import '../ai-node-editor/CombatCatalogEditor'",
@@ -128,6 +134,7 @@ for (const file of [
   'src/ai-node-editor/EnvironmentProfileEditorIntegration.ts',
   'src/ai-node-editor/CombatCatalogEditor.ts',
   'src/ai-node-editor/DirectionalTerrainProfileEditor.ts',
+  'src/ai-node-editor/GameplayTuningProfileEditorIntegration.ts',
 ]) {
   expectExcludes(file, [
     "document.querySelector<HTMLElement>('#ai-node-editor-root')",
