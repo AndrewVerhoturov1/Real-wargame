@@ -1,0 +1,454 @@
+name: Temporary Shared Editors Final Browser Rerun
+
+on:
+  push:
+    branches:
+      - compiler/20260731-shared-game-editors-integration
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  verify:
+    if: contains(github.event.head_commit.message, '[shared-editors-final-browser-rerun]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Establish exact clean browser HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mapfile -t TEMP_FILES < <(git ls-files \
+            '.github/workflows/tmp-shared-editors-*.yml' \
+            'reports/.tmp-shared-editors-*' \
+            'reports/compiler-final/*')
+          if [ "${#TEMP_FILES[@]}" -gt 0 ]; then
+            git rm -f -- "${TEMP_FILES[@]}"
+            git commit -m "chore(integration): remove final browser rerun scaffolding"
+            git push origin HEAD:compiler/20260731-shared-game-editors-integration
+          fi
+          test -z "$(git status --short)"
+          TESTED_HEAD=$(git rev-parse HEAD)
+          REMOTE_HEAD=$(git ls-remote origin refs/heads/compiler/20260731-shared-game-editors-integration | cut -f1)
+          test "$REMOTE_HEAD" = "$TESTED_HEAD"
+          git diff --quiet 596c73a7bdd932db56c04f7a3ec03b57fb883e78 "$TESTED_HEAD" -- \
+            src scripts package.json package-lock.json public '*.html' '*.css'
+          echo "TESTED_HEAD=$TESTED_HEAD" >> "$GITHUB_ENV"
+          OUT=/tmp/shared-editors-final-browser-rerun
+          rm -rf "$OUT"
+          mkdir -p "$OUT/logs" "$OUT/screenshots"
+          printf '%s\n' "$TESTED_HEAD" > "$OUT/tested-head.txt"
+
+      - name: Prepare exact product build
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/tmp/shared-editors-final-browser-rerun
+          npm ci --no-audit --no-fund > "$OUT/logs/npm-ci.log" 2>&1
+          npm run combat-lab-game-editors:smoke > "$OUT/logs/combat-lab-game-editors.log" 2>&1
+          npm run typecheck > "$OUT/logs/typecheck.log" 2>&1
+          npm run build > "$OUT/logs/build.log" 2>&1
+          git diff --check dd89d31c4d4b874439e0860b6a2be0c5e6ecee1f...HEAD
+          test -z "$(git status --short)"
+
+      - name: Install Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/tmp/shared-editors-final-browser-rerun
+          npm install --no-save --package-lock=false playwright@1.54.2 > "$OUT/logs/playwright-package.log" 2>&1
+          npx playwright install --with-deps chromium > "$OUT/logs/playwright-browser.log" 2>&1
+
+      - name: Run corrected four-resolution browser audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/tmp/shared-editors-final-browser-rerun
+          cat > .tmp-shared-editors-final-browser-rerun.mjs <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { chromium } from 'playwright';
+
+          const out = '/tmp/shared-editors-final-browser-rerun';
+          const shots = path.join(out, 'screenshots');
+          const base = 'http://127.0.0.1:4173';
+          const sizes = [[1440, 900], [1366, 768], [1100, 760], [1920, 1080]];
+          const editorIds = [
+            'behaviorGraph', 'tacticalPositions', 'routeProfiles', 'environmentProfiles',
+            'movementProfiles', 'weapons', 'attentionProfiles', 'perceptionProfiles',
+            'soldierData', 'soldierArchetypes', 'conditionProfiles', 'directionalTerrain',
+          ];
+          const evidence = {
+            testedHead: fs.readFileSync(path.join(out, 'tested-head.txt'), 'utf8').trim(),
+            sizes: [], consoleErrors: [], pageErrors: [], requestFailures: [],
+            lifecycle: null, frameSamples: null, longTasks: [],
+            runControls: false, dirtyCloseGuard: false, selectedProfileLink: false,
+            batchStarted: false, graphReturn: false, failure: null,
+          };
+          const ensure = (condition, message) => { if (!condition) throw new Error(message); };
+          const percentile = (values, p) => {
+            const sorted = [...values].sort((a, b) => a - b);
+            return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * p) - 1)] ?? 0;
+          };
+          const browser = await chromium.launch({ headless: true });
+          try {
+            for (const [width, height] of sizes) {
+              const label = `${width}x${height}`;
+              const context = await browser.newContext({ viewport: { width, height } });
+              await context.addInitScript(() => {
+                window.__sharedEditorsQaLongTasks = [];
+                try {
+                  new PerformanceObserver((list) => {
+                    for (const entry of list.getEntries()) {
+                      window.__sharedEditorsQaLongTasks.push({ startTime: entry.startTime, duration: entry.duration });
+                    }
+                  }).observe({ type: 'longtask', buffered: true });
+                } catch {}
+              });
+              const page = await context.newPage();
+              page.on('console', (message) => {
+                if (message.type() === 'error') evidence.consoleErrors.push({ label, text: message.text() });
+              });
+              page.on('pageerror', (error) => evidence.pageErrors.push({ label, text: String(error) }));
+              page.on('requestfailed', (request) => evidence.requestFailures.push({
+                label,
+                url: request.url(),
+                error: request.failure()?.errorText ?? '',
+              }));
+
+              const noHorizontalScroll = async (stage) => {
+                const value = await page.evaluate(() => ({
+                  viewport: document.documentElement.clientWidth,
+                  documentWidth: document.documentElement.scrollWidth,
+                  bodyWidth: document.body.scrollWidth,
+                }));
+                ensure(value.documentWidth <= value.viewport + 1 && value.bodyWidth <= value.viewport + 1,
+                  `${label} ${stage}: horizontal overflow ${JSON.stringify(value)}`);
+              };
+              const openAndCloseMenu = async (prefix) => {
+                const trigger = page.locator('.app-shell-menu-trigger');
+                await trigger.waitFor({ state: 'visible' });
+                ensure(await page.locator('[data-app-shell-menu-root="true"]').count() === 1,
+                  `${label} ${prefix}: expected one menu root`);
+                await trigger.click();
+                const dialog = page.locator('.app-modal-dialog[role="dialog"]');
+                await dialog.waitFor({ state: 'visible' });
+                ensure(await dialog.getByText('Текущий режим').count() === 1,
+                  `${label} ${prefix}: current mode marker missing`);
+                await page.keyboard.press('Escape');
+                await dialog.waitFor({ state: 'detached' });
+                ensure(await page.evaluate(() => document.activeElement?.classList.contains('app-shell-menu-trigger') === true),
+                  `${label} ${prefix}: menu focus was not restored`);
+              };
+
+              await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
+              await page.locator('.app-shell-menu-trigger').waitFor({ state: 'visible' });
+              await noHorizontalScroll('game');
+              await openAndCloseMenu('game');
+
+              await page.goto(`${base}/ai-node-editor.html`, { waitUntil: 'domcontentloaded' });
+              await page.locator('[data-game-editor-surface="ai-editor"]').waitFor({ state: 'visible' });
+              ensure(await page.locator('[data-game-editor-id]').count() === 12,
+                `${label} AI editor: expected 12 editor tabs`);
+              ensure(await page.locator('[data-game-editor-return]').isHidden(),
+                `${label} AI editor: unsafe return link visible on direct load`);
+              await noHorizontalScroll('ai-editor');
+              if (width === 1440 || width === 1100) {
+                for (const id of editorIds) {
+                  await page.locator(`[data-game-editor-id="${id}"]`).click();
+                  await page.waitForFunction(
+                    (value) => document.querySelector('[data-game-editor-workspace]')?.dataset.activeGameEditor === value,
+                    id,
+                  );
+                  await noHorizontalScroll(`ai-editor-${id}`);
+                }
+              }
+              await openAndCloseMenu('ai');
+
+              await page.goto(`${base}/combat-lab.html`, { waitUntil: 'domcontentloaded' });
+              await page.locator('.combat-lab-workspace').waitFor({ state: 'visible' });
+              await noHorizontalScroll('combat-lab');
+
+              const runToolbar = page.locator('.combat-lab-experiment-run-toolbar');
+              await runToolbar.waitFor({ state: 'visible' });
+              const startButton = runToolbar.getByRole('button', { name: /Запустить/ }).first();
+              if (await startButton.isEnabled()) {
+                const initialStatus = await runToolbar.getAttribute('data-status');
+                await startButton.click();
+                await page.waitForFunction((previous) => {
+                  const status = document.querySelector('.combat-lab-experiment-run-toolbar')?.dataset.status;
+                  return Boolean(status && status !== previous);
+                }, initialStatus, { timeout: 5000 });
+                const pauseButton = runToolbar.getByRole('button', { name: 'Пауза', exact: true });
+                await pauseButton.evaluate((button) => {
+                  if (!button.disabled) button.click();
+                });
+                await runToolbar.getByRole('button', { name: 'Сбросить', exact: true }).click();
+                await page.waitForFunction(() => (
+                  document.querySelector('.combat-lab-experiment-run-toolbar')?.dataset.status === 'ready'
+                ));
+                evidence.runControls = true;
+              }
+
+              await page.locator('[data-combat-lab-tab="scene"]').click();
+              const participantCard = page.locator('.combat-lab-participant-card').first();
+              await participantCard.waitFor({ state: 'visible' });
+              await participantCard.locator('.combat-lab-participant-card__name').click();
+              await page.locator('.combat-lab-participant-card.is-selected').first().waitFor({ state: 'visible' });
+
+              await page.locator('[data-combat-lab-tab="settings"]').click();
+              await page.locator('[data-combat-lab-game-editor-catalogue="true"]').waitFor({ state: 'visible' });
+              ensure(await page.locator('.combat-lab-game-editor-item').count() === 12,
+                `${label} Combat Lab: expected 12 editors`);
+              ensure(await page.locator('[data-game-editor-group]').count() === 4,
+                `${label} Combat Lab: expected four groups`);
+              await noHorizontalScroll('combat-lab-settings');
+
+              const perceptionButton = page.locator('[data-game-editor-id="perceptionProfiles"]');
+              await perceptionButton.click();
+              await page.locator('.app-modal-layer').waitFor({ state: 'visible' });
+              await noHorizontalScroll('combat-lab-perception-modal');
+              await page.keyboard.press('Escape');
+              await page.locator('.app-modal-layer').waitFor({ state: 'detached' });
+              ensure(await page.evaluate(() => document.activeElement?.dataset.gameEditorId === 'perceptionProfiles'),
+                `${label}: editor focus was not restored`);
+
+              if (width === 1440) {
+                const embedded = editorIds.filter((id) => id !== 'behaviorGraph');
+                for (const id of embedded) {
+                  await page.locator(`[data-game-editor-id="${id}"]`).click();
+                  await page.locator('.app-modal-layer').waitFor({ state: 'visible' });
+                  await page.keyboard.press('Escape');
+                  await page.locator('.app-modal-layer').waitFor({ state: 'detached' });
+                }
+
+                await page.evaluate(() => { window.__sharedEditorsQaLongTasks.length = 0; });
+                const openDurations = [];
+                const closeDurations = [];
+                const lifecycleButton = page.locator('[data-game-editor-id="conditionProfiles"]');
+                for (let index = 0; index < 20; index += 1) {
+                  let started = Date.now();
+                  await lifecycleButton.click();
+                  await page.locator('.app-modal-layer').waitFor({ state: 'visible' });
+                  openDurations.push(Date.now() - started);
+                  ensure(await page.locator('.app-modal-layer').count() === 1, 'modal layers accumulated');
+                  started = Date.now();
+                  await page.keyboard.press('Escape');
+                  await page.locator('.app-modal-layer').waitFor({ state: 'detached' });
+                  closeDurations.push(Date.now() - started);
+                }
+                evidence.lifecycle = {
+                  cycles: 20,
+                  openP95Ms: percentile(openDurations, 0.95),
+                  openMaxMs: Math.max(...openDurations),
+                  closeP95Ms: percentile(closeDurations, 0.95),
+                  closeMaxMs: Math.max(...closeDurations),
+                };
+
+                const dialogQueue = [];
+                page.on('dialog', async (dialog) => {
+                  const instruction = dialogQueue.shift();
+                  if (!instruction) {
+                    evidence.pageErrors.push({ label, text: `Unexpected dialog: ${dialog.message()}` });
+                    await dialog.dismiss();
+                  } else if (instruction.action === 'accept') {
+                    await dialog.accept(instruction.value ?? '');
+                  } else {
+                    await dialog.dismiss();
+                  }
+                });
+                await perceptionButton.click();
+                await page.locator('.app-modal-layer').waitFor({ state: 'visible' });
+                dialogQueue.push(
+                  { action: 'accept', value: 'qa-perception-browser-rerun' },
+                  { action: 'accept', value: 'Проверка несохранённых изменений' },
+                );
+                await page.getByRole('button', { name: 'Создать копию', exact: true }).click();
+                await page.locator('[data-tuning-profile-id="qa-perception-browser-rerun"]').waitFor();
+                const numericInput = page.locator('input[data-tuning-path]:not([disabled])').first();
+                await numericInput.evaluate((element) => {
+                  element.value = String(Number(element.value) + Number(element.step || 1));
+                  element.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+                ensure(await page.getByText('Есть несохранённые изменения.').count() === 1,
+                  'dirty state missing');
+                dialogQueue.push({ action: 'dismiss' });
+                await page.keyboard.press('Escape');
+                await page.waitForTimeout(100);
+                ensure(await page.locator('.app-modal-layer').count() === 1,
+                  'beforeClose=false did not preserve modal');
+                dialogQueue.push({ action: 'accept' });
+                await page.keyboard.press('Escape');
+                await page.locator('.app-modal-layer').waitFor({ state: 'detached' });
+                evidence.dirtyCloseGuard = true;
+              }
+
+              await page.locator('[data-combat-lab-tab="parameters"]').click();
+              const inspector = page.locator('[data-combat-lab-unified-inspector="participant"]');
+              const quickInstallation = page.locator('.combat-lab-quick-parameters-installation');
+              const sourceLink = page.locator('.combat-lab-source-profile-link button').first();
+              await inspector.waitFor({ state: 'visible', timeout: 10000 });
+              await quickInstallation.waitFor({ state: 'visible', timeout: 10000 });
+              await sourceLink.waitFor({ state: 'visible', timeout: 10000 });
+              ensure(await page.locator('[data-combat-lab-parameters-host="selected-unit"]').count() === 1,
+                `${label}: dedicated inspector host missing`);
+              await noHorizontalScroll('combat-lab-parameters');
+              await page.screenshot({ path: path.join(shots, `parameters-${label}.png`), fullPage: true });
+
+              if (width === 1440) {
+                await sourceLink.click();
+                await page.locator('.app-modal-layer').waitFor({ state: 'visible' });
+                evidence.selectedProfileLink = true;
+                await page.keyboard.press('Escape');
+                await page.locator('.app-modal-layer').waitFor({ state: 'detached' });
+
+                await runToolbar.getByRole('button', { name: 'Серия', exact: true }).click();
+                await page.locator('[data-combat-lab-tab="batch"][aria-selected="true"]').waitFor();
+                const batchPanel = page.locator('.combat-lab-batch-panel');
+                await batchPanel.getByLabel('Число прогонов').fill('2');
+                await batchPanel.getByLabel('Максимум симуляционных секунд').fill('1');
+                await batchPanel.getByRole('button', { name: 'Запустить серию', exact: true }).click();
+                evidence.batchStarted = true;
+                await page.waitForTimeout(1200);
+                const cancelBatch = batchPanel.getByRole('button', { name: 'Отменить', exact: true });
+                if (await cancelBatch.isEnabled()) await cancelBatch.click();
+
+                await page.locator('[data-combat-lab-tab="settings"]').click();
+                await Promise.all([
+                  page.waitForURL(/\/ai-node-editor\.html\?/),
+                  page.locator('[data-game-editor-id="behaviorGraph"]').click(),
+                ]);
+                const returnLink = page.locator('[data-game-editor-return]');
+                await returnLink.waitFor({ state: 'visible' });
+                ensure((await returnLink.getAttribute('href'))?.startsWith('/combat-lab.html') === true,
+                  'safe graph return link missing');
+                evidence.graphReturn = true;
+                await Promise.all([
+                  page.waitForURL(/\/combat-lab\.html/),
+                  returnLink.click(),
+                ]);
+                await page.locator('.combat-lab-workspace').waitFor({ state: 'visible' });
+
+                await page.locator('[data-combat-lab-tab="settings"]').click();
+                await page.locator('[data-game-editor-id="perceptionProfiles"]').click();
+                await page.locator('.app-modal-layer').waitFor({ state: 'visible' });
+                const sampleFrames = async () => page.evaluate(async () => {
+                  const deltas = [];
+                  let previous = performance.now();
+                  await new Promise((resolve) => {
+                    const frame = (now) => {
+                      deltas.push(now - previous);
+                      previous = now;
+                      if (deltas.length >= 120) resolve();
+                      else requestAnimationFrame(frame);
+                    };
+                    requestAnimationFrame(frame);
+                  });
+                  deltas.sort((a, b) => a - b);
+                  return {
+                    p95: deltas[Math.ceil(deltas.length * 0.95) - 1],
+                    max: deltas.at(-1),
+                  };
+                });
+                const modalFrames = await sampleFrames();
+                await page.keyboard.press('Escape');
+                await page.locator('.app-modal-layer').waitFor({ state: 'detached' });
+                const closedFrames = await sampleFrames();
+                evidence.frameSamples = { modalOpen: modalFrames, modalClosed: closedFrames };
+                evidence.longTasks = await page.evaluate(() => [...window.__sharedEditorsQaLongTasks]);
+              }
+
+              evidence.sizes.push({ width, height, horizontalOverflow: false });
+              await context.close();
+            }
+
+            ensure(evidence.sizes.length === 4, 'not all four resolutions completed');
+            ensure(evidence.consoleErrors.length === 0,
+              `console errors: ${JSON.stringify(evidence.consoleErrors)}`);
+            ensure(evidence.pageErrors.length === 0,
+              `page errors: ${JSON.stringify(evidence.pageErrors)}`);
+            ensure(evidence.requestFailures.length === 0,
+              `request failures: ${JSON.stringify(evidence.requestFailures)}`);
+            ensure(evidence.runControls, 'run controls were not exercised');
+            ensure(evidence.dirtyCloseGuard, 'dirty close guard was not exercised');
+            ensure(evidence.selectedProfileLink, 'selected profile link was not exercised');
+            ensure(evidence.batchStarted, 'batch start was not exercised');
+            ensure(evidence.graphReturn, 'graph return was not exercised');
+            ensure(evidence.longTasks.length === 0,
+              `application long tasks observed: ${JSON.stringify(evidence.longTasks)}`);
+          } catch (error) {
+            evidence.failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+            throw error;
+          } finally {
+            fs.writeFileSync(path.join(out, 'browser-evidence.json'), JSON.stringify(evidence, null, 2));
+            await browser.close();
+          }
+          NODE
+
+          npm run preview -- --host 127.0.0.1 --port 4173 > "$OUT/logs/preview-server.log" 2>&1 &
+          SERVER_PID=$!
+          npm run engine:dev > "$OUT/logs/ai-engine.log" 2>&1 &
+          ENGINE_PID=$!
+          cleanup() {
+            kill "$SERVER_PID" "$ENGINE_PID" >/dev/null 2>&1 || true
+            wait "$SERVER_PID" >/dev/null 2>&1 || true
+            wait "$ENGINE_PID" >/dev/null 2>&1 || true
+            rm -f .tmp-shared-editors-final-browser-rerun.mjs
+          }
+          trap cleanup EXIT
+          READY=0
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null \
+              && curl -fsS http://127.0.0.1:8787/engine/health >/dev/null; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+          test "$READY" -eq 1
+          node .tmp-shared-editors-final-browser-rerun.mjs > "$OUT/logs/browser-audit.log" 2>&1
+
+      - name: Build browser evidence summary
+        if: always()
+        shell: bash
+        run: |
+          OUT=/tmp/shared-editors-final-browser-rerun
+          {
+            echo "tested_head=$(cat "$OUT/tested-head.txt" 2>/dev/null || echo missing)"
+            echo "branch_head=$(git rev-parse HEAD)"
+            echo "remote_head=$(git ls-remote origin refs/heads/compiler/20260731-shared-game-editors-integration | cut -f1)"
+            echo "working_tree_clean=$([ -z "$(git status --short)" ] && echo yes || echo no)"
+            echo
+            cat "$OUT/browser-evidence.json" 2>/dev/null || echo missing
+          } > "$OUT/summary.txt"
+          cat "$OUT/summary.txt"
+
+      - name: Upload final browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-editors-final-browser-rerun-evidence
+          path: /tmp/shared-editors-final-browser-rerun
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce final browser result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TESTED_HEAD"
+          test "$(git ls-remote origin refs/heads/compiler/20260731-shared-game-editors-integration | cut -f1)" = "$TESTED_HEAD"
+          test -z "$(git status --short)"
+          node -e "const fs=require('fs'); const e=JSON.parse(fs.readFileSync('/tmp/shared-editors-final-browser-rerun/browser-evidence.json','utf8')); if(e.failure) throw new Error(e.failure); if(e.sizes.length!==4) throw new Error('Expected four resolutions');"
