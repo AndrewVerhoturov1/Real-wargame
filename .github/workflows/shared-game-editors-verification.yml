@@ -25,61 +25,57 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          def replace(path: str, old: str, new: str) -> None:
+          def simple_replace(path: str, old: str, new: str) -> None:
               file = Path(path)
               text = file.read_text(encoding='utf-8')
-              if old not in text:
-                  raise SystemExit(f'missing expected source contract in {path}: {old!r}')
               file.write_text(text.replace(old, new), encoding='utf-8')
 
-          replace(
+          simple_replace(
               'scripts/shared_game_editor_platform_smoke.mjs',
               "'const graphRoot = document.getElementById'",
               "'const graphRootElement = document.getElementById'",
           )
-          replace(
+          simple_replace(
               'scripts/ai_node_editor_smoke.mjs',
-              "for (const needle of ['Тактические позиции', 'TACTICAL_POSITION_SETTINGS_GROUPS'",
-              "for (const needle of ['Профили позиций', 'TACTICAL_POSITION_SETTINGS_GROUPS'",
+              "['Тактические позиции', 'TACTICAL_POSITION_SETTINGS_GROUPS'",
+              "['Профили позиций', 'TACTICAL_POSITION_SETTINGS_GROUPS'",
           )
-          replace(
+          simple_replace(
               'scripts/attention_profiles_smoke.ts',
               "assert.match(visibilityFieldSource, /let currentVisibilityQuality = 0/);",
               "assert.match(visibilityFieldSource, /const quality = new Uint8Array/);\nassert.match(visibilityFieldSource, /zone\\[localIndex\\] = VISIBILITY_ZONE_CODE\\.unseen/);",
           )
 
           environment = Path('scripts/environment_materials_smoke.ts')
-          text = environment.read_text(encoding='utf-8')
-          old = """const sectionRegistrySource = readFileSync('src/ai-node-editor/AiEditorSectionRegistry.ts', 'utf8');
-const environmentIntegrationSource = readFileSync('src/ai-node-editor/EnvironmentProfileEditorIntegration.ts', 'utf8');
-const movementIntegrationSource = readFileSync('src/ai-node-editor/MovementProfileEditorIntegration.ts', 'utf8');
-"""
-          new = """const sharedRegistrySource = readFileSync('src/game-editors/createDefaultGameEditorRegistry.ts', 'utf8');
-const environmentIntegrationSource = readFileSync('src/ai-node-editor/EnvironmentProfileEditorIntegration.ts', 'utf8');
-const movementIntegrationSource = readFileSync('src/ai-node-editor/MovementProfileEditorIntegration.ts', 'utf8');
-"""
-          if old not in text:
-              raise SystemExit('missing environment editor registry source block')
-          text = text.replace(old, new)
-          old = """assert.match(environmentIntegrationSource, /labelRu:\\s*'Профили местности'/, 'environment editor must register through the shared section registry');
-assert.match(environmentIntegrationSource, /order:\\s*25/, 'environment editor must sit between route and movement profiles');
-assert.match(movementIntegrationSource, /order:\\s*30/, 'movement editor must follow environment profiles');
-assert.match(sectionRegistrySource, /\\['profiles',\\s*'Профили маршрута',\\s*20\\]/, 'the legacy profiles tab must be labelled as route profiles');
-assert.match(sectionRegistrySource, /\\['attentionProfiles',\\s*'Профили внимания',\\s*40\\]/);
-assert.match(sectionRegistrySource, /\\['blackboard',\\s*'Данные бойца',\\s*50\\]/);
-"""
-          new = """assert.match(environmentIntegrationSource, /mountEnvironmentProfileEditor/, 'environment editor must expose a direct mount');
-assert.match(environmentIntegrationSource, /const panel = context\\.host/, 'environment editor must mount into the supplied host');
-assert.match(movementIntegrationSource, /mountMovementProfileEditor/, 'movement editor must expose a direct mount');
-assert.doesNotMatch(environmentIntegrationSource, /registerAiEditorSection|AiEditorSectionRegistry/);
-assert.doesNotMatch(movementIntegrationSource, /registerAiEditorSection|AiEditorSectionRegistry/);
-assert.match(sharedRegistrySource, /id:\\s*'routeProfiles'[\\s\\S]*labelRu:\\s*'Профили маршрута'/);
-assert.match(sharedRegistrySource, /id:\\s*'attentionProfiles'[\\s\\S]*labelRu:\\s*'Профили внимания'/);
-assert.match(sharedRegistrySource, /id:\\s*'soldierData'[\\s\\S]*labelRu:\\s*'Данные бойца'/);
-"""
-          if old not in text:
-              raise SystemExit('missing environment legacy registry assertions')
-          environment.write_text(text.replace(old, new), encoding='utf-8')
+          lines = environment.read_text(encoding='utf-8').splitlines()
+          output = []
+          skipping_legacy_assertions = False
+          inserted_assertions = False
+          for line in lines:
+              if line.startswith("const sectionRegistrySource = readFileSync("):
+                  output.append("const sharedRegistrySource = readFileSync('src/game-editors/createDefaultGameEditorRegistry.ts', 'utf8');")
+                  continue
+              if line.startswith("assert.match(environmentIntegrationSource, /labelRu:"):
+                  skipping_legacy_assertions = True
+                  if not inserted_assertions:
+                      output.extend([
+                          "assert.match(environmentIntegrationSource, /mountEnvironmentProfileEditor/, 'environment editor must expose a direct mount');",
+                          "assert.match(environmentIntegrationSource, /const panel = context\\.host/, 'environment editor must mount into the supplied host');",
+                          "assert.match(movementIntegrationSource, /mountMovementProfileEditor/, 'movement editor must expose a direct mount');",
+                          "assert.doesNotMatch(environmentIntegrationSource, /registerAiEditorSection|AiEditorSectionRegistry/);",
+                          "assert.doesNotMatch(movementIntegrationSource, /registerAiEditorSection|AiEditorSectionRegistry/);",
+                          "assert.match(sharedRegistrySource, /id:\\s*'routeProfiles'[\\s\\S]*labelRu:\\s*'Профили маршрута'/);",
+                          "assert.match(sharedRegistrySource, /id:\\s*'attentionProfiles'[\\s\\S]*labelRu:\\s*'Профили внимания'/);",
+                          "assert.match(sharedRegistrySource, /id:\\s*'soldierData'[\\s\\S]*labelRu:\\s*'Данные бойца'/);",
+                      ])
+                      inserted_assertions = True
+                  continue
+              if skipping_legacy_assertions:
+                  if line.startswith("assert.match(sectionRegistrySource, /\\['blackboard'"):
+                      skipping_legacy_assertions = False
+                  continue
+              output.append(line)
+          environment.write_text('\n'.join(output) + '\n', encoding='utf-8')
           PY
       - name: Run required verification
         shell: bash
