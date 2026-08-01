@@ -1,0 +1,92 @@
+name: Temporary Shared Editors Canonical Contract Fix 2
+
+on:
+  push:
+    branches:
+      - compiler/20260731-shared-game-editors-integration
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: contains(github.event.head_commit.message, '[canonical-contract-fix2]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Update canonical integration contracts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          layout = Path('scripts/combat_lab_workspace_layout_smoke.mjs')
+          source = layout.read_text(encoding='utf-8')
+          replacements = [
+            (
+              "for (const tabId of ['scene', 'program', 'batch', 'parameters', 'metrics', 'journal']) {\n",
+              "for (const tabId of ['scene', 'program', 'batch', 'parameters', 'settings', 'metrics', 'journal']) {\n",
+            ),
+            (
+              "assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 6, 'Combat Lab must expose exactly six workspace tabs.');\n",
+              "assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 7, 'Combat Lab must expose six Stage 10 tabs plus game settings.');\n",
+            ),
+            (
+              "  'body.app-shell-mode-combat-lab .app-shell-menu',\n",
+              "",
+            ),
+          ]
+          for old, new in replacements:
+            if source.count(old) != 1:
+              raise SystemExit(f'workspace layout smoke: replacement marker missing: {old!r}')
+            source = source.replace(old, new, 1)
+          layout.write_text(source, encoding='utf-8')
+
+          tuning = Path('scripts/tactical_position_tuning_smoke.ts')
+          source = tuning.read_text(encoding='utf-8')
+          replacements = [
+            (
+              "  const html = readFileSync('ai-node-editor.html', 'utf8');\n",
+              "  const defaultRegistry = readFileSync('src/game-editors/createDefaultGameEditorRegistry.ts', 'utf8');\n",
+            ),
+            (
+              "  assert.ok(aiEditor.includes('Тактические позиции'));\n",
+              "  assert.ok(aiEditor.includes('Профили позиций'));\n",
+            ),
+            (
+              "  assert.ok(html.includes('TacticalPositionProfileEditor.ts'));\n",
+              "  assert.ok(defaultRegistry.includes('mountTacticalPositionProfileEditor'));\n  assert.ok(defaultRegistry.includes(\"id: 'tacticalPositions'\"));\n  assert.ok(defaultRegistry.includes(\"labelRu: 'Тактические позиции'\"));\n",
+            ),
+          ]
+          for old, new in replacements:
+            if source.count(old) != 1:
+              raise SystemExit(f'tactical position tuning smoke: replacement marker missing: {old!r}')
+            source = source.replace(old, new, 1)
+          tuning.write_text(source, encoding='utf-8')
+          PY
+      - name: Run focused and canonical gate
+        shell: bash
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          node scripts/combat_lab_workspace_layout_smoke.mjs
+          node scripts/tactical_position_tuning_smoke.mjs
+          npm run shared-game-editors:smoke
+          npm run combat-lab-scenario-system:verify
+          npm run verify:preview -- --report /tmp/shared-editors-canonical-preview.json
+          npm run build
+      - name: Commit permanent corrections
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/combat_lab_workspace_layout_smoke.mjs scripts/tactical_position_tuning_smoke.ts
+          git commit -m "test(integration): align canonical checks with shared editors"
+          git push origin HEAD:compiler/20260731-shared-game-editors-integration
