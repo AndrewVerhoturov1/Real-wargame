@@ -1,4 +1,5 @@
 import type { GameEditorInstallation, GameEditorMountContext } from '../game-editors/GameEditorTypes';
+import './gameplay-tuning-profile-editor.css';
 import {
   mountGameplayTuningProfileEditor,
   type GameplayTuningEditorKind,
