@@ -112,6 +112,10 @@ expectIncludes('src/combat-lab/main.ts', [
   './game-editors/combat-lab-game-editors.css',
 ]);
 
+expectIncludes('src/combat-lab/CombatLabExtension.ts', [
+  'parametersHost: this.layout.parametersPanelHost,',
+]);
+
 expectIncludes('src/combat-lab/parameters/installCombatLabQuickParameters.ts', [
   'sourceProfilesHost',
   'resolveCombatLabSelectedUnitProfileLinks',
@@ -119,10 +123,17 @@ expectIncludes('src/combat-lab/parameters/installCombatLabQuickParameters.ts', [
   'requestCombatLabGameEditorOpen',
   'не указан — редактор откроет текущий профиль',
   '...(link.profileId ? { profileId: link.profileId } : {})',
+  "const installationRoot = document.createElement('section');",
+  "installationRoot.className = 'combat-lab-quick-parameters-installation';",
+  'installationRoot.append(sourceProfilesHost, quickParametersHost);',
+  'host.insertBefore(installationRoot, manualDivider);',
+  'installationRoot.remove();',
   'unsubscribeSelection()',
   'unsubscribeDraft()',
 ]);
 expectExcludes('src/combat-lab/parameters/installCombatLabQuickParameters.ts', [
+  'host.replaceChildren(sourceProfilesHost, quickParametersHost);',
+  'host.replaceChildren();',
   'setInterval(',
   'requestAnimationFrame(',
   'localStorage',
