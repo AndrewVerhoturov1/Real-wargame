@@ -36,6 +36,11 @@ export function mountMovementProfileEditor(context: GameEditorMountContext): Gam
   });
   renderMovementProfiles(panel);
 
+  const requestedProfileId = context.request.profileId;
+  if (requestedProfileId) {
+    panel.querySelector<HTMLButtonElement>(`[data-movement-profile-id="${cssEscape(requestedProfileId)}"]`)?.click();
+  }
+
   return {
     beforeClose: requestMovementProfileEditorLeave,
     destroy(): void {
@@ -47,4 +52,10 @@ export function mountMovementProfileEditor(context: GameEditorMountContext): Gam
       panel.replaceChildren();
     },
   };
+}
+
+function cssEscape(value: string): string {
+  return typeof CSS !== 'undefined' && CSS.escape
+    ? CSS.escape(value)
+    : value.replace(/[^a-zA-Z0-9_-]/g, '\\$&');
 }
