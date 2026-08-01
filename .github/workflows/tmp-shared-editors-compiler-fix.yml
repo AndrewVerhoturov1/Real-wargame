@@ -1,0 +1,43 @@
+name: Temporary Shared Editors Compiler Fix
+
+on:
+  push:
+    branches:
+      - compiler/20260731-shared-game-editors-integration
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: contains(github.event.head_commit.message, '[compiler-fix2]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch stale smoke assertion and verify
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/shared_game_editor_platform_smoke.mjs')
+          source = path.read_text(encoding='utf-8')
+          old = '''  "search.set('returnTo', request.returnTo)",
+'''
+          new = '''  'const safeReturnTo = getSafeGameEditorReturnTarget(request.returnTo)',
+  "search.set('returnTo', safeReturnTo)",
+'''
+          count = source.count(old)
+          if count != 1:
+              raise SystemExit(f'expected exactly one stale assertion, found {count}')
+          path.write_text(source.replace(old, new), encoding='utf-8')
+          PY
+          npm ci --no-audit --no-fund
+          npm run shared-game-editors:smoke
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/shared_game_editor_platform_smoke.mjs
+          git commit -m "test(integration): require validated graph return target"
+          git push origin HEAD:compiler/20260731-shared-game-editors-integration
