@@ -35,7 +35,7 @@ export class GameEditorWorkspace {
     if (activation === 'hidden') return { kind: 'hidden', definition };
 
     if (!(await this.closeActive())) return { kind: 'refused', definition };
-    this.assertCurrentTransition(transitionRevision);
+    if (!this.isCurrentTransition(transitionRevision)) return { kind: 'refused', definition };
 
     if (activation === 'route') {
       return { kind: 'route', definition, url: definition.route!(request) };
@@ -48,7 +48,11 @@ export class GameEditorWorkspace {
       request,
       requestClose: () => { void this.close(); },
     });
-    this.assertCurrentTransition(transitionRevision, installation);
+    if (!this.isCurrentTransition(transitionRevision)) {
+      installation.destroy();
+      this.host.replaceChildren();
+      return { kind: 'refused', definition };
+    }
     this.active = { definition, installation };
     return { kind: 'mounted', definition };
   }
@@ -80,10 +84,8 @@ export class GameEditorWorkspace {
     return true;
   }
 
-  private assertCurrentTransition(revision: number, installation?: GameEditorInstallation): void {
-    if (!this.destroyed && revision === this.transitionRevision) return;
-    installation?.destroy();
-    throw new Error('Game editor workspace transition was superseded.');
+  private isCurrentTransition(revision: number): boolean {
+    return !this.destroyed && revision === this.transitionRevision;
   }
 
   private assertAlive(): void {
