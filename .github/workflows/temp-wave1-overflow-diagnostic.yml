@@ -40,7 +40,7 @@ jobs:
       - name: Capture overflow elements
         shell: bash
         run: |
-          cat > /tmp/overflow-diagnostic.mjs <<'EOF'
+          cat > scripts/.tmp-wave1-overflow-diagnostic.mjs <<'EOF'
           import { chromium } from 'playwright';
 
           const browser = await chromium.launch({ headless: true });
@@ -106,8 +106,9 @@ jobs:
             await browser.close();
           }
           EOF
-          node /tmp/overflow-diagnostic.mjs > .tmp-wave1-overflow-diagnostic 2>&1
+          node scripts/.tmp-wave1-overflow-diagnostic.mjs > .tmp-wave1-overflow-diagnostic 2>&1
           cat .tmp-wave1-overflow-diagnostic
+          rm -f scripts/.tmp-wave1-overflow-diagnostic.mjs
           if [ -f /tmp/wave1-vite-preview.pid ]; then kill "$(cat /tmp/wave1-vite-preview.pid)" || true; fi
           git config user.name "wave1-compiler-bot"
           git config user.email "wave1-compiler-bot@users.noreply.github.com"
