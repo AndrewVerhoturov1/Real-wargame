@@ -5,5 +5,11 @@ declare module '../behavior/BehaviorModel' {
   interface SoldierCondition extends Record<string, number> {}
 }
 
+declare global {
+  interface Array<T> {
+    at(index: number): T | undefined;
+  }
+}
+
 export type GameplayTuningSoldierTraits = SoldierTraits;
 export type GameplayTuningSoldierCondition = SoldierCondition;
