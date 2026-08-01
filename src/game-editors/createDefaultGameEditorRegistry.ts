@@ -9,6 +9,7 @@ import {
 } from '../ai-node-editor/NavigationProfileEditor';
 import { mountTacticalPositionProfileEditor } from '../ai-node-editor/TacticalPositionProfileEditor';
 import { GameEditorRegistry } from './GameEditorRegistry';
+import { getSafeGameEditorReturnTarget } from './GameEditorReturnTarget';
 import type {
   GameEditorDefinition,
   GameEditorInstallation,
@@ -108,7 +109,8 @@ function behaviorGraphRoute(request: GameEditorOpenRequest): string {
   const baseRoute = '/ai-node-editor.html';
   const search = new URLSearchParams();
   search.set('editor', 'behaviorGraph');
-  if (request.returnTo) search.set('returnTo', request.returnTo);
+  const safeReturnTo = getSafeGameEditorReturnTarget(request.returnTo);
+  if (safeReturnTo) search.set('returnTo', safeReturnTo);
   if (request.selectedUnitId) search.set('selectedUnitId', request.selectedUnitId);
   return `${baseRoute}?${search.toString()}`;
 }
