@@ -17,13 +17,40 @@ The user does not need to name a skill. Route by intent and current environment 
 
 | Skill | Path | Read when |
 |---|---|---|
+| Real-Wargame screenshot router | `.agents/skills/real-wargame-screenshots/SKILL.md` | **Mandatory before answering or planning** for screenshots, visual inspection, UI/layout review, browser verification, deployed-page inspection, Chrome, Chromium or Playwright. Routes to the direct-browser or deployed-Vercel execution skill. |
 | Real-Wargame performance contract | `.agents/skills/real-wargame-performance/SKILL.md` | Mandatory for simulation, AI, perception, navigation, tactical fields, map data, rendering, recurring UI, workers, queues, caches, revisions, lifecycle, diagnostics or browser-performance gates. |
-| Real-Wargame local preview | `.agents/skills/real-wargame-local-preview/SKILL.md` | Visual-QA preparation, terminal-free local launch, or approved visual verification when the current Web Chat can directly control a real browser against the target. |
+| Real-Wargame local preview | `.agents/skills/real-wargame-local-preview/SKILL.md` | Direct-browser execution selected by `real-wargame-screenshots`: visual-QA preparation, terminal-free local launch, or approved visual verification when the current Web Chat can directly control a real browser against the target. |
 | Real-Wargame manual Vercel deploy | `.agents/skills/real-wargame-manual-vercel-deploy/SKILL.md` | **Mandatory** when the user explicitly asks to deploy, redeploy, create/update a Vercel Preview or check a manual Vercel deployment. |
 | Real-Wargame GitHub Pages deploy | `.agents/skills/real-wargame-github-pages-deploy/SKILL.md` | **Mandatory** when the user explicitly asks to deploy, publish, redeploy or update a branch on GitHub Pages / Pages / «пайдж». |
-| Vercel deployment Playwright E2E | `.agents/skills/vercel-deployment-playwright-e2e/SKILL.md` | **Mandatory automatically** when the user requests visual, screenshot, browser or Playwright verification of an already deployed Vercel Preview and the current Web Chat cannot directly control a real browser against that URL. |
+| Vercel deployment Playwright E2E | `.agents/skills/vercel-deployment-playwright-e2e/SKILL.md` | Deployed-Vercel fallback selected by `real-wargame-screenshots`: **mandatory automatically** when visual/browser verification is requested and the current Web Chat cannot directly control a real browser against that URL. |
 | Real-Wargame PixiJS 8 guide | `.agents/skills/real-wargame-pixijs/SKILL.md` | Any PixiJS, canvas, renderer, camera, pointer event, visual layer or rendering-performance task. Read before general PixiJS skills. |
 | Real-Wargame AI Runtime | `.agents/skills/real-wargame-ai-runtime/SKILL.md` | Soldier AI graph, Utility scoring, Blackboard, Runtime, lifecycle, cancellation, Bridge, AI Dictionary, node authoring or live trace. |
+
+## Mandatory screenshot routing
+
+Load `.agents/skills/real-wargame-screenshots/SKILL.md` before answering or planning when user intent includes any equivalent of:
+
+```text
+screenshot / screenshots;
+visual QA / visual verification;
+inspect UI or layout;
+open the game or deployment;
+Chrome / Chromium / Playwright;
+скриншот / скриншоты / сделай скрины;
+покажи экран;
+открой игру;
+зайди на деплой;
+посмотри интерфейс;
+проверь верстку;
+проверь визуально;
+проверь глазами;
+открой в браузере;
+проверь Combat Lab;
+проверь редактор ИИ;
+можешь ли ты зайти на сайт.
+```
+
+Do not first conclude that browser access is unavailable. The screenshot router defines the required capability check and fallback.
 
 ## Mandatory deployment routing
 
@@ -62,7 +89,7 @@ One deployment request covers the exact current HEAD and necessary retries after
 
 ## Mandatory visual routing decision
 
-When user intent includes visual verification, screenshots, browser verification or Playwright:
+When user intent includes visual verification, screenshots, browser verification or Playwright, first load `real-wargame-screenshots`, then apply its decision:
 
 ```text
 Is a suitable Vercel deployment already available?
@@ -84,11 +111,12 @@ Visual verification permission is not deployment permission, and deployment perm
 
 | User task | Skills |
 |---|---|
+| Make or inspect screenshots, visually review UI/layout, open a game/editor/deployment in a browser | `real-wargame-screenshots` mandatory, then the execution skill it selects |
 | Deploy or redeploy exact branch HEAD to Vercel | `real-wargame-manual-vercel-deploy` mandatory |
 | Deploy or update exact branch HEAD on GitHub Pages | `real-wargame-github-pages-deploy` mandatory |
-| Run or show the local game | `real-wargame-local-preview` |
-| Visually verify deployed Vercel Preview with direct browser available | `real-wargame-local-preview` |
-| Visually verify deployed Vercel Preview without direct browser | `vercel-deployment-playwright-e2e` mandatory |
+| Run or show the local game | `real-wargame-screenshots`, then `real-wargame-local-preview` |
+| Visually verify deployed Vercel Preview with direct browser available | `real-wargame-screenshots`, then `real-wargame-local-preview` |
+| Visually verify deployed Vercel Preview without direct browser | `real-wargame-screenshots`, then `vercel-deployment-playwright-e2e` mandatory |
 | Change simulation, AI, perception, navigation, map runtime, UI runtime or caches | `real-wargame-performance`, then relevant domain skill |
 | Change map/unit/overlay visual | `real-wargame-performance`, `real-wargame-pixijs`; prepare visual verification separately |
 | Diagnose FPS or overlay stalls | `real-wargame-performance`, `real-wargame-pixijs`, then narrow Pixi performance reference |
