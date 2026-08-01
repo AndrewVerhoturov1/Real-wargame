@@ -193,6 +193,13 @@ expectExcludes('ai-node-editor.html', [
   '/src/ai-node-editor/DirectionalTerrainProfileEditor.ts',
 ]);
 
+const aiEditorCss = read('src/ai-node-editor/ai-node-editor.css');
+const aiEditorBodyRule = aiEditorCss.match(/(?:^|\n)body\s*\{([^}]*)\}/i)?.[1] ?? '';
+const fixedAiEditorBodyMinWidth = aiEditorBodyRule.match(/min-width\s*:\s*(\d+(?:\.\d+)?)px/i);
+if (fixedAiEditorBodyMinWidth && Number(fixedAiEditorBodyMinWidth[1]) > 0) {
+  failures.push('src/ai-node-editor/ai-node-editor.css: editor body must not enforce a positive fixed min-width');
+}
+
 const combatLabCss = read('src/combat-lab/combat-lab.css');
 if (/body\.app-shell-mode-combat-lab\s+\.app-shell-menu\s*\{[^}]*display\s*:\s*none(?:\s*!important)?\s*;?[^}]*\}/i.test(combatLabCss)) {
   failures.push('src/combat-lab/combat-lab.css: common app-shell menu must remain visible in Combat Lab');
