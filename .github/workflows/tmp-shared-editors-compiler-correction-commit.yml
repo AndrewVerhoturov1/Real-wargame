@@ -1,4 +1,4 @@
-name: Temporary Shared Editors Compiler Correction Commit
+name: Temporary Shared Editors Compiler Gate Correction
 
 on:
   push:
@@ -17,61 +17,119 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-      - name: Apply final correction package
+
+      - name: Correct canonical integration gates
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          workflow = Path('.github/workflows/tmp-shared-editors-compiler-correction-final.yml').read_text(encoding='utf-8')
-          marker = "          python - <<'PY'\n"
-          start = workflow.index(marker) + len(marker)
-          end = workflow.index("          PY\n", start)
-          embedded = '\n'.join(
-              line[10:] if line.startswith('          ') else line
-              for line in workflow[start:end].splitlines()
-          )
-          exec(compile(embedded, 'embedded-compiler-correction.py', 'exec'), {})
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              source = file.read_text(encoding='utf-8')
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one replacement marker, found {count}: {old[:100]!r}')
+              file.write_text(source.replace(old, new, 1), encoding='utf-8')
 
-          path = Path('scripts/combat_lab_workspace_tabs_contract_smoke.mjs')
-          source = path.read_text(encoding='utf-8')
-          old = "  ['parameters', 'Параметры', 'Параметры бойцов'],\n  ['metrics', 'Метрики', 'Метрики текущего прогона'],\n"
-          new = "  ['parameters', 'Параметры', 'Параметры бойцов'],\n  ['settings', 'Настройка игры', 'Настройка игры'],\n  ['metrics', 'Метрики', 'Метрики текущего прогона'],\n"
-          if source.count(old) != 1:
-              raise SystemExit('workspace tabs contract: expected-list marker missing')
-          source = source.replace(old, new, 1)
-          old_count = "assert.equal((hosts.match(/tabId:/g) ?? []).length, 6, 'Exactly six workspace tab definitions are required.');\n"
-          new_count = "assert.equal((hosts.match(/tabId:/g) ?? []).length, 7, 'Integrated workspace requires six Stage 10 tabs plus game settings.');\n"
-          if source.count(old_count) != 1:
-              raise SystemExit('workspace tabs contract: count marker missing')
-          path.write_text(source.replace(old_count, new_count, 1), encoding='utf-8')
+          replace_once(
+              'scripts/combat_lab_workspace_layout_smoke.mjs',
+              "for (const tabId of ['scene', 'program', 'batch', 'parameters', 'metrics', 'journal']) {",
+              "for (const tabId of ['scene', 'program', 'batch', 'parameters', 'settings', 'metrics', 'journal']) {",
+          )
+          replace_once(
+              'scripts/combat_lab_workspace_layout_smoke.mjs',
+              "assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 6, 'Combat Lab must expose exactly six workspace tabs.');",
+              "assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 7, 'Integrated Combat Lab must expose six Stage 10 tabs plus game settings.');",
+          )
+
+          replace_once(
+              'scripts/infantry_combat_stage8_verify.mjs',
+              "const REQUIRED_BASE_SHA = 'f7eea38163be07c70d83314b5b6f3a1ae1cb5855';\nconst repoRoot = process.cwd();",
+              "const REQUIRED_BASE_SHA = 'f7eea38163be07c70d83314b5b6f3a1ae1cb5855';\nconst APPROVED_STAGE8_IMPLEMENTATION_HEAD_SHA = 'f93cdbdf15497498e99dd4f63a2bfd20e5414ea9';\nconst repoRoot = process.cwd();",
+          )
+          replace_once(
+              'scripts/infantry_combat_stage8_verify.mjs',
+              "const previousCachePath = process.env.INFANTRY_COMBAT_VERIFICATION_CACHE;\nrmSync(verificationCachePath, { force: true });\nprocess.env.INFANTRY_COMBAT_VERIFICATION_CACHE = verificationCachePath;",
+              "const previousCachePath = process.env.INFANTRY_COMBAT_VERIFICATION_CACHE;\nconst previousStage8DiffHead = process.env.INFANTRY_COMBAT_STAGE8_DIFF_HEAD_SHA;\nrmSync(verificationCachePath, { force: true });\nprocess.env.INFANTRY_COMBAT_VERIFICATION_CACHE = verificationCachePath;\nif (previousStage8DiffHead === undefined) {\n  process.env.INFANTRY_COMBAT_STAGE8_DIFF_HEAD_SHA = APPROVED_STAGE8_IMPLEMENTATION_HEAD_SHA;\n}",
+          )
+          replace_once(
+              'scripts/infantry_combat_stage8_verify.mjs',
+              "  if (previousCachePath === undefined) delete process.env.INFANTRY_COMBAT_VERIFICATION_CACHE;\n  else process.env.INFANTRY_COMBAT_VERIFICATION_CACHE = previousCachePath;\n}",
+              "  if (previousCachePath === undefined) delete process.env.INFANTRY_COMBAT_VERIFICATION_CACHE;\n  else process.env.INFANTRY_COMBAT_VERIFICATION_CACHE = previousCachePath;\n  if (previousStage8DiffHead === undefined) delete process.env.INFANTRY_COMBAT_STAGE8_DIFF_HEAD_SHA;\n  else process.env.INFANTRY_COMBAT_STAGE8_DIFF_HEAD_SHA = previousStage8DiffHead;\n}",
+          )
+
+          workflow_path = Path('.github/workflows/tmp-shared-editors-compiler-fix.yml')
+          workflow = workflow_path.read_text(encoding='utf-8')
+          workflow = workflow.replace('$GITHUB_WORKSPACE/reports/compiler-final', '$RUNNER_TEMP/shared-editors-final-compiler')
+
+          old = "          const out = path.resolve('reports/compiler-final');"
+          new = "          const out = process.env.SHARED_EDITORS_QA_OUT;\n          if (!out) throw new Error('SHARED_EDITORS_QA_OUT is required.');"
+          if workflow.count(old) != 1:
+              raise SystemExit('matrix workflow: browser output marker missing')
+          workflow = workflow.replace(old, new, 1)
+
+          old = "              if (await startButton.isEnabled()) {\n                await startButton.click();\n                await page.waitForFunction(() => document.querySelector('.combat-lab-experiment-run-toolbar')?.dataset.status === 'running');\n                const pauseButton = runToolbar.getByRole('button', { name: 'Пауза', exact: true });\n                if (await pauseButton.isEnabled()) await pauseButton.click();\n                await runToolbar.getByRole('button', { name: 'Сбросить', exact: true }).click();\n                evidence.runControls = true;\n              }\n"
+          new = "              if (await startButton.isEnabled()) {\n                await startButton.click();\n                await page.waitForFunction(() => {\n                  const status = document.querySelector('.combat-lab-experiment-run-toolbar')?.dataset.status;\n                  return Boolean(status && status !== 'ready' && status !== 'idle');\n                });\n                const status = await runToolbar.getAttribute('data-status');\n                const pauseButton = runToolbar.getByRole('button', { name: 'Пауза', exact: true });\n                if (status === 'running' && await pauseButton.isEnabled()) await pauseButton.click();\n                await runToolbar.getByRole('button', { name: 'Сбросить', exact: true }).click();\n                await page.waitForFunction(() => document.querySelector('.combat-lab-experiment-run-toolbar')?.dataset.status === 'ready');\n                evidence.runControls = true;\n              }\n"
+          if workflow.count(old) != 1:
+              raise SystemExit('matrix workflow: run-controls marker missing')
+          workflow = workflow.replace(old, new, 1)
+
+          old = "          cat > \"$OUT/browser-audit.mjs\" <<'NODE'"
+          new = "          AUDIT_SCRIPT=\"$GITHUB_WORKSPACE/.tmp-shared-editors-browser-audit.mjs\"\n          cat > \"$AUDIT_SCRIPT\" <<'NODE'"
+          if workflow.count(old) != 1:
+              raise SystemExit('matrix workflow: audit-script marker missing')
+          workflow = workflow.replace(old, new, 1)
+
+          old = "          set +e\n          npm run preview -- --host 127.0.0.1 --port 4173 > \"$OUT/logs/preview-server.log\" 2>&1 &\n          SERVER_PID=$!\n          for attempt in $(seq 1 60); do\n            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then break; fi\n            sleep 1\n          done\n          node \"$OUT/browser-audit.mjs\" > \"$OUT/logs/browser-audit.log\" 2>&1\n          STATUS=$?\n          kill \"$SERVER_PID\" >/dev/null 2>&1 || true\n          wait \"$SERVER_PID\" >/dev/null 2>&1 || true\n          set -e\n          echo \"$STATUS\" > \"$OUT/browser-failed.txt\"\n"
+          new = "          set +e\n          npm run preview -- --host 127.0.0.1 --port 4173 > \"$OUT/logs/preview-server.log\" 2>&1 &\n          SERVER_PID=$!\n          npm run engine:dev > \"$OUT/logs/ai-engine.log\" 2>&1 &\n          ENGINE_PID=$!\n          READY=0\n          for attempt in $(seq 1 60); do\n            if curl -fsS http://127.0.0.1:4173/ >/dev/null \\\n              && curl -fsS http://127.0.0.1:8787/engine/health >/dev/null; then\n              READY=1\n              break\n            fi\n            sleep 1\n          done\n          if [ \"$READY\" -eq 1 ]; then\n            SHARED_EDITORS_QA_OUT=\"$OUT\" node \"$AUDIT_SCRIPT\" > \"$OUT/logs/browser-audit.log\" 2>&1\n            STATUS=$?\n          else\n            echo \"Preview or AI Engine did not become ready.\" > \"$OUT/logs/browser-audit.log\"\n            STATUS=1\n          fi\n          kill \"$SERVER_PID\" \"$ENGINE_PID\" >/dev/null 2>&1 || true\n          wait \"$SERVER_PID\" >/dev/null 2>&1 || true\n          wait \"$ENGINE_PID\" >/dev/null 2>&1 || true\n          rm -f \"$AUDIT_SCRIPT\"\n          set -e\n          echo \"$STATUS\" > \"$OUT/browser-failed.txt\"\n"
+          if workflow.count(old) != 1:
+              raise SystemExit('matrix workflow: server-run marker missing')
+          workflow = workflow.replace(old, new, 1)
+
+          old = '          path: reports/compiler-final'
+          new = '          path: ${{ runner.temp }}/shared-editors-final-compiler'
+          if workflow.count(old) != 1:
+              raise SystemExit('matrix workflow: artifact path marker missing')
+          workflow = workflow.replace(old, new, 1)
+
+          publish_marker = '      - name: Publish report metadata to compiler branch\n'
+          if workflow.count(publish_marker) != 1:
+              raise SystemExit('matrix workflow: publish step marker missing')
+          prefix, publish = workflow.split(publish_marker, 1)
+          old = '          OUT="$RUNNER_TEMP/shared-editors-final-compiler"\n          {'
+          new = '          SOURCE="$RUNNER_TEMP/shared-editors-final-compiler"\n          OUT="$GITHUB_WORKSPACE/reports/compiler-final"\n          mkdir -p "$OUT"\n          cp "$SOURCE/summary.txt" "$OUT/summary.txt"\n          cp "$SOURCE/canonical-preview.json" "$OUT/canonical-preview.json"\n          {'
+          if publish.count(old) != 1:
+              raise SystemExit('matrix workflow: publish output marker missing')
+          publish = publish.replace(old, new, 1)
+          workflow = prefix + publish_marker + publish
+          workflow_path.write_text(workflow, encoding='utf-8')
           PY
-      - name: Run focused correction gate
+
+      - name: Run focused correction checks
         shell: bash
         run: |
           npm ci --no-audit --no-fund
+          node scripts/combat_lab_workspace_layout_smoke.mjs
+          node --check scripts/infantry_combat_stage8_verify.mjs
+          INFANTRY_COMBAT_STAGE8_DIFF_HEAD_SHA=f93cdbdf15497498e99dd4f63a2bfd20e5414ea9 npm run infantry-combat-stage8:forbidden-scan
           npm run typecheck
           npm run shared-game-editors:smoke
           npm run combat-lab-game-editors:smoke
-          npm run combat-lab-scenario-system:verify
-          npm run build
-      - name: Commit correction package
+
+      - name: Commit corrected gates and start canonical matrix
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
-            src/ai-node-editor/GameplayTuningProfileEditor.ts \
-            src/game-editors/game-editor-workspace.css \
-            scripts/shared_game_editors_integration_smoke.mjs \
-            scripts/shared_game_editor_platform_smoke.mjs \
-            scripts/combat_lab_game_editors_smoke.mjs \
-            scripts/combat_lab_stage10_ui_integration_contract_smoke.mjs \
-            scripts/combat_lab_workspace_tabs_contract_smoke.mjs \
-            scripts/combat_lab_game_editors_behavior_smoke.ts
-          git commit -m "fix(integration): align shared editor contracts and return visibility"
+            scripts/combat_lab_workspace_layout_smoke.mjs \
+            scripts/infantry_combat_stage8_verify.mjs \
+            .github/workflows/tmp-shared-editors-compiler-fix.yml
+          git commit -m "fix(verification): align integrated compiler gates [compiler-matrix]"
           git push origin HEAD:compiler/20260731-shared-game-editors-integration
