@@ -12,6 +12,7 @@ const expected = [
   ['program', 'Программа', 'Программа эксперимента'],
   ['batch', 'Серия', 'Серия прогонов'],
   ['parameters', 'Параметры', 'Параметры бойцов'],
+  ['settings', 'Настройка игры', 'Настройка игры'],
   ['metrics', 'Метрики', 'Метрики текущего прогона'],
   ['journal', 'Журнал', 'Журнал'],
 ];
@@ -20,7 +21,7 @@ for (const [id, label, title] of expected) {
   assert.match(hosts, new RegExp(`'${label}'`));
   assert.match(hosts, new RegExp(`'${title}'`));
 }
-assert.equal((hosts.match(/tabId:/g) ?? []).length, 6, 'Exactly six workspace tab definitions are required.');
+assert.equal((hosts.match(/tabId:/g) ?? []).length, 7, 'Integrated workspace requires six Stage 10 tabs plus game settings.');
 assert.doesNotMatch(hosts, /tabId:\s*'stand'|labelRu:\s*'Стенд'/);
 assert.match(tabs, /dock\.append\(header, toolbarHost, tabList, panelHost\)/, 'Run toolbar must sit outside switchable panels.');
 assert.match(

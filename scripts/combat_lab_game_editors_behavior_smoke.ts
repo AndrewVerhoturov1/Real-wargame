@@ -21,6 +21,102 @@ import type {
   DismissLayerOptions,
 } from '../src/shared/app-overlay/AppOverlayCoordinator';
 
+class FakeElement {
+  className = '';
+  type = '';
+  textContent = '';
+  readonly dataset: Record<string, string> = {};
+  readonly children: unknown[] = [];
+  private readonly listeners = new Map<string, Set<(event: Event) => void>>();
+
+  append(...nodes: unknown[]): void {
+    this.children.push(...nodes);
+  }
+
+  replaceChildren(...nodes: unknown[]): void {
+    this.children.length = 0;
+    this.children.push(...nodes);
+  }
+
+  setAttribute(_name: string, _value: string): void {}
+
+  addEventListener(type: string, listener: EventListener): void {
+    const listeners = this.listeners.get(type) ?? new Set<(event: Event) => void>();
+    listeners.add(listener as (event: Event) => void);
+    this.listeners.set(type, listeners);
+  }
+
+  removeEventListener(type: string, listener: EventListener): void {
+    this.listeners.get(type)?.delete(listener as (event: Event) => void);
+  }
+
+  dispatchEvent(event: Event): boolean {
+    for (const listener of this.listeners.get(event.type) ?? []) listener(event);
+    return true;
+  }
+}
+
+class FakeOverlayCoordinator implements AppOverlayCoordinator {
+  private current: {
+    readonly options: AppModalOptions;
+    open: boolean;
+  } | null = null;
+  openModalCount = 0;
+  maximumOpenModalCount = 0;
+
+  openModal(options: AppModalOptions): AppOverlayHandle {
+    assert.equal(this.current?.open ?? false, false, 'Only one modal may be open.');
+    const host = new FakeElement();
+    options.render(host as unknown as HTMLElement);
+    const current = { options, open: true };
+    this.current = current;
+    this.openModalCount += 1;
+    this.maximumOpenModalCount = Math.max(this.maximumOpenModalCount, this.isModalOpen() ? 1 : 0);
+    return {
+      priority: options.priority,
+      close: () => {
+        void this.requestTopClose();
+      },
+      destroy: () => {
+        this.destroyCurrent(current);
+      },
+    };
+  }
+
+  registerDismissLayer(_options: DismissLayerOptions): () => void {
+    return () => {};
+  }
+
+  setEscapeFallback(_handler: (() => void) | null): void {}
+
+  hasOpenLayer(): boolean {
+    return this.isModalOpen();
+  }
+
+  destroy(): void {
+    if (this.current) this.destroyCurrent(this.current);
+  }
+
+  isModalOpen(): boolean {
+    return this.current?.open ?? false;
+  }
+
+  async requestTopClose(): Promise<boolean> {
+    const current = this.current;
+    if (!current?.open) return false;
+    if (current.options.beforeClose && !(await current.options.beforeClose())) return false;
+    this.destroyCurrent(current);
+    return true;
+  }
+
+  private destroyCurrent(current: { readonly options: AppModalOptions; open: boolean }): void {
+    if (!current.open) return;
+    current.open = false;
+    if (this.current === current) this.current = null;
+    current.options.onClosed?.();
+  }
+}
+
 installFakeDom();
 
 assert.equal(
@@ -56,6 +152,14 @@ assert.equal(groups[1]!.items[0]!.activation, 'embedded');
 
 const unit = {
   id: 'blue-1',
+  soldier: {
+    sourceProfileLinks: [
+      { editorId: 'routeProfiles', profileId: 'careful', labelRu: 'Повтор профиля маршрута' },
+      { editorId: 'soldierArchetypes', profileId: 'regular', labelRu: 'Архетип бойца' },
+      { editorId: 'perceptionProfiles', profileId: 'standard', labelRu: 'Профиль восприятия' },
+      { editorId: 'conditionProfiles', profileId: 'standard', labelRu: 'Ранения и подавление' },
+    ],
+  },
   playerAttentionProfileId: 'focused-observe',
   activeNavigationProfileId: 'careful',
   movementRuntime: {
@@ -79,9 +183,25 @@ assert.deepEqual(resolveCombatLabSelectedUnitProfileLinks(unit), [
     profileId: 'focused-observe',
     labelRu: 'Профиль внимания',
   },
+  {
+    editorId: 'soldierArchetypes',
+    profileId: 'regular',
+    labelRu: 'Архетип бойца',
+  },
+  {
+    editorId: 'perceptionProfiles',
+    profileId: 'standard',
+    labelRu: 'Профиль восприятия',
+  },
+  {
+    editorId: 'conditionProfiles',
+    profileId: 'standard',
+    labelRu: 'Ранения и подавление',
+  },
 ]);
 assert.deepEqual(resolveCombatLabSelectedUnitProfileLinks({
   id: 'empty',
+  soldier: { sourceProfileLinks: [] },
   movementRuntime: {
     effectiveProfileId: '',
     requestedProfileId: '',
@@ -273,101 +393,6 @@ function route(
   };
 }
 
-class FakeOverlayCoordinator implements AppOverlayCoordinator {
-  private current: {
-    readonly options: AppModalOptions;
-    open: boolean;
-  } | null = null;
-  openModalCount = 0;
-  maximumOpenModalCount = 0;
-
-  openModal(options: AppModalOptions): AppOverlayHandle {
-    assert.equal(this.current?.open ?? false, false, 'Only one modal may be open.');
-    const host = new FakeElement();
-    options.render(host as unknown as HTMLElement);
-    const current = { options, open: true };
-    this.current = current;
-    this.openModalCount += 1;
-    this.maximumOpenModalCount = Math.max(this.maximumOpenModalCount, this.isModalOpen() ? 1 : 0);
-    return {
-      priority: options.priority,
-      close: () => {
-        void this.requestTopClose();
-      },
-      destroy: () => {
-        this.destroyCurrent(current);
-      },
-    };
-  }
-
-  registerDismissLayer(_options: DismissLayerOptions): () => void {
-    return () => {};
-  }
-
-  setEscapeFallback(_handler: (() => void) | null): void {}
-
-  hasOpenLayer(): boolean {
-    return this.isModalOpen();
-  }
-
-  destroy(): void {
-    if (this.current) this.destroyCurrent(this.current);
-  }
-
-  isModalOpen(): boolean {
-    return this.current?.open ?? false;
-  }
-
-  async requestTopClose(): Promise<boolean> {
-    const current = this.current;
-    if (!current?.open) return false;
-    if (current.options.beforeClose && !(await current.options.beforeClose())) return false;
-    this.destroyCurrent(current);
-    return true;
-  }
-
-  private destroyCurrent(current: { readonly options: AppModalOptions; open: boolean }): void {
-    if (!current.open) return;
-    current.open = false;
-    if (this.current === current) this.current = null;
-    current.options.onClosed?.();
-  }
-}
-
-class FakeElement {
-  className = '';
-  type = '';
-  textContent = '';
-  readonly dataset: Record<string, string> = {};
-  readonly children: unknown[] = [];
-  private readonly listeners = new Map<string, Set<(event: Event) => void>>();
-
-  append(...nodes: unknown[]): void {
-    this.children.push(...nodes);
-  }
-
-  replaceChildren(...nodes: unknown[]): void {
-    this.children.length = 0;
-    this.children.push(...nodes);
-  }
-
-  setAttribute(_name: string, _value: string): void {}
-
-  addEventListener(type: string, listener: EventListener): void {
-    const listeners = this.listeners.get(type) ?? new Set<(event: Event) => void>();
-    listeners.add(listener as (event: Event) => void);
-    this.listeners.set(type, listeners);
-  }
-
-  removeEventListener(type: string, listener: EventListener): void {
-    this.listeners.get(type)?.delete(listener as (event: Event) => void);
-  }
-
-  dispatchEvent(event: Event): boolean {
-    for (const listener of this.listeners.get(event.type) ?? []) listener(event);
-    return true;
-  }
-}
 
 function installFakeDom(): void {
   class FakeEvent {

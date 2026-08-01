@@ -65,7 +65,7 @@ expectIncludes('src/combat-lab/game-editors/CombatLabGameEditorOverlay.ts', [
   "'combat-lab'",
   'beforeClose:',
   'workspace.close()',
-  'workspace.destroy()',
+  'this.workspace?.destroy()',
   'getSafeGameEditorReturnTarget',
 ]);
 expectExcludes('src/combat-lab/game-editors/CombatLabGameEditorOverlay.ts', [

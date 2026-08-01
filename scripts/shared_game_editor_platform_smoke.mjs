@@ -202,6 +202,11 @@ expectExcludes('ai-node-editor.html', [
   '/src/ai-node-editor/DirectionalTerrainProfileEditor.ts',
 ]);
 
+expectIncludes('src/game-editors/game-editor-workspace.css', [
+  '.game-editor-return-link[hidden]',
+  'display: none',
+]);
+
 const aiEditorCss = read('src/ai-node-editor/ai-node-editor.css');
 const aiEditorBodyRule = aiEditorCss.match(/(?:^|\n)body\s*\{([^}]*)\}/i)?.[1] ?? '';
 const fixedAiEditorBodyMinWidth = aiEditorBodyRule.match(/min-width\s*:\s*(\d+(?:\.\d+)?)px/i);

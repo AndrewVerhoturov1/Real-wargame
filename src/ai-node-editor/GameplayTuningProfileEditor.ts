@@ -184,7 +184,8 @@ export class GameplayTuningProfileEditor {
     if (target instanceof HTMLSelectElement) {
       const reference = target.dataset.tuningReference as ArchetypeReferenceKey | undefined;
       if (!reference || this.kind !== 'archetype' || this.draft.builtIn) return;
-      (this.draft as SoldierArchetypeDefinition)[reference] = target.value;
+      const archetypeDraft = this.draft as SoldierArchetypeDefinition;
+      this.draft = { ...archetypeDraft, [reference]: target.value } as SoldierArchetypeDefinition;
       this.dirty = true;
       this.render();
       return;

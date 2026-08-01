@@ -37,6 +37,10 @@
   white-space: nowrap;
 }
 
+.game-editor-return-link[hidden] {
+  display: none;
+}
+
 .game-editor-return-link:hover {
   border-color: rgba(134, 189, 245, 0.76);
   background: rgba(66, 119, 180, 0.3);
