@@ -2,6 +2,11 @@ import { mountAttentionProfileEditor } from '../ai-node-editor/AttentionProfileE
 import { mountCombatCatalogEditor } from '../ai-node-editor/CombatCatalogEditor';
 import { mountDirectionalTerrainProfileEditor } from '../ai-node-editor/DirectionalTerrainProfileEditor';
 import { mountEnvironmentProfileEditor } from '../ai-node-editor/EnvironmentProfileEditorIntegration';
+import {
+  mountConditionProfileEditor,
+  mountPerceptionProfileEditor,
+  mountSoldierArchetypeEditor,
+} from '../ai-node-editor/GameplayTuningProfileEditorIntegration';
 import { mountMovementProfileEditor } from '../ai-node-editor/MovementProfileEditorIntegration';
 import {
   mountNavigationProfileEditor,
@@ -61,12 +66,28 @@ export function createDefaultGameEditorRegistry(
       mount: mountSoldierDataEditor,
     },
     {
+      id: 'soldierArchetypes',
+      labelRu: 'Архетипы бойцов',
+      group: 'soldier',
+      order: 15,
+      activationFor: () => 'embedded',
+      mount: mountSoldierArchetypeEditor,
+    },
+    {
       id: 'attentionProfiles',
       labelRu: 'Профили внимания',
       group: 'soldier',
       order: 20,
       activationFor: () => 'embedded',
       mount: mountAttentionProfileEditor,
+    },
+    {
+      id: 'perceptionProfiles',
+      labelRu: 'Профили восприятия',
+      group: 'soldier',
+      order: 25,
+      activationFor: () => 'embedded',
+      mount: mountPerceptionProfileEditor,
     },
     {
       id: 'movementProfiles',
@@ -83,6 +104,14 @@ export function createDefaultGameEditorRegistry(
       order: 10,
       activationFor: () => 'embedded',
       mount: mountCombatCatalogEditor,
+    },
+    {
+      id: 'conditionProfiles',
+      labelRu: 'Ранения и подавление',
+      group: 'combat',
+      order: 20,
+      activationFor: () => 'embedded',
+      mount: mountConditionProfileEditor,
     },
     {
       id: 'environmentProfiles',
