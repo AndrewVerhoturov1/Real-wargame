@@ -49,3 +49,37 @@ jobs:
           git add reports/.tmp-shared-editors-compiler-repro.txt
           git commit -m "test(integration): record compiler smoke reproduction"
           git push origin HEAD:compiler/20260731-shared-game-editors-integration
+
+  correct-test-contract:
+    if: contains(github.event.head_commit.message, '[compiler-fix]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout compiler branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Correct safe return-target smoke contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/shared_game_editor_platform_smoke.mjs')
+          source = path.read_text(encoding='utf-8')
+          old = '  "search.set(\'returnTo\', request.returnTo)",\n'
+          new = (
+              "  'const safeReturnTo = getSafeGameEditorReturnTarget(request.returnTo)',\n"
+              "  \"search.set('returnTo', safeReturnTo)\",\n"
+          )
+          if source.count(old) != 1:
+              raise SystemExit(f'expected exactly one stale assertion, found {source.count(old)}')
+          path.write_text(source.replace(old, new), encoding='utf-8')
+          PY
+          npm ci --no-audit --no-fund
+          npm run shared-game-editors:smoke
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/shared_game_editor_platform_smoke.mjs
+          git commit -m "test(integration): require validated graph return target"
+          git push origin HEAD:compiler/20260731-shared-game-editors-integration
