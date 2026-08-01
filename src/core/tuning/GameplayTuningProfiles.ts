@@ -436,12 +436,14 @@ function normalizeConditionProfile(input: ConditionProfileDefinition): Condition
   });
 }
 
-function normalizePercentRecord<T extends Record<string, number>>(value: T | undefined, fallback: T): T {
-  const normalized: Record<string, number> = {};
-  for (const key of Object.keys(fallback)) {
-    normalized[key] = finiteNumber(value?.[key], fallback[key]!, 0, 100);
+function normalizePercentRecord<T extends object>(value: T | undefined, fallback: T): T {
+  const normalized: T = { ...fallback };
+  for (const key of Object.keys(fallback) as Array<keyof T>) {
+    const fallbackValue = fallback[key];
+    if (typeof fallbackValue !== 'number') continue;
+    normalized[key] = finiteNumber(value?.[key], fallbackValue, 0, 100) as T[keyof T];
   }
-  return deepFreeze(normalized) as T;
+  return deepFreeze(normalized);
 }
 
 function semanticFingerprint(profile: BaseProfile): string {
