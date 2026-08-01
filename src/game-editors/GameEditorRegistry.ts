@@ -12,6 +12,13 @@ export const GROUP_ORDER: Readonly<Record<GameEditorGroup, number>> = Object.fre
   world: 40,
 });
 
+export const GROUP_LABEL_RU: Readonly<Record<GameEditorGroup, string>> = Object.freeze({
+  behavior: 'Поведение',
+  soldier: 'Боец',
+  combat: 'Бой',
+  world: 'Мир',
+});
+
 const SURFACES: readonly GameEditorSurface[] = ['ai-editor', 'combat-lab'];
 const ACTIVATIONS: readonly GameEditorActivation[] = ['embedded', 'route', 'hidden'];
 
