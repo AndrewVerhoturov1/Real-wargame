@@ -54,6 +54,9 @@ expectIncludes('src/game-editors/GameEditorRegistry.ts', [
   'class GameEditorRegistry',
   'Game editor id is required',
   'Game editor id is already registered',
+  'Game editor label is required',
+  'Embedded editor has no mount function',
+  'Route editor has no route factory',
   'GROUP_ORDER',
   'Object.freeze',
 ]);
@@ -62,8 +65,8 @@ expectExcludes('src/game-editors/GameEditorRegistry.ts', ['document.', 'window.'
 expectIncludes('src/game-editors/GameEditorWorkspace.ts', [
   'beforeClose',
   'installation.destroy()',
-  'route(request)',
-  'destroyed',
+  'transitionRevision',
+  'assertCurrentTransition',
   'host.replaceChildren()',
 ]);
 expectExcludes('src/game-editors/GameEditorWorkspace.ts', [
@@ -71,7 +74,8 @@ expectExcludes('src/game-editors/GameEditorWorkspace.ts', [
   'setTimeout(',
   'MutationObserver',
   'requestAnimationFrame(',
-  'combat-lab',
+  "from '../combat-lab",
+  "from '../../combat-lab",
 ]);
 
 const defaultRegistrySource = read('src/game-editors/createDefaultGameEditorRegistry.ts');
@@ -91,9 +95,16 @@ for (const id of expectedIds) {
   if (count !== 1) failures.push(`default registry: ${id} must be defined exactly once, found ${count}`);
 }
 expectIncludes('src/game-editors/createDefaultGameEditorRegistry.ts', [
-  "surface === 'ai-editor' ? 'embedded' : 'route'",
-  "return '/ai-node-editor.html'",
+  "surface === 'combat-lab'",
+  "? 'route'",
+  "const baseRoute = '/ai-node-editor.html'",
+  "search.set('returnTo', request.returnTo)",
   'mountEnvironmentProfileEditor',
+  "requireLegacyAiEditorSection('combatCatalogs')",
+]);
+expectExcludes('src/game-editors/createDefaultGameEditorRegistry.ts', [
+  "from '../combat-lab",
+  "from '../../combat-lab",
 ]);
 
 for (const file of [
@@ -107,18 +118,30 @@ for (const file of [
   expectExcludes(file, [
     "document.querySelector<HTMLElement>('#ai-node-editor-root')",
     "document.querySelector<HTMLElement>('.navigation-profile-tabs')",
-    "from './AiEditorSectionRegistry'",
     "from '../combat-lab",
     "from '../../combat-lab",
   ]);
 }
 
+expectIncludes('src/ai-node-editor/AiEditorSectionRegistry.ts', [
+  "id !== 'combatCatalogs'",
+  'capturedCombatCatalog',
+  'The shared GameEditorRegistry remains the sole authoritative registry',
+]);
+expectExcludes('src/ai-node-editor/AiEditorSectionRegistry.ts', [
+  'new Map',
+  'querySelector',
+  'document.',
+]);
+
 expectIncludes('src/ai-node-editor/AiEditorGameEditorPlatform.ts', [
   'createDefaultGameEditorRegistry',
   'new GameEditorWorkspace',
-  'registry.listForSurface',
+  "registry.listForSurface('ai-editor')",
   'definition.labelRu',
-  "editorId: 'behaviorGraph'",
+  "const initialEditorId =",
+  "'behaviorGraph'",
+  'mountBehaviorGraph',
 ]);
 expectExcludes('src/ai-node-editor/AiEditorGameEditorPlatform.ts', [
   'Обновить',
@@ -129,19 +152,13 @@ expectExcludes('src/ai-node-editor/AiEditorGameEditorPlatform.ts', [
 expectIncludes('ai-node-editor.html', [
   '/src/game-editors/game-editor-workspace.css',
   '/src/ai-node-editor/AiEditorGameEditorPlatform.ts',
-  '/src/ai-node-editor/EnvironmentProfileEditorIntegration.ts',
 ]);
 expectExcludes('ai-node-editor.html', [
   '/src/ai-node-editor/NavigationProfileEditor.ts',
-  '/src/ai-node-editor/TacticalPositionProfileEditor.ts',
   '/src/ai-node-editor/MovementProfileEditorIntegration.ts',
-  '/src/ai-node-editor/CombatCatalogEditor.ts',
+  '/src/ai-node-editor/EnvironmentProfileEditorIntegration.ts',
   '/src/ai-node-editor/DirectionalTerrainProfileEditor.ts',
 ]);
-
-if (exists('src/ai-node-editor/AiEditorSectionRegistry.ts')) {
-  failures.push('legacy AiEditorSectionRegistry.ts must be removed');
-}
 
 if (failures.length > 0) {
   console.error('Shared game editor platform smoke failed:');
