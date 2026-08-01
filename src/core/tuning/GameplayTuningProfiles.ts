@@ -35,6 +35,8 @@ export interface SoldierArchetypeDefinition {
   readonly nameRu: string;
   readonly builtIn: boolean;
   readonly revision: number;
+  readonly perceptionProfileId: string;
+  readonly conditionProfileId: string;
   readonly traits: SoldierTraits;
   readonly condition: SoldierCondition;
 }
@@ -73,6 +75,13 @@ export interface GameplayTuningBundleV1 {
   readonly conditionProfiles: readonly ConditionProfileDefinition[];
 }
 
+interface BaseProfile {
+  readonly id: string;
+  readonly nameRu: string;
+  readonly builtIn: boolean;
+  readonly revision: number;
+}
+
 export class GameplayTuningRegistry {
   readonly formatVersion = GAMEPLAY_TUNING_FORMAT_VERSION;
   semanticRevision: number;
@@ -82,13 +91,16 @@ export class GameplayTuningRegistry {
   private readonly conditionProfiles = new Map<string, ConditionProfileDefinition>();
 
   constructor(bundle?: Partial<GameplayTuningBundleV1>) {
-    const defaults = builtInBundle();
-    this.semanticRevision = positiveInteger(bundle?.semanticRevision, defaults.semanticRevision);
-    for (const profile of defaults.perceptionProfiles) this.perceptionProfiles.set(profile.id, profile);
-    for (const profile of defaults.soldierArchetypes) this.soldierArchetypes.set(profile.id, profile);
-    for (const profile of defaults.conditionProfiles) this.conditionProfiles.set(profile.id, profile);
-    this.importProfiles(bundle?.perceptionProfiles, bundle?.soldierArchetypes, bundle?.conditionProfiles, false);
-    const requestedActive = id(bundle?.activePerceptionProfileId);
+    this.semanticRevision = positiveInteger(bundle?.semanticRevision, 1);
+    for (const profile of BUILT_IN_PERCEPTION_PROFILES.values()) this.perceptionProfiles.set(profile.id, profile);
+    for (const profile of BUILT_IN_CONDITION_PROFILES.values()) this.conditionProfiles.set(profile.id, profile);
+    for (const profile of BUILT_IN_SOLDIER_ARCHETYPES.values()) this.soldierArchetypes.set(profile.id, profile);
+
+    for (const profile of bundle?.perceptionProfiles ?? []) this.importPerceptionProfile(profile);
+    for (const profile of bundle?.conditionProfiles ?? []) this.importConditionProfile(profile);
+    for (const profile of bundle?.soldierArchetypes ?? []) this.importSoldierArchetype(profile);
+
+    const requestedActive = normalizeId(bundle?.activePerceptionProfileId);
     this.activePerceptionProfileId = requestedActive && this.perceptionProfiles.has(requestedActive)
       ? requestedActive
       : DEFAULT_PERCEPTION_PROFILE_ID;
@@ -133,33 +145,39 @@ export class GameplayTuningRegistry {
   }
 
   replacePerceptionProfile(input: PerceptionProfileDefinition): PerceptionProfileDefinition {
-    return this.replaceProfile(
+    const profileId = requiredId(input?.id, 'perception-profile');
+    const builtIn = BUILT_IN_PERCEPTION_PROFILES.get(profileId);
+    if (builtIn) return this.requirePerceptionProfile(profileId);
+    return this.replaceCustomProfile(
       this.perceptionProfiles,
-      normalizePerceptionProfile(input),
-      BUILT_IN_PERCEPTION_PROFILES,
+      normalizePerceptionProfile({ ...input, id: profileId, builtIn: false }),
     );
   }
 
   replaceSoldierArchetype(input: SoldierArchetypeDefinition): SoldierArchetypeDefinition {
-    return this.replaceProfile(
+    const profileId = requiredId(input?.id, 'soldier-archetype');
+    const builtIn = BUILT_IN_SOLDIER_ARCHETYPES.get(profileId);
+    if (builtIn) return this.requireSoldierArchetype(profileId);
+    return this.replaceCustomProfile(
       this.soldierArchetypes,
-      normalizeSoldierArchetype(input),
-      BUILT_IN_SOLDIER_ARCHETYPES,
+      this.normalizeSoldierArchetype({ ...input, id: profileId, builtIn: false }),
     );
   }
 
   replaceConditionProfile(input: ConditionProfileDefinition): ConditionProfileDefinition {
-    return this.replaceProfile(
+    const profileId = requiredId(input?.id, 'condition-profile');
+    const builtIn = BUILT_IN_CONDITION_PROFILES.get(profileId);
+    if (builtIn) return this.requireConditionProfile(profileId);
+    return this.replaceCustomProfile(
       this.conditionProfiles,
-      normalizeConditionProfile(input),
-      BUILT_IN_CONDITION_PROFILES,
+      normalizeConditionProfile({ ...input, id: profileId, builtIn: false }),
     );
   }
 
   deletePerceptionProfile(profileId: string): boolean {
-    if (BUILT_IN_PERCEPTION_PROFILES.has(profileId) || !this.perceptionProfiles.delete(profileId)) return false;
+    if (!this.deleteCustomProfile(this.perceptionProfiles, profileId, BUILT_IN_PERCEPTION_PROFILES)) return false;
     if (this.activePerceptionProfileId === profileId) this.activePerceptionProfileId = DEFAULT_PERCEPTION_PROFILE_ID;
-    this.semanticRevision += 1;
+    this.repairArchetypeReferences();
     return true;
   }
 
@@ -168,19 +186,21 @@ export class GameplayTuningRegistry {
   }
 
   deleteConditionProfile(profileId: string): boolean {
-    return this.deleteCustomProfile(this.conditionProfiles, profileId, BUILT_IN_CONDITION_PROFILES);
+    if (!this.deleteCustomProfile(this.conditionProfiles, profileId, BUILT_IN_CONDITION_PROFILES)) return false;
+    this.repairArchetypeReferences();
+    return true;
   }
 
   resetPerceptionProfile(profileId: string): PerceptionProfileDefinition | null {
-    return this.resetBuiltIn(this.perceptionProfiles, profileId, BUILT_IN_PERCEPTION_PROFILES);
+    return BUILT_IN_PERCEPTION_PROFILES.get(profileId) ?? null;
   }
 
   resetSoldierArchetype(profileId: string): SoldierArchetypeDefinition | null {
-    return this.resetBuiltIn(this.soldierArchetypes, profileId, BUILT_IN_SOLDIER_ARCHETYPES);
+    return BUILT_IN_SOLDIER_ARCHETYPES.get(profileId) ?? null;
   }
 
   resetConditionProfile(profileId: string): ConditionProfileDefinition | null {
-    return this.resetBuiltIn(this.conditionProfiles, profileId, BUILT_IN_CONDITION_PROFILES);
+    return BUILT_IN_CONDITION_PROFILES.get(profileId) ?? null;
   }
 
   exportBundle(): GameplayTuningBundleV1 {
@@ -194,41 +214,52 @@ export class GameplayTuningRegistry {
     });
   }
 
-  private importProfiles(
-    perceptionProfiles: readonly PerceptionProfileDefinition[] | undefined,
-    soldierArchetypes: readonly SoldierArchetypeDefinition[] | undefined,
-    conditionProfiles: readonly ConditionProfileDefinition[] | undefined,
-    countRevision: boolean,
-  ): void {
-    for (const profile of perceptionProfiles ?? []) this.importOne(this.perceptionProfiles, normalizePerceptionProfile(profile), BUILT_IN_PERCEPTION_PROFILES);
-    for (const profile of soldierArchetypes ?? []) this.importOne(this.soldierArchetypes, normalizeSoldierArchetype(profile), BUILT_IN_SOLDIER_ARCHETYPES);
-    for (const profile of conditionProfiles ?? []) this.importOne(this.conditionProfiles, normalizeConditionProfile(profile), BUILT_IN_CONDITION_PROFILES);
-    if (countRevision) this.semanticRevision += 1;
+  private importPerceptionProfile(input: PerceptionProfileDefinition): void {
+    const profileId = requiredId(input?.id, 'perception-profile');
+    if (BUILT_IN_PERCEPTION_PROFILES.has(profileId)) return;
+    const normalized = normalizePerceptionProfile({ ...input, id: profileId, builtIn: false });
+    this.perceptionProfiles.set(profileId, normalized);
   }
 
-  private importOne<T extends BaseProfile>(
-    store: Map<string, T>,
-    profile: T,
-    builtIns: ReadonlyMap<string, T>,
-  ): void {
-    const builtIn = builtIns.get(profile.id);
-    store.set(profile.id, deepFreeze({
-      ...profile,
-      builtIn: Boolean(builtIn),
-      revision: positiveInteger(profile.revision, 1),
-    }) as T);
+  private importConditionProfile(input: ConditionProfileDefinition): void {
+    const profileId = requiredId(input?.id, 'condition-profile');
+    if (BUILT_IN_CONDITION_PROFILES.has(profileId)) return;
+    const normalized = normalizeConditionProfile({ ...input, id: profileId, builtIn: false });
+    this.conditionProfiles.set(profileId, normalized);
   }
 
-  private replaceProfile<T extends BaseProfile>(
-    store: Map<string, T>,
-    normalized: T,
-    builtIns: ReadonlyMap<string, T>,
-  ): T {
+  private importSoldierArchetype(input: SoldierArchetypeDefinition): void {
+    const profileId = requiredId(input?.id, 'soldier-archetype');
+    if (BUILT_IN_SOLDIER_ARCHETYPES.has(profileId)) return;
+    const normalized = this.normalizeSoldierArchetype({ ...input, id: profileId, builtIn: false });
+    this.soldierArchetypes.set(profileId, normalized);
+  }
+
+  private normalizeSoldierArchetype(input: SoldierArchetypeDefinition): SoldierArchetypeDefinition {
+    const fallback = BUILT_IN_SOLDIER_ARCHETYPES.get(DEFAULT_SOLDIER_ARCHETYPE_ID)!;
+    const requestedPerceptionProfileId = normalizeId(input?.perceptionProfileId);
+    const requestedConditionProfileId = normalizeId(input?.conditionProfileId);
+    return deepFreeze({
+      id: requiredId(input?.id, 'soldier-archetype'),
+      nameRu: normalizeName(input?.nameRu, 'Архетип бойца'),
+      builtIn: false,
+      revision: positiveInteger(input?.revision, 1),
+      perceptionProfileId: requestedPerceptionProfileId && this.perceptionProfiles.has(requestedPerceptionProfileId)
+        ? requestedPerceptionProfileId
+        : DEFAULT_PERCEPTION_PROFILE_ID,
+      conditionProfileId: requestedConditionProfileId && this.conditionProfiles.has(requestedConditionProfileId)
+        ? requestedConditionProfileId
+        : DEFAULT_CONDITION_PROFILE_ID,
+      traits: normalizePercentRecord(input?.traits, fallback.traits),
+      condition: normalizePercentRecord(input?.condition, fallback.condition),
+    });
+  }
+
+  private replaceCustomProfile<T extends BaseProfile>(store: Map<string, T>, normalized: T): T {
     const existing = store.get(normalized.id);
-    const builtIn = builtIns.has(normalized.id);
     const candidate = deepFreeze({
       ...normalized,
-      builtIn,
+      builtIn: false,
       revision: existing ? existing.revision + 1 : 1,
     }) as T;
     if (existing && semanticFingerprint(existing) === semanticFingerprint(candidate)) return existing;
@@ -247,27 +278,17 @@ export class GameplayTuningRegistry {
     return true;
   }
 
-  private resetBuiltIn<T extends BaseProfile>(
-    store: Map<string, T>,
-    profileId: string,
-    builtIns: ReadonlyMap<string, T>,
-  ): T | null {
-    const builtIn = builtIns.get(profileId);
-    if (!builtIn) return null;
-    const existing = store.get(profileId);
-    if (existing && semanticFingerprint(existing) === semanticFingerprint(builtIn)) return existing;
-    const reset = deepFreeze({ ...builtIn, revision: (existing?.revision ?? 0) + 1 }) as T;
-    store.set(profileId, reset);
-    this.semanticRevision += 1;
-    return reset;
+  private repairArchetypeReferences(): void {
+    for (const archetype of this.soldierArchetypes.values()) {
+      if (archetype.builtIn) continue;
+      const repaired = this.normalizeSoldierArchetype(archetype);
+      if (semanticFingerprint(repaired) === semanticFingerprint(archetype)) continue;
+      this.soldierArchetypes.set(archetype.id, deepFreeze({
+        ...repaired,
+        revision: archetype.revision + 1,
+      }));
+    }
   }
-}
-
-interface BaseProfile {
-  readonly id: string;
-  readonly nameRu: string;
-  readonly builtIn: boolean;
-  readonly revision: number;
 }
 
 const BUILT_IN_PERCEPTION_PROFILES = new Map<string, PerceptionProfileDefinition>([
@@ -289,28 +310,6 @@ const BUILT_IN_PERCEPTION_PROFILES = new Map<string, PerceptionProfileDefinition
     },
   })],
 ]);
-
-const ARCHETYPE_NAMES: Record<BehaviorProfileId, string> = {
-  green: 'Необстрелянный',
-  regular: 'Линейный пехотинец',
-  veteran: 'Ветеран',
-  cautious: 'Осторожный',
-  reckless: 'Безрассудный',
-};
-
-const BUILT_IN_SOLDIER_ARCHETYPES = new Map<string, SoldierArchetypeDefinition>(
-  (Object.keys(SOLDIER_PARAMETERS_BY_PROFILE) as BehaviorProfileId[]).map((profileId) => [
-    profileId,
-    deepFreeze({
-      id: profileId,
-      nameRu: ARCHETYPE_NAMES[profileId],
-      builtIn: true,
-      revision: 1,
-      traits: SOLDIER_PARAMETERS_BY_PROFILE[profileId].traits,
-      condition: SOLDIER_PARAMETERS_BY_PROFILE[profileId].condition,
-    }),
-  ]),
-);
 
 const BUILT_IN_CONDITION_PROFILES = new Map<string, ConditionProfileDefinition>([
   [DEFAULT_CONDITION_PROFILE_ID, deepFreeze({
@@ -335,10 +334,34 @@ const BUILT_IN_CONDITION_PROFILES = new Map<string, ConditionProfileDefinition>(
   })],
 ]);
 
+const ARCHETYPE_NAMES: Record<BehaviorProfileId, string> = {
+  green: 'Необстрелянный',
+  regular: 'Линейный пехотинец',
+  veteran: 'Ветеран',
+  cautious: 'Осторожный',
+  reckless: 'Безрассудный',
+};
+
+const BUILT_IN_SOLDIER_ARCHETYPES = new Map<string, SoldierArchetypeDefinition>(
+  (Object.keys(SOLDIER_PARAMETERS_BY_PROFILE) as BehaviorProfileId[]).map((profileId) => [
+    profileId,
+    deepFreeze({
+      id: profileId,
+      nameRu: ARCHETYPE_NAMES[profileId],
+      builtIn: true,
+      revision: 1,
+      perceptionProfileId: DEFAULT_PERCEPTION_PROFILE_ID,
+      conditionProfileId: DEFAULT_CONDITION_PROFILE_ID,
+      traits: SOLDIER_PARAMETERS_BY_PROFILE[profileId].traits,
+      condition: SOLDIER_PARAMETERS_BY_PROFILE[profileId].condition,
+    }),
+  ]),
+);
+
 let currentRegistry = createDefaultGameplayTuningRegistry();
 
 export function createDefaultGameplayTuningRegistry(): GameplayTuningRegistry {
-  return new GameplayTuningRegistry(builtInBundle());
+  return new GameplayTuningRegistry();
 }
 
 export function getGameplayTuningRegistry(): GameplayTuningRegistry {
@@ -365,80 +388,59 @@ export function resolveConditionProfileSnapshot(profileId?: string | null): Cond
   return currentRegistry.requireConditionProfile(profileId ?? DEFAULT_CONDITION_PROFILE_ID);
 }
 
-function builtInBundle(): GameplayTuningBundleV1 {
-  return deepFreeze({
-    formatVersion: GAMEPLAY_TUNING_FORMAT_VERSION,
-    semanticRevision: 1,
-    activePerceptionProfileId: DEFAULT_PERCEPTION_PROFILE_ID,
-    perceptionProfiles: Object.freeze([...BUILT_IN_PERCEPTION_PROFILES.values()]),
-    soldierArchetypes: Object.freeze([...BUILT_IN_SOLDIER_ARCHETYPES.values()]),
-    conditionProfiles: Object.freeze([...BUILT_IN_CONDITION_PROFILES.values()]),
-  });
-}
-
-function normalizePerceptionProfile(value: PerceptionProfileDefinition): PerceptionProfileDefinition {
+function normalizePerceptionProfile(input: PerceptionProfileDefinition): PerceptionProfileDefinition {
   const fallback = BUILT_IN_PERCEPTION_PROFILES.get(DEFAULT_PERCEPTION_PROFILE_ID)!;
-  const contact = value?.contact ?? fallback.contact;
+  const contact = input?.contact ?? fallback.contact;
   return deepFreeze({
-    id: requiredId(value?.id, 'perception-profile'),
-    nameRu: name(value?.nameRu, 'Профиль восприятия'),
-    builtIn: Boolean(value?.builtIn),
-    revision: positiveInteger(value?.revision, 1),
+    id: requiredId(input?.id, 'perception-profile'),
+    nameRu: normalizeName(input?.nameRu, 'Профиль восприятия'),
+    builtIn: false,
+    revision: positiveInteger(input?.revision, 1),
     contact: {
-      confidenceEvidenceDivisor: number(contact.confidenceEvidenceDivisor, fallback.contact.confidenceEvidenceDivisor, 0.1, 10),
-      minimumUncertaintyCells: number(contact.minimumUncertaintyCells, fallback.contact.minimumUncertaintyCells, 0.05, 20),
-      initialUncertaintyCells: number(contact.initialUncertaintyCells, fallback.contact.initialUncertaintyCells, 0.05, 100),
-      uncertaintyEvidenceDivisor: number(contact.uncertaintyEvidenceDivisor, fallback.contact.uncertaintyEvidenceDivisor, 0.1, 500),
-      evidenceDecayPerSecond: number(contact.evidenceDecayPerSecond, fallback.contact.evidenceDecayPerSecond, 0, 50),
-      confidenceDecayPerSecond: number(contact.confidenceDecayPerSecond, fallback.contact.confidenceDecayPerSecond, 0, 50),
-      uncertaintyGrowthMetersPerSecond: number(contact.uncertaintyGrowthMetersPerSecond, fallback.contact.uncertaintyGrowthMetersPerSecond, 0, 20),
-      soundEvidenceMultiplier: number(contact.soundEvidenceMultiplier, fallback.contact.soundEvidenceMultiplier, 0, 4),
-      reportedEvidenceMultiplier: number(contact.reportedEvidenceMultiplier, fallback.contact.reportedEvidenceMultiplier, 0, 4),
+      confidenceEvidenceDivisor: finiteNumber(contact.confidenceEvidenceDivisor, fallback.contact.confidenceEvidenceDivisor, 0.1, 10),
+      minimumUncertaintyCells: finiteNumber(contact.minimumUncertaintyCells, fallback.contact.minimumUncertaintyCells, 0.05, 20),
+      initialUncertaintyCells: finiteNumber(contact.initialUncertaintyCells, fallback.contact.initialUncertaintyCells, 0.05, 100),
+      uncertaintyEvidenceDivisor: finiteNumber(contact.uncertaintyEvidenceDivisor, fallback.contact.uncertaintyEvidenceDivisor, 0.1, 500),
+      evidenceDecayPerSecond: finiteNumber(contact.evidenceDecayPerSecond, fallback.contact.evidenceDecayPerSecond, 0, 50),
+      confidenceDecayPerSecond: finiteNumber(contact.confidenceDecayPerSecond, fallback.contact.confidenceDecayPerSecond, 0, 50),
+      uncertaintyGrowthMetersPerSecond: finiteNumber(contact.uncertaintyGrowthMetersPerSecond, fallback.contact.uncertaintyGrowthMetersPerSecond, 0, 20),
+      soundEvidenceMultiplier: finiteNumber(contact.soundEvidenceMultiplier, fallback.contact.soundEvidenceMultiplier, 0, 4),
+      reportedEvidenceMultiplier: finiteNumber(contact.reportedEvidenceMultiplier, fallback.contact.reportedEvidenceMultiplier, 0, 4),
     },
   });
 }
 
-function normalizeSoldierArchetype(value: SoldierArchetypeDefinition): SoldierArchetypeDefinition {
-  const fallback = BUILT_IN_SOLDIER_ARCHETYPES.get(DEFAULT_SOLDIER_ARCHETYPE_ID)!;
-  return deepFreeze({
-    id: requiredId(value?.id, 'soldier-archetype'),
-    nameRu: name(value?.nameRu, 'Архетип бойца'),
-    builtIn: Boolean(value?.builtIn),
-    revision: positiveInteger(value?.revision, 1),
-    traits: normalizePercentRecord(value?.traits, fallback.traits),
-    condition: normalizePercentRecord(value?.condition, fallback.condition),
-  });
-}
-
-function normalizeConditionProfile(value: ConditionProfileDefinition): ConditionProfileDefinition {
+function normalizeConditionProfile(input: ConditionProfileDefinition): ConditionProfileDefinition {
   const fallback = BUILT_IN_CONDITION_PROFILES.get(DEFAULT_CONDITION_PROFILE_ID)!;
-  const wound = value?.wound ?? fallback.wound;
-  const suppression = value?.suppression ?? fallback.suppression;
+  const wound = input?.wound ?? fallback.wound;
+  const suppression = input?.suppression ?? fallback.suppression;
   return deepFreeze({
-    id: requiredId(value?.id, 'condition-profile'),
-    nameRu: name(value?.nameRu, 'Профиль ранений и подавления'),
-    builtIn: Boolean(value?.builtIn),
-    revision: positiveInteger(value?.revision, 1),
+    id: requiredId(input?.id, 'condition-profile'),
+    nameRu: normalizeName(input?.nameRu, 'Профиль ранений и подавления'),
+    builtIn: false,
+    revision: positiveInteger(input?.revision, 1),
     wound: {
-      woundedMovementMultiplier: number(wound.woundedMovementMultiplier, fallback.wound.woundedMovementMultiplier, 0, 2),
-      severelyWoundedMovementMultiplier: number(wound.severelyWoundedMovementMultiplier, fallback.wound.severelyWoundedMovementMultiplier, 0, 2),
-      woundedAimMultiplier: number(wound.woundedAimMultiplier, fallback.wound.woundedAimMultiplier, 0, 2),
-      severelyWoundedAimMultiplier: number(wound.severelyWoundedAimMultiplier, fallback.wound.severelyWoundedAimMultiplier, 0, 2),
-      limbHitStressGain: number(wound.limbHitStressGain, fallback.wound.limbHitStressGain, 0, 100),
-      bodyHitStressGain: number(wound.bodyHitStressGain, fallback.wound.bodyHitStressGain, 0, 100),
+      woundedMovementMultiplier: finiteNumber(wound.woundedMovementMultiplier, fallback.wound.woundedMovementMultiplier, 0, 1),
+      severelyWoundedMovementMultiplier: finiteNumber(wound.severelyWoundedMovementMultiplier, fallback.wound.severelyWoundedMovementMultiplier, 0, 1),
+      woundedAimMultiplier: finiteNumber(wound.woundedAimMultiplier, fallback.wound.woundedAimMultiplier, 0, 1),
+      severelyWoundedAimMultiplier: finiteNumber(wound.severelyWoundedAimMultiplier, fallback.wound.severelyWoundedAimMultiplier, 0, 1),
+      limbHitStressGain: finiteNumber(wound.limbHitStressGain, fallback.wound.limbHitStressGain, 0, 100),
+      bodyHitStressGain: finiteNumber(wound.bodyHitStressGain, fallback.wound.bodyHitStressGain, 0, 100),
     },
     suppression: {
-      gainMultiplier: number(suppression.gainMultiplier, fallback.suppression.gainMultiplier, 0, 4),
-      decayPerSecond: number(suppression.decayPerSecond, fallback.suppression.decayPerSecond, 0, 100),
-      stressMultiplier: number(suppression.stressMultiplier, fallback.suppression.stressMultiplier, 0, 4),
-      maximumSuppression: number(suppression.maximumSuppression, fallback.suppression.maximumSuppression, 0, 100),
+      gainMultiplier: finiteNumber(suppression.gainMultiplier, fallback.suppression.gainMultiplier, 0, 4),
+      decayPerSecond: finiteNumber(suppression.decayPerSecond, fallback.suppression.decayPerSecond, 0, 100),
+      stressMultiplier: finiteNumber(suppression.stressMultiplier, fallback.suppression.stressMultiplier, 0, 4),
+      maximumSuppression: finiteNumber(suppression.maximumSuppression, fallback.suppression.maximumSuppression, 0, 100),
     },
   });
 }
 
 function normalizePercentRecord<T extends Record<string, number>>(value: T | undefined, fallback: T): T {
   const normalized: Record<string, number> = {};
-  for (const key of Object.keys(fallback)) normalized[key] = number(value?.[key], fallback[key]!, 0, 100);
+  for (const key of Object.keys(fallback)) {
+    normalized[key] = finiteNumber(value?.[key], fallback[key]!, 0, 100);
+  }
   return deepFreeze(normalized) as T;
 }
 
@@ -454,18 +456,19 @@ function profileSort<T extends BaseProfile>(left: T, right: T): number {
 }
 
 function requiredId(value: unknown, fallback: string): string {
-  const normalized = id(value);
-  return normalized ?? fallback;
+  return normalizeId(value) ?? fallback;
 }
 
-function id(value: unknown): string | null {
+function normalizeId(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
   return normalized.length > 0 ? normalized : null;
 }
 
-function name(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim().slice(0, 120) : fallback;
+function normalizeName(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim().slice(0, 120)
+    : fallback;
 }
 
 function positiveInteger(value: unknown, fallback: number): number {
@@ -474,7 +477,7 @@ function positiveInteger(value: unknown, fallback: number): number {
     : fallback;
 }
 
-function number(value: unknown, fallback: number, minimum: number, maximum: number): number {
+function finiteNumber(value: unknown, fallback: number, minimum: number, maximum: number): number {
   const normalized = typeof value === 'number' && Number.isFinite(value) ? value : fallback;
   return Math.max(minimum, Math.min(maximum, normalized));
 }
