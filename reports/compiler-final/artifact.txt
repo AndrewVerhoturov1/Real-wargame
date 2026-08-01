@@ -1,0 +1,5 @@
+workflow_run_id=30712227771
+workflow_run_attempt=1
+artifact_id=8822356837
+artifact_url=https://github.com/AndrewVerhoturov1/Real-wargame/actions/runs/30712227771/artifacts/8822356837
+artifact_digest=0f720dff3214cf6bc99c7d64dc766f9e5ce8981b16607e9da164af69e6358457

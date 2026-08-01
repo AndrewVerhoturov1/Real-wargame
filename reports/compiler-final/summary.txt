@@ -1,0 +1,37 @@
+overall_status=FAIL
+tested_head=b71d3856b18ed0f0f0acc38bca84552c79e7d9c9
+matrix_failed=1
+browser_failed=1
+
+checks:
+npm-ci	0	2
+typecheck	2	8
+app-shell-overlay	0	1
+shared-game-editors	1	1
+gameplay-tuning-editors	0	0
+combat-lab-game-editors	1	0
+editor	0	1
+graph-v2	0	0
+perception	0	3
+perception-performance	0	3
+attention-profiles	0	0
+movement-profiles	0	1
+environment-materials	0	0
+combat-catalog-editor	0	1
+directional-terrain	0	2
+combat-lab-ui-contract	1	2
+combat-lab-experiment	0	6
+combat-lab-batch	0	4
+combat-lab-scenario-system	1	0
+infantry-stage6	1	499
+infantry-stage7	0	2
+infantry-stage8	1	10
+infantry-stage9	1	10
+workspace-architecture	0	0
+performance-contract	0	0
+long-task-classification	0	0
+production-build	0	12
+canonical-preview	1	8
+
+browser_evidence:
+missing

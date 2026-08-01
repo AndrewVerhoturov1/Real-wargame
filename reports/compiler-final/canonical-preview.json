@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "status": "failed",
+  "checks": [
+    {
+      "name": "TypeScript",
+      "command": "\"npm\" \"run\" \"typecheck\"",
+      "status": "failed",
+      "exitCode": 2,
+      "signal": null,
+      "durationMs": 8249,
+      "stdout": "\n> real-wargame@0.1.0 typecheck\n> tsc --noEmit\n\nsrc/ai-node-editor/GameplayTuningProfileEditor.ts(187,50): error TS2540: Cannot assign to 'conditionProfileId' because it is a read-only property.\nsrc/ai-node-editor/GameplayTuningProfileEditor.ts(187,50): error TS2540: Cannot assign to 'perceptionProfileId' because it is a read-only property.\n",
+      "stderr": "",
+      "error": "Check failed: TypeScript exited with 2."
+    }
+  ],
+  "skippedChecks": []
+}
