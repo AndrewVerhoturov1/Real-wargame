@@ -1,4 +1,4 @@
-tested_commit=ebbc9876222138bf127cbd41f735ba58795f4673
+tested_commit=72c520d3bc1ba3cc954b87253a980cb64900c874
 shell_source=26e7cc7fe9c6fc7855d2781fc2c0a539cbb1a049
 platform_source=af9e54036658e95a8df680658be73e589efae4b4
 runner_node=v22.23.1
@@ -7,8 +7,571 @@ runner_npm=10.9.8
 ## git diff --check
 exit=0
 
+## git status --short before matrix
+exit=0
+
 ## npm run app-shell-overlay:smoke
 exit=1
+output_tail_begin
+ers: Map(1) {
+-                       'focusin' => Set(1) {
+-                         [Function: onFocusIn]
+-                       }
+-                     }
+-                   },
+-                   parentNode: [Circular *2],
+-                   tabIndex: 0,
+-                   tagName: 'BUTTON'
+-                 }
+-               ],
+-               className: '',
+-               dataset: {},
+-               disabled: false,
+-               hidden: false,
+-               inert: true,
+-               innerHTML: '',
+-               listeners: Map(0) {},
+-               ownerDocument: FakeDocument {
+-                 activeElement: [Circular *3],
+-                 body: [Circular *1],
+-                 listeners: Map(1) {
+-                   'focusin' => Set(1) {
+-                     [Function: onFocusIn]
+-                   }
+-                 }
+-               },
+-               parentNode: [Circular *1],
+-               tabIndex: 0,
+-               tagName: 'MAIN'
+-             },
+-             [Circular *4]
+-           ],
+-           className: '',
+-           dataset: {},
+-           disabled: false,
+-           hidden: false,
+-           inert: false,
+-           innerHTML: '',
+-           listeners: Map(0) {},
+-           ownerDocument: FakeDocument {
+-             activeElement: [Circular *3],
+-             body: [Circular *1],
+-             listeners: Map(1) {
+-               'focusin' => Set(1) {
+-                 [Function: onFocusIn]
+-               }
+-             }
+-           },
+-           parentNode: null,
+-           tabIndex: 0,
+-           tagName: 'BODY'
+-         },
+          tabIndex: 0,
++         tagName: 'BODY'
+-         tagName: 'DIV'
+        },
++       tabIndex: 0,
++       tagName: 'DIV'
+-       tabIndex: -1,
+-       tagName: 'SECTION'
+      },
++     tabIndex: -1,
++     tagName: 'SECTION'
+-     tabIndex: 0,
+-     tagName: 'DIV'
+    },
+    tabIndex: 0,
++   tagName: 'DIV'
+-   tagName: 'BUTTON'
+  }
+
+    at file:///home/runner/work/Real-wargame/Real-wargame/.tmp-app-shell-overlay-behavior-smoke/app-shell-overlay-behavior-smoke.mjs?run=1785579448476:495:8 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: <ref *3> FakeElement {
+    listeners: Map(0) {},
+    parentNode: <ref *4> FakeElement {
+      listeners: Map(0) {},
+      parentNode: <ref *1> FakeElement {
+        listeners: Map(5) {
+          'keydown' => Set(1) { [Function: onKeyDown] },
+          'pointerdown' => Set(1) { [Function: onBackdropPointerDown] },
+          'pointerup' => Set(1) { [Function: stopBackgroundInteraction] },
+          'click' => Set(1) { [Function: stopBackgroundInteraction] },
+          'contextmenu' => Set(1) { [Function: stopBackgroundInteraction] }
+        },
+        parentNode: <ref *2> FakeElement {
+          listeners: Map(0) {},
+          parentNode: null,
+          children: [ [FakeElement], [Circular *1] ],
+          ownerDocument: FakeDocument {
+            listeners: [Map],
+            body: [Circular *2],
+            activeElement: [Circular *3]
+          },
+          className: '',
+          dataset: {},
+          attributes: Map(0) {},
+          hidden: false,
+          inert: false,
+          disabled: false,
+          tabIndex: 0,
+          innerHTML: '',
+          tagName: 'BODY'
+        },
+        children: [ [Circular *4] ],
+        ownerDocument: <ref *5> FakeDocument {
+          listeners: Map(1) { 'focusin' => [Set] },
+          body: <ref *2> FakeElement {
+            listeners: Map(0) {},
+            parentNode: null,
+            children: [Array],
+            ownerDocument: [Circular *5],
+            className: '',
+            dataset: {},
+            attributes: Map(0) {},
+            hidden: false,
+            inert: false,
+            disabled: false,
+            tabIndex: 0,
+            innerHTML: '',
+            tagName: 'BODY'
+          },
+          activeElement: [Circular *3]
+        },
+        className: 'app-modal-layer',
+        dataset: { appModalLayer: 'open' },
+        attributes: Map(0) {},
+        hidden: false,
+        inert: false,
+        disabled: false,
+        tabIndex: 0,
+        innerHTML: '',
+        tagName: 'DIV'
+      },
+      children: [ [Circular *3] ],
+      ownerDocument: <ref *5> FakeDocument {
+        listeners: Map(1) { 'focusin' => Set(1) { [Function: onFocusIn] } },
+        body: <ref *2> FakeElement {
+          listeners: Map(0) {},
+          parentNode: null,
+          children: [ [FakeElement], [FakeElement] ],
+          ownerDocument: [Circular *5],
+          className: '',
+          dataset: {},
+          attributes: Map(0) {},
+          hidden: false,
+          inert: false,
+          disabled: false,
+          tabIndex: 0,
+          innerHTML: '',
+          tagName: 'BODY'
+        },
+        activeElement: [Circular *3]
+      },
+      className: 'app-modal-dialog',
+      dataset: {},
+      attributes: Map(3) {
+        'role' => 'dialog',
+        'aria-modal' => 'true',
+        'aria-label' => 'Проверка общего модального слоя'
+      },
+      hidden: false,
+      inert: false,
+      disabled: false,
+      tabIndex: -1,
+      innerHTML: '',
+      tagName: 'SECTION'
+    },
+    children: [
+      FakeElement {
+        listeners: Map(0) {},
+        parentNode: [Circular *3],
+        children: [],
+        ownerDocument: <ref *5> FakeDocument {
+          listeners: Map(1) { 'focusin' => [Set] },
+          body: <ref *2> FakeElement {
+            listeners: Map(0) {},
+            parentNode: null,
+            children: [Array],
+            ownerDocument: [Circular *5],
+            className: '',
+            dataset: {},
+            attributes: Map(0) {},
+            hidden: false,
+            inert: false,
+            disabled: false,
+            tabIndex: 0,
+            innerHTML: '',
+            tagName: 'BODY'
+          },
+          activeElement: [Circular *3]
+        },
+        className: '',
+        dataset: {},
+        attributes: Map(0) {},
+        hidden: false,
+        inert: false,
+        disabled: false,
+        tabIndex: 0,
+        innerHTML: '',
+        tagName: 'BUTTON'
+      },
+      FakeElement {
+        listeners: Map(0) {},
+        parentNode: [Circular *3],
+        children: [],
+        ownerDocument: <ref *5> FakeDocument {
+          listeners: Map(1) { 'focusin' => [Set] },
+          body: <ref *2> FakeElement {
+            listeners: Map(0) {},
+            parentNode: null,
+            children: [Array],
+            ownerDocument: [Circular *5],
+            className: '',
+            dataset: {},
+            attributes: Map(0) {},
+            hidden: false,
+            inert: false,
+            disabled: false,
+            tabIndex: 0,
+            innerHTML: '',
+            tagName: 'BODY'
+          },
+          activeElement: [Circular *3]
+        },
+        className: '',
+        dataset: {},
+        attributes: Map(0) {},
+        hidden: false,
+        inert: false,
+        disabled: false,
+        tabIndex: 0,
+        innerHTML: '',
+        tagName: 'BUTTON'
+      }
+    ],
+    ownerDocument: <ref *5> FakeDocument {
+      listeners: Map(1) { 'focusin' => Set(1) { [Function: onFocusIn] } },
+      body: <ref *2> FakeElement {
+        listeners: Map(0) {},
+        parentNode: null,
+        children: [
+          FakeElement {
+            listeners: Map(0) {},
+            parentNode: [Circular *2],
+            children: [Array],
+            ownerDocument: [Circular *5],
+            className: '',
+            dataset: {},
+            attributes: Map(0) {},
+            hidden: false,
+            inert: true,
+            disabled: false,
+            tabIndex: 0,
+            innerHTML: '',
+            tagName: 'MAIN'
+          },
+          <ref *1> FakeElement {
+            listeners: [Map],
+            parentNode: [Circular *2],
+            children: [Array],
+            ownerDocument: [Circular *5],
+            className: 'app-modal-layer',
+            dataset: [Object],
+            attributes: Map(0) {},
+            hidden: false,
+            inert: false,
+            disabled: false,
+            tabIndex: 0,
+            innerHTML: '',
+            tagName: 'DIV'
+          }
+        ],
+        ownerDocument: [Circular *5],
+        className: '',
+        dataset: {},
+        attributes: Map(0) {},
+        hidden: false,
+        inert: false,
+        disabled: false,
+        tabIndex: 0,
+        innerHTML: '',
+        tagName: 'BODY'
+      },
+      activeElement: [Circular *3]
+    },
+    className: 'app-modal-host',
+    dataset: {},
+    attributes: Map(0) {},
+    hidden: false,
+    inert: false,
+    disabled: false,
+    tabIndex: 0,
+    innerHTML: '',
+    tagName: 'DIV'
+  },
+  expected: <ref *6> FakeElement {
+    listeners: Map(0) {},
+    parentNode: <ref *3> FakeElement {
+      listeners: Map(0) {},
+      parentNode: <ref *4> FakeElement {
+        listeners: Map(0) {},
+        parentNode: <ref *1> FakeElement {
+          listeners: Map(5) {
+            'keydown' => [Set],
+            'pointerdown' => [Set],
+            'pointerup' => [Set],
+            'click' => [Set],
+            'contextmenu' => [Set]
+          },
+          parentNode: <ref *2> FakeElement {
+            listeners: Map(0) {},
+            parentNode: null,
+            children: [Array],
+            ownerDocument: [FakeDocument],
+            className: '',
+            dataset: {},
+            attributes: Map(0) {},
+            hidden: false,
+            inert: false,
+            disabled: false,
+            tabIndex: 0,
+            innerHTML: '',
+            tagName: 'BODY'
+          },
+          children: [ [Circular *4] ],
+          ownerDocument: <ref *5> FakeDocument {
+            listeners: [Map],
+            body: [FakeElement],
+            activeElement: [Circular *3]
+          },
+          className: 'app-modal-layer',
+          dataset: { appModalLayer: 'open' },
+          attributes: Map(0) {},
+          hidden: false,
+          inert: false,
+          disabled: false,
+          tabIndex: 0,
+          innerHTML: '',
+          tagName: 'DIV'
+        },
+        children: [ [Circular *3] ],
+        ownerDocument: <ref *5> FakeDocument {
+          listeners: Map(1) { 'focusin' => [Set] },
+          body: <ref *2> FakeElement {
+            listeners: Map(0) {},
+            parentNode: null,
+            children: [Array],
+            ownerDocument: [Circular *5],
+            className: '',
+            dataset: {},
+            attributes: Map(0) {},
+            hidden: false,
+            inert: false,
+            disabled: false,
+            tabIndex: 0,
+            innerHTML: '',
+            tagName: 'BODY'
+          },
+          activeElement: [Circular *3]
+        },
+        className: 'app-modal-dialog',
+        dataset: {},
+        attributes: Map(3) {
+          'role' => 'dialog',
+          'aria-modal' => 'true',
+          'aria-label' => 'Проверка общего модального слоя'
+        },
+        hidden: false,
+        inert: false,
+        disabled: false,
+        tabIndex: -1,
+        innerHTML: '',
+        tagName: 'SECTION'
+      },
+      children: [
+        [Circular *6],
+        FakeElement {
+          listeners: Map(0) {},
+          parentNode: [Circular *3],
+          children: [],
+          ownerDocument: <ref *5> FakeDocument {
+            listeners: [Map],
+            body: [FakeElement],
+            activeElement: [Circular *3]
+          },
+          className: '',
+          dataset: {},
+          attributes: Map(0) {},
+          hidden: false,
+          inert: false,
+          disabled: false,
+          tabIndex: 0,
+          innerHTML: '',
+          tagName: 'BUTTON'
+        }
+      ],
+      ownerDocument: <ref *5> FakeDocument {
+        listeners: Map(1) { 'focusin' => Set(1) { [Function: onFocusIn] } },
+        body: <ref *2> FakeElement {
+          listeners: Map(0) {},
+          parentNode: null,
+          children: [ [FakeElement], [FakeElement] ],
+          ownerDocument: [Circular *5],
+          className: '',
+          dataset: {},
+          attributes: Map(0) {},
+          hidden: false,
+          inert: false,
+          disabled: false,
+          tabIndex: 0,
+          innerHTML: '',
+          tagName: 'BODY'
+        },
+        activeElement: [Circular *3]
+      },
+      className: 'app-modal-host',
+      dataset: {},
+      attributes: Map(0) {},
+      hidden: false,
+      inert: false,
+      disabled: false,
+      tabIndex: 0,
+      innerHTML: '',
+      tagName: 'DIV'
+    },
+    children: [],
+    ownerDocument: <ref *5> FakeDocument {
+      listeners: Map(1) { 'focusin' => Set(1) { [Function: onFocusIn] } },
+      body: <ref *2> FakeElement {
+        listeners: Map(0) {},
+        parentNode: null,
+        children: [
+          FakeElement {
+            listeners: Map(0) {},
+            parentNode: [Circular *2],
+            children: [Array],
+            ownerDocument: [Circular *5],
+            className: '',
+            dataset: {},
+            attributes: Map(0) {},
+            hidden: false,
+            inert: true,
+            disabled: false,
+            tabIndex: 0,
+            innerHTML: '',
+            tagName: 'MAIN'
+          },
+          <ref *1> FakeElement {
+            listeners: [Map],
+            parentNode: [Circular *2],
+            children: [Array],
+            ownerDocument: [Circular *5],
+            className: 'app-modal-layer',
+            dataset: [Object],
+            attributes: Map(0) {},
+            hidden: false,
+            inert: false,
+            disabled: false,
+            tabIndex: 0,
+            innerHTML: '',
+            tagName: 'DIV'
+          }
+        ],
+        ownerDocument: [Circular *5],
+        className: '',
+        dataset: {},
+        attributes: Map(0) {},
+        hidden: false,
+        inert: false,
+        disabled: false,
+        tabIndex: 0,
+        innerHTML: '',
+        tagName: 'BODY'
+      },
+      activeElement: <ref *3> FakeElement {
+        listeners: Map(0) {},
+        parentNode: <ref *4> FakeElement {
+          listeners: Map(0) {},
+          parentNode: <ref *1> FakeElement {
+            listeners: [Map],
+            parentNode: [FakeElement],
+            children: [Array],
+            ownerDocument: [Circular *5],
+            className: 'app-modal-layer',
+            dataset: [Object],
+            attributes: Map(0) {},
+            hidden: false,
+            inert: false,
+            disabled: false,
+            tabIndex: 0,
+            innerHTML: '',
+            tagName: 'DIV'
+          },
+          children: [ [Circular *3] ],
+          ownerDocument: [Circular *5],
+          className: 'app-modal-dialog',
+          dataset: {},
+          attributes: Map(3) {
+            'role' => 'dialog',
+            'aria-modal' => 'true',
+            'aria-label' => 'Проверка общего модального слоя'
+          },
+          hidden: false,
+          inert: false,
+          disabled: false,
+          tabIndex: -1,
+          innerHTML: '',
+          tagName: 'SECTION'
+        },
+        children: [
+          [Circular *6],
+          FakeElement {
+            listeners: Map(0) {},
+            parentNode: [Circular *3],
+            children: [],
+            ownerDocument: [Circular *5],
+            className: '',
+            dataset: {},
+            attributes: Map(0) {},
+            hidden: false,
+            inert: false,
+            disabled: false,
+            tabIndex: 0,
+            innerHTML: '',
+            tagName: 'BUTTON'
+          }
+        ],
+        ownerDocument: [Circular *5],
+        className: 'app-modal-host',
+        dataset: {},
+        attributes: Map(0) {},
+        hidden: false,
+        inert: false,
+        disabled: false,
+        tabIndex: 0,
+        innerHTML: '',
+        tagName: 'DIV'
+      }
+    },
+    className: '',
+    dataset: {},
+    attributes: Map(0) {},
+    hidden: false,
+    inert: false,
+    disabled: false,
+    tabIndex: 0,
+    innerHTML: '',
+    tagName: 'BUTTON'
+  },
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.23.1
+
+output_tail_end
 
 ## npm run shared-game-editors:smoke
 exit=0
@@ -57,8 +620,22 @@ exit=0
 
 ## npm run infantry-combat-stage9:verify
 exit=1
+output_tail_begin
+
+> real-wargame@0.1.0 infantry-combat-stage9:verify
+> node scripts/infantry_combat_stage9_verify.mjs
+
+Node.js v22.23.1
+::notice file=package.json,line=1,title=Stage 9 verification::PASS full git history, required base f93cdbdf15497498e99dd4f63a2bfd20e5414ea9, Stage 9 scope head f7842189b15f4d564ac8eb5ca226d0b20ca91251, Stage 8 scope head f93cdbdf15497498e99dd4f63a2bfd20e5414ea9 and Stage 7 head 08e1bc5264bbf0497c1a48278d9b3cc077ff54f0 available
+::notice file=package.json,line=1,title=Stage 9 verification::PASS Stage 8 matrix contract: catalogs, physical runtime, posture, movement, perception, projectile benchmark, Stage 5–8 verification, AI regressions, TypeScript, build, diff, performance and clean-tree gates are present.
+::error file=package.json,line=1,title=Stage 9 verification failed::FAIL npm run infantry-combat-stage8:verify%0A> real-wargame@0.1.0 infantry-combat-stage8:verify%0A> node scripts/infantry_combat_stage8_verify.mjs%0A%0ANode.js v22.23.1%0A::notice file=package.json,line=1,title=Stage 8 verification::PASS npm run node-contract-ui:smoke: AI node contract UI smoke passed: typed ports, convenient attention and contact-investigation controls, persistent custom blackboard selects, authoritative friendly saves, modular Graph v2-only editor, errors, and visible Russian subgraph controls.%0A::notice file=package.json,line=1,title=Stage 8 verification::PASS npm run graph-v2:smoke: AI Graph v2 contracts smoke passed: 48 contracts, migration, validation and memory scopes.%0A::notice file=package.json,line=1,title=Stage 8 verification::PASS npm run typecheck: > tsc --noEmit%0A::notice file=package.json,line=1,title=Stage 8 verification::PASS npm run build: - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m%0A::notice file=package.json,line=1,title=Stage 8 verification::PASS node --check scripts/infantry_combat_stage8_smoke.mjs: completed without output%0A::notice file=package.json,line=1,title=Stage 8 verification::PASS node --check scripts/infantry_combat_stage8_forbidden_scan.mjs: completed without output%0A::notice file=package.json,line=1,title=Stage 8 verification::PASS node --check scripts/infantry_combat_stage8_verify.mjs: completed without output%0A::notice file=package.json,line=1,title=Stage 8 verification::PASS git diff --check f7eea38163be07c70d83314b5b6f3a1ae1cb5855...HEAD: completed without output%0A::notice file=package.json,line=1,title=Stage 8 verification::PASS npm run performance-contract:smoke%0A::notice file=package.json,line=1,title=Stage 8 verification::PASS node scripts/infantry_combat_verification_cache_smoke.mjs: Infantry combat verification cache smoke passed: successful identical commands execute once, distinct commands execute independently.%0A::notice file=package.json,line=1,title=Stage 8 verification::PASS npm run combat-catalogs:smoke: combat-catalog-serialization: smoke passed%0A::notice file=package.json,line=1,title=Stage 8 verification::PASS npm run combat-catalog-storage:smoke: combat-catalog-storage: smoke passed%0A::notice file=package.json,line=1,title=Stage 8 verification::PASS npm run combat-catalog-editor:smoke: combat-catalog-editor: smoke passed%0A::notice file=package.json,line=1,title=Stage 8 verification::PASS npm run physical-action-coordinator:smoke: Physical action coordinator terminal migration smoke passed: terminal posture stays lease-free, advances nextSequence and reconciles idempotently.%0A%0AFAILED_COMMAND=npm run posture-transition:smoke%0A::error file=package.json,line=1,title=Stage 8 verification failed::FAIL npm run posture-transition:smoke%250ANESTED_FAILURE_SIGNATURE }%250A> real-wargame@0.1.0 posture-transition:smoke%250A> node scripts/posture_transition_smoke.mjs%250A%250A%250AAssertionError [ERR_ASSERTION]: instant live posture writes: src/core/testing/combat-lab/experiment/CombatLabParticipantInitialRuntime.ts%250A+ actual - expected%250A%250A+ [%250A+   'src/core/testing/combat-lab/experiment/CombatLabParticipantInitialRuntime.ts'%250A+ ]%250A- []%250A%250A    at verifyNoInstantLivePostureWritesRemain (file:///home/runner/work/Real-wargame/Real-wargame/.tmp-posture-transition-smoke/posture-transition-smoke.mjs?run=1785579518355:35380:10)%250A    at file:///home/runner/work/Real-wargame/Real-wargame/.tmp-posture-transition-smoke/posture-transition-smoke.mjs?run=1785579518355:35007:1%250A    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)%250A    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)%250A    at async run (file:///home/runner/work/Real-wargame/Real-wargame/scripts/posture_transition_smoke.mjs:50:5) {%250A  generatedMessage: false,%250A  code: 'ERR_ASSERTION',%250A  actual: [Array],%250A  expected: [],%250A  operator: 'deepStrictEqual',%250A  diff: 'simple'%250A}
+
+output_tail_end
 
 ## npm run build
+exit=0
+
+## git status --short after matrix
 exit=0
 
 overall_exit=1
