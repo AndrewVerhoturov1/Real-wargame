@@ -1,3 +1,4 @@
+import { getSafeGameEditorReturnTarget } from '../game-editors/GameEditorReturnTarget';
 import { GameEditorWorkspace } from '../game-editors/GameEditorWorkspace';
 import { createDefaultGameEditorRegistry } from '../game-editors/createDefaultGameEditorRegistry';
 import type { GameEditorInstallation, GameEditorMountContext } from '../game-editors/GameEditorTypes';
@@ -5,12 +6,15 @@ import type { GameEditorInstallation, GameEditorMountContext } from '../game-edi
 const graphRootElement = document.getElementById('ai-node-editor-root');
 if (!(graphRootElement instanceof HTMLElement)) throw new Error('AI node editor root is missing.');
 const graphRoot: HTMLElement = graphRootElement;
+const searchParams = new URLSearchParams(window.location.search);
+const returnTarget = getSafeGameEditorReturnTarget(searchParams.get('returnTo'));
 
 const shell = document.createElement('main');
 shell.className = 'game-editor-shell';
 shell.dataset.gameEditorSurface = 'ai-editor';
 shell.innerHTML = `
   <nav class="game-editor-navigation" aria-label="Разделы редактора ИИ">
+    <a class="game-editor-return-link" data-game-editor-return hidden>Вернуться в полигон</a>
     <div class="game-editor-navigation-tabs" role="tablist" data-game-editor-tabs></div>
   </nav>
   <section class="game-editor-workspace" data-game-editor-workspace aria-live="polite"></section>
@@ -21,6 +25,11 @@ graphRoot.replaceWith(shell);
 const tabs = requireElement(shell, '[data-game-editor-tabs]');
 const workspaceHost = requireElement(shell, '[data-game-editor-workspace]');
 const graphParking = requireElement(shell, '[data-game-editor-graph-parking]');
+const returnLink = shell.querySelector<HTMLAnchorElement>('[data-game-editor-return]');
+if (returnTarget && returnLink) {
+  returnLink.href = returnTarget;
+  returnLink.hidden = false;
+}
 graphParking.append(graphRoot);
 graphRoot.hidden = true;
 
@@ -39,7 +48,7 @@ for (const definition of registry.listForSurface('ai-editor')) {
   tabs.append(button);
 }
 
-const requestedEditorId = new URLSearchParams(window.location.search).get('editor');
+const requestedEditorId = searchParams.get('editor');
 const initialEditorId = requestedEditorId && registry.get(requestedEditorId)
   ? requestedEditorId
   : 'behaviorGraph';
@@ -50,7 +59,7 @@ async function openEditor(editorId: string): Promise<void> {
   if (destroyed) return;
   const result = await workspace.open({
     editorId,
-    selectedUnitId: new URLSearchParams(window.location.search).get('selectedUnitId') ?? undefined,
+    selectedUnitId: searchParams.get('selectedUnitId') ?? undefined,
   });
   if (result.kind === 'refused' || result.kind === 'hidden') return;
   if (result.kind === 'route') {
