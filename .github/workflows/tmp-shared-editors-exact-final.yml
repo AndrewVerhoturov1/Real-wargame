@@ -1,0 +1,401 @@
+name: Temporary Shared Editors Exact Final
+
+on:
+  push:
+    branches:
+      - compiler/20260731-shared-game-editors-integration
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  verify:
+    if: contains(github.event.head_commit.message, '[shared-editors-exact-final]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Establish clean exact HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mapfile -t TEMP_FILES < <(git ls-files \
+            '.github/workflows/tmp-shared-editors-*.yml' \
+            'reports/.tmp-shared-editors-*' \
+            'reports/compiler-final/*')
+          if [ "${#TEMP_FILES[@]}" -gt 0 ]; then
+            git rm -f -- "${TEMP_FILES[@]}"
+            git commit -m "chore(integration): remove final verification scaffolding"
+            git push origin HEAD:compiler/20260731-shared-game-editors-integration
+          fi
+          test -z "$(git status --short)"
+          git rev-parse HEAD | tee /tmp/shared-editors-exact-head.txt
+
+      - name: Run complete canonical matrix
+        shell: bash
+        run: |
+          set -u
+          OUT=/tmp/shared-editors-exact-final
+          LOGS="$OUT/logs"
+          rm -rf "$OUT"
+          mkdir -p "$LOGS" "$OUT/screenshots"
+          cp /tmp/shared-editors-exact-head.txt "$OUT/tested-head.txt"
+          : > "$OUT/checks.tsv"
+          FAILED=0
+          run_check() {
+            local name="$1"; shift
+            local started ended status
+            started=$(date +%s)
+            set +e
+            "$@" > "$LOGS/$name.log" 2>&1
+            status=$?
+            set -e
+            ended=$(date +%s)
+            printf '%s\t%s\t%s\n' "$name" "$status" "$((ended-started))" >> "$OUT/checks.tsv"
+            if [ "$status" -ne 0 ]; then FAILED=1; fi
+          }
+          run_check npm-ci npm ci --no-audit --no-fund
+          run_check typecheck npm run typecheck
+          run_check app-shell-overlay npm run app-shell-overlay:smoke
+          run_check shared-game-editors npm run shared-game-editors:smoke
+          run_check gameplay-tuning-editors npm run gameplay-tuning-editors:smoke
+          run_check combat-lab-game-editors npm run combat-lab-game-editors:smoke
+          run_check editor npm run editor:smoke
+          run_check graph-v2 npm run graph-v2:smoke
+          run_check perception npm run perception:smoke
+          run_check perception-performance npm run perception-performance:smoke
+          run_check attention-profiles npm run attention-profiles:smoke
+          run_check movement-profiles npm run movement-profiles:smoke
+          run_check environment-materials npm run environment-materials:smoke
+          run_check combat-catalog-editor npm run combat-catalog-editor:smoke
+          run_check directional-terrain npm run directional-terrain:smoke
+          run_check combat-lab-ui-contract npm run combat-lab-ui-contract:smoke
+          run_check combat-lab-experiment npm run combat-lab-experiment:smoke
+          run_check combat-lab-batch npm run combat-lab-batch:smoke
+          run_check combat-lab-scenario-system npm run combat-lab-scenario-system:verify
+          run_check infantry-stage6 npm run infantry-combat-stage6:verify
+          run_check infantry-stage7 npm run infantry-combat-stage7:verify
+          run_check infantry-stage8 npm run infantry-combat-stage8:verify
+          run_check infantry-stage9 npm run infantry-combat-stage9:verify
+          run_check workspace-architecture npm run workspace-architecture-contract:smoke
+          run_check performance-contract npm run performance-contract:smoke
+          run_check long-task-classification npm run long-task-classification:smoke
+          run_check production-build npm run build
+          run_check canonical-preview npm run verify:preview -- --report "$OUT/canonical-preview.json"
+          echo "$FAILED" > "$OUT/matrix-failed.txt"
+
+      - name: Install Chromium
+        shell: bash
+        run: |
+          OUT=/tmp/shared-editors-exact-final
+          set +e
+          npm install --no-save --package-lock=false playwright@1.54.2 > "$OUT/logs/playwright-package.log" 2>&1
+          PACKAGE_STATUS=$?
+          npx playwright install --with-deps chromium > "$OUT/logs/playwright-browser.log" 2>&1
+          BROWSER_STATUS=$?
+          set -e
+          if [ "$PACKAGE_STATUS" -ne 0 ] || [ "$BROWSER_STATUS" -ne 0 ]; then
+            echo 1 > "$OUT/browser-install-failed.txt"
+          else
+            echo 0 > "$OUT/browser-install-failed.txt"
+          fi
+
+      - name: Run four-resolution browser acceptance
+        shell: bash
+        run: |
+          OUT=/tmp/shared-editors-exact-final
+          cat > .tmp-shared-editors-exact-browser.mjs <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { chromium } from 'playwright';
+
+          const out = '/tmp/shared-editors-exact-final';
+          const shots = path.join(out, 'screenshots');
+          const base = 'http://127.0.0.1:4173';
+          const sizes = [[1440, 900], [1366, 768], [1100, 760], [1920, 1080]];
+          const editorIds = [
+            'behaviorGraph', 'tacticalPositions', 'routeProfiles', 'environmentProfiles',
+            'movementProfiles', 'weapons', 'attentionProfiles', 'perceptionProfiles',
+            'soldierData', 'soldierArchetypes', 'conditionProfiles', 'directionalTerrain',
+          ];
+          const evidence = {
+            testedHead: fs.readFileSync(path.join(out, 'tested-head.txt'), 'utf8').trim(),
+            sizes: [], consoleErrors: [], pageErrors: [], requestFailures: [],
+            lifecycle: null, frameSamples: null, longTasks: [],
+            runControls: false, graphReturn: false, selectedProfileLink: false,
+          };
+          const ensure = (condition, message) => { if (!condition) throw new Error(message); };
+          const percentile = (values, p) => {
+            const sorted = [...values].sort((a, b) => a - b);
+            return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * p) - 1)] ?? 0;
+          };
+          const browser = await chromium.launch({ headless: true });
+          try {
+            for (const [width, height] of sizes) {
+              const label = `${width}x${height}`;
+              const context = await browser.newContext({ viewport: { width, height } });
+              await context.addInitScript(() => {
+                window.__sharedEditorsLongTasks = [];
+                try {
+                  new PerformanceObserver((list) => {
+                    for (const entry of list.getEntries()) {
+                      window.__sharedEditorsLongTasks.push({ startTime: entry.startTime, duration: entry.duration });
+                    }
+                  }).observe({ type: 'longtask', buffered: true });
+                } catch {}
+              });
+              const page = await context.newPage();
+              page.on('console', (message) => {
+                if (message.type() === 'error') evidence.consoleErrors.push({ label, text: message.text() });
+              });
+              page.on('pageerror', (error) => evidence.pageErrors.push({ label, text: String(error) }));
+              page.on('requestfailed', (request) => {
+                const error = request.failure()?.errorText ?? '';
+                if (error !== 'net::ERR_ABORTED') evidence.requestFailures.push({ label, url: request.url(), error });
+              });
+              const noOverflow = async (stage) => {
+                const dimensions = await page.evaluate(() => ({
+                  viewport: document.documentElement.clientWidth,
+                  html: document.documentElement.scrollWidth,
+                  body: document.body.scrollWidth,
+                }));
+                ensure(dimensions.html <= dimensions.viewport + 1 && dimensions.body <= dimensions.viewport + 1,
+                  `${label} ${stage}: horizontal overflow ${JSON.stringify(dimensions)}`);
+              };
+              const menuCycle = async (prefix) => {
+                const trigger = page.locator('.app-shell-menu-trigger');
+                await trigger.waitFor({ state: 'visible' });
+                ensure(await page.locator('[data-app-shell-menu-root="true"]').count() === 1,
+                  `${label} ${prefix}: expected one menu root`);
+                await trigger.click();
+                const dialog = page.locator('.app-modal-dialog[role="dialog"]');
+                await dialog.waitFor({ state: 'visible' });
+                await page.keyboard.press('Escape');
+                await dialog.waitFor({ state: 'detached' });
+                ensure(await page.evaluate(() => document.activeElement?.classList.contains('app-shell-menu-trigger') === true),
+                  `${label} ${prefix}: menu focus was not restored`);
+              };
+
+              await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
+              await page.locator('.app-shell-menu-trigger').waitFor({ state: 'visible' });
+              await noOverflow('game');
+              await menuCycle('game');
+
+              await page.goto(`${base}/ai-node-editor.html`, { waitUntil: 'domcontentloaded' });
+              await page.locator('[data-game-editor-surface="ai-editor"]').waitFor({ state: 'visible' });
+              ensure(await page.locator('[data-game-editor-id]').count() === 12, `${label} AI editor: expected 12 editors`);
+              ensure(await page.locator('[data-game-editor-return]').isHidden(), `${label} AI editor: unsafe return visible`);
+              await noOverflow('ai-editor');
+              if (width === 1440 || width === 1100) {
+                for (const id of editorIds) {
+                  await page.locator(`[data-game-editor-id="${id}"]`).click();
+                  await page.waitForFunction((value) =>
+                    document.querySelector('[data-game-editor-workspace]')?.dataset.activeGameEditor === value, id);
+                  await noOverflow(`ai-${id}`);
+                }
+              }
+              await menuCycle('ai-editor');
+
+              await page.goto(`${base}/combat-lab.html`, { waitUntil: 'domcontentloaded' });
+              await page.locator('.combat-lab-workspace').waitFor({ state: 'visible' });
+              await noOverflow('combat-lab');
+              const runToolbar = page.locator('.combat-lab-experiment-run-toolbar');
+              await runToolbar.waitFor({ state: 'visible' });
+              const startButton = runToolbar.getByRole('button', { name: /Запустить/ }).first();
+              if (await startButton.isEnabled()) {
+                const transition = page.evaluate(() => new Promise((resolve) => {
+                  const element = document.querySelector('.combat-lab-experiment-run-toolbar');
+                  const initial = element?.dataset.status;
+                  const observer = new MutationObserver(() => {
+                    const status = element?.dataset.status;
+                    if (status && status !== initial) {
+                      observer.disconnect();
+                      resolve(status);
+                    }
+                  });
+                  if (element) observer.observe(element, { attributes: true, attributeFilter: ['data-status'] });
+                  setTimeout(() => { observer.disconnect(); resolve(element?.dataset.status ?? 'missing'); }, 5000);
+                }));
+                await startButton.click();
+                const changedStatus = await transition;
+                ensure(changedStatus !== 'missing', `${label} run controls: status element missing`);
+                const pauseButton = runToolbar.getByRole('button', { name: 'Пауза', exact: true });
+                if (await pauseButton.isEnabled()) await pauseButton.click();
+                const resetButton = runToolbar.getByRole('button', { name: 'Сбросить', exact: true });
+                if (await resetButton.isEnabled()) await resetButton.click();
+                evidence.runControls = true;
+              }
+
+              await page.locator('[data-combat-lab-tab="settings"]').click();
+              await page.locator('[data-combat-lab-game-editor-catalogue="true"]').waitFor({ state: 'visible' });
+              ensure(await page.locator('.combat-lab-game-editor-item').count() === 12, `${label} Combat Lab: expected 12 editors`);
+              ensure(await page.locator('[data-game-editor-group]').count() === 4, `${label} Combat Lab: expected four groups`);
+              await noOverflow('combat-lab-settings');
+              await page.screenshot({ path: path.join(shots, `combat-lab-${label}.png`), fullPage: true });
+
+              const perception = page.locator('[data-game-editor-id="perceptionProfiles"]');
+              await perception.click();
+              await page.locator('.app-modal-layer').waitFor({ state: 'visible' });
+              await noOverflow('perception-modal');
+              await page.keyboard.press('Escape');
+              await page.locator('.app-modal-layer').waitFor({ state: 'detached' });
+              ensure(await page.evaluate(() => document.activeElement?.dataset.gameEditorId === 'perceptionProfiles'),
+                `${label} editor focus was not restored`);
+
+              if (width === 1440) {
+                await page.evaluate(() => { window.__sharedEditorsLongTasks.length = 0; });
+                const openDurations = [];
+                const closeDurations = [];
+                const lifecycle = page.locator('[data-game-editor-id="conditionProfiles"]');
+                for (let index = 0; index < 20; index += 1) {
+                  let started = performance.now();
+                  await lifecycle.click();
+                  await page.locator('.app-modal-layer').waitFor({ state: 'visible' });
+                  openDurations.push(performance.now() - started);
+                  ensure(await page.locator('.app-modal-layer').count() === 1, 'modal layers accumulated');
+                  started = performance.now();
+                  await page.keyboard.press('Escape');
+                  await page.locator('.app-modal-layer').waitFor({ state: 'detached' });
+                  closeDurations.push(performance.now() - started);
+                }
+                evidence.lifecycle = {
+                  cycles: 20,
+                  openP95Ms: percentile(openDurations, 0.95),
+                  openMaxMs: Math.max(...openDurations),
+                  closeP95Ms: percentile(closeDurations, 0.95),
+                  closeMaxMs: Math.max(...closeDurations),
+                };
+
+                await page.locator('[data-combat-lab-tab="parameters"]').click();
+                const sourceLink = page.locator('.combat-lab-source-profile-link button').first();
+                if (await sourceLink.count()) {
+                  await sourceLink.click();
+                  await page.locator('.app-modal-layer').waitFor({ state: 'visible' });
+                  evidence.selectedProfileLink = true;
+                  await page.keyboard.press('Escape');
+                  await page.locator('.app-modal-layer').waitFor({ state: 'detached' });
+                }
+
+                await page.locator('[data-combat-lab-tab="settings"]').click();
+                await page.locator('[data-game-editor-id="behaviorGraph"]').click();
+                await page.waitForURL(/ai-node-editor\.html/);
+                const returnLink = page.locator('[data-game-editor-return]');
+                ensure(await returnLink.isVisible(), 'behavior graph return link is not visible');
+                await returnLink.click();
+                await page.waitForURL(/combat-lab\.html/);
+                evidence.graphReturn = true;
+
+                const frames = await page.evaluate(() => new Promise((resolve) => {
+                  const values = [];
+                  let previous = performance.now();
+                  const tick = (now) => {
+                    values.push(now - previous);
+                    previous = now;
+                    if (values.length >= 120) resolve(values);
+                    else requestAnimationFrame(tick);
+                  };
+                  requestAnimationFrame(tick);
+                }));
+                evidence.frameSamples = {
+                  count: frames.length,
+                  p95Ms: percentile(frames, 0.95),
+                  maxMs: Math.max(...frames),
+                };
+                evidence.longTasks = await page.evaluate(() => window.__sharedEditorsLongTasks ?? []);
+              }
+
+              evidence.sizes.push({ width, height, passed: true });
+              await context.close();
+            }
+          } finally {
+            await browser.close();
+          }
+          ensure(evidence.sizes.length === 4, 'not all four resolutions passed');
+          ensure(evidence.runControls, 'run controls were not exercised');
+          ensure(evidence.graphReturn, 'behavior graph return was not exercised');
+          ensure(evidence.lifecycle?.cycles === 20, 'lifecycle stress was not completed');
+          ensure(evidence.lifecycle.openP95Ms <= 1000 && evidence.lifecycle.closeP95Ms <= 1000,
+            `lifecycle p95 too high: ${JSON.stringify(evidence.lifecycle)}`);
+          ensure(evidence.frameSamples?.p95Ms <= 100, `frame p95 too high: ${JSON.stringify(evidence.frameSamples)}`);
+          ensure(!evidence.longTasks.some((entry) => entry.duration >= 1000),
+            `long task >=1000ms: ${JSON.stringify(evidence.longTasks)}`);
+          ensure(evidence.consoleErrors.length === 0, `console errors: ${JSON.stringify(evidence.consoleErrors)}`);
+          ensure(evidence.pageErrors.length === 0, `page errors: ${JSON.stringify(evidence.pageErrors)}`);
+          ensure(evidence.requestFailures.length === 0, `request failures: ${JSON.stringify(evidence.requestFailures)}`);
+          fs.writeFileSync(path.join(out, 'browser-evidence.json'), JSON.stringify(evidence, null, 2));
+          NODE
+
+          set +e
+          npm run preview -- --host 127.0.0.1 --port 4173 > "$OUT/logs/preview-server.log" 2>&1 &
+          PREVIEW_PID=$!
+          npm run engine:dev > "$OUT/logs/ai-engine.log" 2>&1 &
+          ENGINE_PID=$!
+          READY=0
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null \
+              && curl -fsS http://127.0.0.1:8787/engine/health >/dev/null; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$READY" -eq 1 ] && [ "$(cat "$OUT/browser-install-failed.txt")" -eq 0 ]; then
+            node .tmp-shared-editors-exact-browser.mjs > "$OUT/logs/browser-audit.log" 2>&1
+            BROWSER_STATUS=$?
+          else
+            echo "Preview, AI Engine or Chromium was not ready." > "$OUT/logs/browser-audit.log"
+            BROWSER_STATUS=1
+          fi
+          kill "$PREVIEW_PID" "$ENGINE_PID" >/dev/null 2>&1 || true
+          wait "$PREVIEW_PID" >/dev/null 2>&1 || true
+          wait "$ENGINE_PID" >/dev/null 2>&1 || true
+          rm -f .tmp-shared-editors-exact-browser.mjs
+          set -e
+          echo "$BROWSER_STATUS" > "$OUT/browser-failed.txt"
+
+      - name: Build final evidence
+        if: always()
+        shell: bash
+        run: |
+          OUT=/tmp/shared-editors-exact-final
+          {
+            echo "TESTED_HEAD=$(cat "$OUT/tested-head.txt")"
+            echo "MATRIX_FAILED=$(cat "$OUT/matrix-failed.txt" 2>/dev/null || echo 1)"
+            echo "BROWSER_INSTALL_FAILED=$(cat "$OUT/browser-install-failed.txt" 2>/dev/null || echo 1)"
+            echo "BROWSER_FAILED=$(cat "$OUT/browser-failed.txt" 2>/dev/null || echo 1)"
+            echo
+            echo "CHECKS"
+            cat "$OUT/checks.tsv" 2>/dev/null || true
+            echo
+            echo "FINAL_STATUS"
+            git status --short
+          } > "$OUT/summary.txt"
+
+      - name: Upload exact final evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-editors-exact-final-evidence
+          path: /tmp/shared-editors-exact-final
+          if-no-files-found: error
+
+      - name: Enforce final result
+        shell: bash
+        run: |
+          OUT=/tmp/shared-editors-exact-final
+          test "$(cat "$OUT/matrix-failed.txt")" -eq 0
+          test "$(cat "$OUT/browser-install-failed.txt")" -eq 0
+          test "$(cat "$OUT/browser-failed.txt")" -eq 0
+          test -z "$(git status --short)"
+          test "$(git rev-parse HEAD)" = "$(cat "$OUT/tested-head.txt")"
