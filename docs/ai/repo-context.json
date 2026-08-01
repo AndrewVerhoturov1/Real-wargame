@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "project": {
     "name": "Real-Wargame",
     "repository": "AndrewVerhoturov1/Real-wargame",
@@ -71,6 +71,40 @@
     "deployedVercelVisualFallbackSkill": ".agents/skills/vercel-deployment-playwright-e2e/SKILL.md",
     "deployedVercelVisualFallbackAutoLoad": true,
     "deployedVercelVisualFallbackCondition": "visual-request-and-no-direct-controlled-browser",
+    "visualQaRouting": {
+      "routerSkill": ".agents/skills/real-wargame-screenshots/SKILL.md",
+      "mandatoryBeforeResponse": true,
+      "userMustNameSkill": false,
+      "intentAliasesRu": [
+        "скриншот",
+        "скриншоты",
+        "сделай скрины",
+        "покажи экран",
+        "открой игру",
+        "зайди на деплой",
+        "посмотри интерфейс",
+        "проверь верстку",
+        "проверь визуально",
+        "проверь глазами",
+        "открой в браузере",
+        "проверь Combat Lab",
+        "проверь редактор ИИ",
+        "можешь ли ты зайти на сайт"
+      ],
+      "intentAliasesEn": [
+        "screenshot",
+        "screenshots",
+        "visual QA",
+        "visual verification",
+        "inspect UI",
+        "check layout",
+        "open deployment",
+        "browser verification",
+        "Chrome",
+        "Chromium",
+        "Playwright"
+      ]
+    },
     "visualCiUsesTemporaryBranchesOnly": true,
     "visualCiPullRequestMayMerge": false,
     "visualCiMayModifyProductBranches": false,
@@ -94,11 +128,12 @@
     "docs/subprojects/index.json"
   ],
   "defaultSkills": {
+    "screenshots": ".agents/skills/real-wargame-screenshots/SKILL.md",
     "localPreview": ".agents/skills/real-wargame-local-preview/SKILL.md",
     "manualVercelDeploy": ".agents/skills/real-wargame-manual-vercel-deploy/SKILL.md",
     "deployedVercelVisualE2E": ".agents/skills/vercel-deployment-playwright-e2e/SKILL.md",
     "pixiJs": ".agents/skills/real-wargame-pixijs/SKILL.md",
     "aiRuntime": ".agents/skills/real-wargame-ai-runtime/SKILL.md"
   },
-  "updatedAt": "2026-07-22"
+  "updatedAt": "2026-08-02"
 }
