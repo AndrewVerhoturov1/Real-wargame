@@ -3,7 +3,7 @@ import type { GameEditorOpenRequest } from '../../game-editors/GameEditorTypes';
 
 export interface CombatLabSourceProfileLink {
   readonly editorId: string;
-  readonly profileId: string;
+  readonly profileId: string | null;
   readonly labelRu: string;
 }
 
@@ -23,7 +23,7 @@ export function resolveCombatLabSelectedUnitProfileLinks(
     unit.unitRoleNavigationProfileId,
     unit.playerNavigationProfileId,
   );
-  if (routeProfileId) links.push(Object.freeze({
+  links.push(Object.freeze({
     editorId: 'routeProfiles',
     profileId: routeProfileId,
     labelRu: 'Профиль маршрута',
@@ -34,7 +34,7 @@ export function resolveCombatLabSelectedUnitProfileLinks(
     unit.movementRuntime?.requestedProfileId,
     unit.unitRoleMovementProfileId,
   );
-  if (movementProfileId) links.push(Object.freeze({
+  links.push(Object.freeze({
     editorId: 'movementProfiles',
     profileId: movementProfileId,
     labelRu: 'Профиль движения',
