@@ -1,0 +1,15 @@
+tested_product_sha=c0298cedce53626264cad59815e6f04bdc5ca1c9
+command=npm run shared-game-editors:smoke
+exit_code=1
+
+--- install ---
+
+added 24 packages in 5s
+
+--- command ---
+
+> real-wargame@0.1.0 shared-game-editors:smoke
+> node scripts/shared_game_editor_platform_smoke.mjs && node scripts/shared_game_editors_integration_smoke.mjs
+
+Shared game editor platform smoke failed:
+- src/game-editors/createDefaultGameEditorRegistry.ts: missing "search.set('returnTo', request.returnTo)"
