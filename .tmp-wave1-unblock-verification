@@ -1,0 +1,7 @@
+tested_sha=1735f102a34faade582e5f43953e53ec83e49481
+job_status=failure
+install=success
+matrix=success
+browser_install=success
+preview=success
+browser=failure
