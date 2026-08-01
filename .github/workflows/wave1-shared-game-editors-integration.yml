@@ -9,378 +9,106 @@ permissions:
   contents: write
 
 jobs:
-  integrate-and-verify:
+  verify:
     if: ${{ !contains(github.event.head_commit.message, '[wave1-bot]') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     env:
       SHELL_HEAD: 26e7cc7fe9c6fc7855d2781fc2c0a539cbb1a049
       PLATFORM_HEAD: af9e54036658e95a8df680658be73e589efae4b4
-      REPORT_FILE: .wave1-shared-game-editors-verification.txt
+      TRACKED_REPORT: .wave1-shared-game-editors-verification.txt
+      TEMP_REPORT: /tmp/wave1-shared-game-editors-verification.txt
     steps:
-      - name: Checkout integration branch
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - name: Integrate exact executor heads
+      - name: Apply final integration fixes
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          test "$(git merge-base HEAD "$PLATFORM_HEAD")" = "$PLATFORM_HEAD"
-          git cat-file -e "$SHELL_HEAD^{commit}"
-
-          shell_paths=(
-            scripts/app_shell_overlay_smoke.mjs
-            src/main.ts
-            src/combat-lab/main.ts
-            src/shared/AiEditorShellMenuEntry.ts
-            src/shared/AppShellMenu.ts
-            src/shared/app-shell-menu.css
-            src/shared/app-overlay/AppOverlayCoordinator.ts
-            src/shared/app-overlay/AppModalLayer.ts
-            src/shared/app-overlay/app-overlay.css
-          )
-
-          for path in "${shell_paths[@]}"; do
-            mkdir -p "$(dirname "$path")"
-            git show "$SHELL_HEAD:$path" > "$path"
-          done
-
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
-          const path = 'package.json';
-          const pkg = JSON.parse(readFileSync(path, 'utf8'));
-          pkg.scripts['app-shell-overlay:smoke'] = 'node scripts/app_shell_overlay_smoke.mjs && node scripts/app_shell_overlay_behavior_smoke.mjs';
-          writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+
+          const behaviorPath = 'scripts/app_shell_overlay_behavior_smoke.ts';
+          let behavior = readFileSync(behaviorPath, 'utf8');
+          const oldElement = "    tabIndex = 0;\n    innerHTML = '';\n    constructor(ownerDocument: FakeDocument, readonly tagName: string) { super(ownerDocument); }";
+          const newElement = "    tabIndex = -1;\n    innerHTML = '';\n    constructor(ownerDocument: FakeDocument, readonly tagName: string) {\n      super(ownerDocument);\n      if (['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'].includes(tagName)) this.tabIndex = 0;\n    }";
+          if (behavior.includes(oldElement)) behavior = behavior.replace(oldElement, newElement);
+          if (!behavior.includes("tabIndex = -1;\n    innerHTML = '';")) throw new Error('Fake DOM tabindex fix missing.');
+          writeFileSync(behaviorPath, behavior);
+
+          const unitPath = 'src/core/units/UnitModel.ts';
+          let unit = readFileSync(unitPath, 'utf8');
+          if (!unit.includes('export function applyInitialPostureToRuntime(')) {
+            const marker = 'export function copyRuntimeToInitialState(unit: UnitModel): void {';
+            const helper = `export function applyInitialPostureToRuntime(\n  unit: UnitModel,\n  posture: UnitInitialState['posture'],\n): void {\n  unit.initialState.posture = posture;\n  unit.behaviorRuntime.previousPosture = posture;\n  unit.behaviorRuntime.posture = posture;\n}\n\n`;
+            if (!unit.includes(marker)) throw new Error('UnitModel helper marker missing.');
+            unit = unit.replace(marker, helper + marker);
+          }
+          writeFileSync(unitPath, unit);
+
+          const combatLabPath = 'src/core/testing/combat-lab/experiment/CombatLabParticipantInitialRuntime.ts';
+          let combatLab = readFileSync(combatLabPath, 'utf8');
+          combatLab = combatLab.replace(
+            "import { applyInitialStateToRuntime, type UnitModel } from '../../../units/UnitModel';",
+            "import { applyInitialPostureToRuntime, applyInitialStateToRuntime, type UnitModel } from '../../../units/UnitModel';",
+          );
+          combatLab = combatLab.replace(
+            "export function applyPosture(unit: UnitModel, posture: 'standing' | 'crouched' | 'prone'): void {\n  unit.initialState.posture = posture;\n  unit.behaviorRuntime.previousPosture = posture;\n  unit.behaviorRuntime.posture = posture;\n}",
+            "export function applyPosture(unit: UnitModel, posture: 'standing' | 'crouched' | 'prone'): void {\n  applyInitialPostureToRuntime(unit, posture);\n}",
+          );
+          if (!combatLab.includes('applyInitialPostureToRuntime(unit, posture);')) throw new Error('Combat Lab posture migration missing.');
+          writeFileSync(combatLabPath, combatLab);
           NODE
 
-          cat > scripts/app_shell_overlay_behavior_smoke.mjs <<'EOF'
-          import { rm } from 'node:fs/promises';
-          import path from 'node:path';
-          import { pathToFileURL } from 'node:url';
-          import { build } from 'vite';
-
-          const root = process.cwd();
-          const outDir = path.join(root, '.tmp-app-shell-overlay-behavior-smoke');
-          const entry = path.join(outDir, 'app-shell-overlay-behavior-smoke.mjs');
-          await rm(outDir, { recursive: true, force: true });
-          try {
-            await build({
-              root,
-              logLevel: 'warn',
-              build: {
-                target: 'esnext',
-                ssr: path.join(root, 'scripts', 'app_shell_overlay_behavior_smoke.ts'),
-                outDir,
-                emptyOutDir: true,
-                minify: false,
-                sourcemap: false,
-                rollupOptions: { output: { entryFileNames: 'app-shell-overlay-behavior-smoke.mjs', format: 'es' } },
-              },
-            });
-            await import(`${pathToFileURL(entry).href}?run=${Date.now()}`);
-          } finally {
-            await rm(outDir, { recursive: true, force: true });
-          }
-          EOF
-
-          cat > scripts/app_shell_overlay_behavior_smoke.ts <<'EOF'
-          import assert from 'node:assert/strict';
-          import { createAppModalLayer } from '../src/shared/app-overlay/AppModalLayer';
-          import { getAppOverlayCoordinator } from '../src/shared/app-overlay/AppOverlayCoordinator';
-
-          type Listener = (event: FakeEvent) => void;
-
-          class FakeEvent {
-            defaultPrevented = false;
-            immediatePropagationStopped = false;
-            propagationStopped = false;
-            target: unknown = null;
-            constructor(
-              readonly key = '',
-              readonly shiftKey = false,
-              readonly repeat = false,
-              readonly isComposing = false,
-            ) {}
-            preventDefault(): void { this.defaultPrevented = true; }
-            stopImmediatePropagation(): void { this.immediatePropagationStopped = true; }
-            stopPropagation(): void { this.propagationStopped = true; }
-          }
-
-          class FakeEventTarget {
-            private readonly listeners = new Map<string, Set<Listener>>();
-            addEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
-              const callback = typeof listener === 'function'
-                ? listener as unknown as Listener
-                : listener.handleEvent.bind(listener) as unknown as Listener;
-              let bucket = this.listeners.get(type);
-              if (!bucket) this.listeners.set(type, bucket = new Set());
-              bucket.add(callback);
-            }
-            removeEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
-              const bucket = this.listeners.get(type);
-              if (!bucket) return;
-              if (typeof listener === 'function') bucket.delete(listener as unknown as Listener);
-              else {
-                for (const callback of bucket) {
-                  if (callback === listener.handleEvent) bucket.delete(callback);
-                }
-              }
-            }
-            dispatch(type: string, event: FakeEvent): void {
-              event.target ??= this;
-              for (const listener of [...(this.listeners.get(type) ?? [])]) {
-                listener(event);
-                if (event.immediatePropagationStopped) break;
-              }
-            }
-            listenerCount(type: string): number { return this.listeners.get(type)?.size ?? 0; }
-          }
-
-          class FakeNode extends FakeEventTarget {
-            parentNode: FakeElement | null = null;
-            readonly children: FakeElement[] = [];
-            constructor(readonly ownerDocument: FakeDocument) { super(); }
-            append(...nodes: FakeElement[]): void {
-              for (const node of nodes) {
-                node.remove();
-                node.parentNode = this as unknown as FakeElement;
-                this.children.push(node);
-              }
-            }
-            replaceChildren(...nodes: FakeElement[]): void {
-              for (const child of [...this.children]) child.remove();
-              this.append(...nodes);
-            }
-            remove(): void {
-              const parent = this.parentNode;
-              if (!parent) return;
-              const index = parent.children.indexOf(this as unknown as FakeElement);
-              if (index >= 0) parent.children.splice(index, 1);
-              this.parentNode = null;
-            }
-            contains(node: FakeNode): boolean {
-              if (node === this) return true;
-              return this.children.some((child) => child.contains(node));
-            }
-            get isConnected(): boolean {
-              let current: FakeNode | null = this;
-              while (current?.parentNode) current = current.parentNode;
-              return current === this.ownerDocument.body;
-            }
-          }
-
-          class FakeElement extends FakeNode {
-            className = '';
-            readonly dataset: Record<string, string> = {};
-            readonly attributes = new Map<string, string>();
-            hidden = false;
-            inert = false;
-            disabled = false;
-            tabIndex = 0;
-            innerHTML = '';
-            constructor(ownerDocument: FakeDocument, readonly tagName: string) { super(ownerDocument); }
-            setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
-            getAttribute(name: string): string | null { return this.attributes.get(name) ?? null; }
-            focus(): void { this.ownerDocument.activeElement = this; }
-            querySelectorAll<T extends Element>(_selector: string): T[] {
-              const found: FakeElement[] = [];
-              const visit = (node: FakeElement): void => {
-                for (const child of node.children) {
-                  if (isFocusable(child)) found.push(child);
-                  visit(child);
-                }
-              };
-              visit(this);
-              return found as unknown as T[];
-            }
-          }
-
-          class FakeDocument extends FakeEventTarget {
-            readonly body: FakeElement;
-            activeElement: FakeElement | null = null;
-            constructor() {
-              super();
-              this.body = new FakeElement(this, 'BODY');
-            }
-            createElement(tagName: string): FakeElement {
-              return new FakeElement(this, tagName.toUpperCase());
-            }
-          }
-
-          function isFocusable(element: FakeElement): boolean {
-            if (element.hidden || element.disabled || element.getAttribute('aria-hidden') === 'true') return false;
-            return ['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'].includes(element.tagName)
-              || element.tabIndex !== -1;
-          }
-
-          (globalThis as unknown as { Node: typeof Node }).Node = FakeNode as unknown as typeof Node;
-          (globalThis as unknown as { Element: typeof Element }).Element = FakeElement as unknown as typeof Element;
-          (globalThis as unknown as { HTMLElement: typeof HTMLElement }).HTMLElement = FakeElement as unknown as typeof HTMLElement;
-
-          const coordinatorDocument = new FakeDocument();
-          const coordinator = getAppOverlayCoordinator(coordinatorDocument as unknown as Document);
-          assert.equal(getAppOverlayCoordinator(coordinatorDocument as unknown as Document), coordinator, 'one document must reuse one coordinator');
-          assert.equal(coordinatorDocument.listenerCount('keydown'), 1, 'coordinator must install exactly one document keydown listener');
-
-          let fallbackCount = 0;
-          let lowOpen = true;
-          let highOpen = true;
-          let lowCloseCount = 0;
-          let highCloseCount = 0;
-          coordinator.setEscapeFallback(() => { fallbackCount += 1; });
-          coordinator.registerDismissLayer({
-            priority: 10,
-            isOpen: () => lowOpen,
-            requestClose: () => { lowCloseCount += 1; lowOpen = false; return true; },
-          });
-          coordinator.registerDismissLayer({
-            priority: 20,
-            isOpen: () => highOpen,
-            requestClose: async () => { highCloseCount += 1; highOpen = false; return true; },
-          });
-
-          const firstEscape = new FakeEvent('Escape');
-          coordinatorDocument.dispatch('keydown', firstEscape);
-          await Promise.resolve();
-          assert.equal(highCloseCount, 1, 'first Escape must close the highest-priority layer');
-          assert.equal(lowCloseCount, 0);
-          assert.equal(fallbackCount, 0, 'closing a layer must not open the menu in the same event');
-          assert.equal(firstEscape.defaultPrevented, true);
-
-          coordinatorDocument.dispatch('keydown', new FakeEvent('Escape'));
-          await Promise.resolve();
-          assert.equal(lowCloseCount, 1, 'second Escape must close the next layer');
-          assert.equal(fallbackCount, 0);
-
-          coordinatorDocument.dispatch('keydown', new FakeEvent('Escape'));
-          assert.equal(fallbackCount, 1, 'Escape with no open layers must invoke the menu fallback');
-
-          const preHandledEscape = new FakeEvent('Escape');
-          preHandledEscape.preventDefault();
-          coordinatorDocument.dispatch('keydown', preHandledEscape);
-          assert.equal(fallbackCount, 1, 'already handled Escape must remain untouched');
-
-          coordinator.destroy();
-          coordinator.destroy();
-          assert.equal(coordinatorDocument.listenerCount('keydown'), 0, 'destroy must remove the document listener');
-          coordinatorDocument.dispatch('keydown', new FakeEvent('Escape'));
-          assert.equal(fallbackCount, 1);
-
-          const modalDocument = new FakeDocument();
-          const background = modalDocument.createElement('main');
-          const trigger = modalDocument.createElement('button');
-          background.append(trigger);
-          modalDocument.body.append(background);
-          trigger.focus();
-
-          let allowClose = false;
-          let closeNotifications = 0;
-          let firstButton: FakeElement | null = null;
-          let lastButton: FakeElement | null = null;
-          const modal = createAppModalLayer(modalDocument as unknown as Document, {
-            ariaLabel: 'Проверка общего модального слоя',
-            priority: 50,
-            trigger: trigger as unknown as HTMLElement,
-            beforeClose: () => allowClose,
-            onClosed: () => { closeNotifications += 1; },
-            render: (host) => {
-              firstButton = modalDocument.createElement('button');
-              lastButton = modalDocument.createElement('button');
-              (host as unknown as FakeElement).append(firstButton, lastButton);
-            },
-          });
-          await Promise.resolve();
-
-          assert.equal(background.inert, true, 'opening a modal must make background inert');
-          assert.equal(modalDocument.activeElement, firstButton, 'opening a modal must move focus inside');
-          const modalRoot = modalDocument.body.children.at(-1)!;
-          const dialog = modalRoot.children[0];
-          assert.equal(dialog.getAttribute('role'), 'dialog');
-          assert.equal(dialog.getAttribute('aria-modal'), 'true');
-
-          lastButton!.focus();
-          const tabForward = new FakeEvent('Tab');
-          modalRoot.dispatch('keydown', tabForward);
-          assert.equal(tabForward.defaultPrevented, true);
-          assert.equal(modalDocument.activeElement, firstButton, 'Tab from the last control must wrap to the first');
-
-          firstButton!.focus();
-          const tabBackward = new FakeEvent('Tab', true);
-          modalRoot.dispatch('keydown', tabBackward);
-          assert.equal(tabBackward.defaultPrevented, true);
-          assert.equal(modalDocument.activeElement, lastButton, 'Shift+Tab from the first control must wrap to the last');
-
-          assert.equal(await modal.requestClose(), false, 'beforeClose=false must keep the modal open');
-          assert.equal(background.inert, true);
-          assert.equal(closeNotifications, 0);
-
-          allowClose = true;
-          assert.equal(await modal.requestClose(), true);
-          assert.equal(background.inert, false, 'closing must restore the prior inert value');
-          assert.equal(modalDocument.activeElement, trigger, 'closing must restore trigger focus');
-          assert.equal(closeNotifications, 1);
-          modal.destroy();
-          assert.equal(closeNotifications, 1, 'destroy after close must be idempotent');
-
-          console.log('App shell overlay behavior smoke passed.');
-          EOF
-
-          git add \
-            package.json \
-            scripts/app_shell_overlay_smoke.mjs \
-            scripts/app_shell_overlay_behavior_smoke.mjs \
-            scripts/app_shell_overlay_behavior_smoke.ts \
-            src/main.ts \
-            src/combat-lab/main.ts \
-            src/shared/AiEditorShellMenuEntry.ts \
-            src/shared/AppShellMenu.ts \
-            src/shared/app-shell-menu.css \
-            src/shared/app-overlay/AppOverlayCoordinator.ts \
-            src/shared/app-overlay/AppModalLayer.ts \
-            src/shared/app-overlay/app-overlay.css
-
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/app_shell_overlay_behavior_smoke.ts src/core/units/UnitModel.ts src/core/testing/combat-lab/experiment/CombatLabParticipantInitialRuntime.ts
           if ! git diff --cached --quiet; then
-            git commit -m "merge(wave1): integrate shell and shared editor platform [wave1-bot]"
+            git commit -m "fix(wave1): centralize initial posture and correct modal test DOM [wave1-bot]"
             git push origin HEAD:integration/20260801-shared-game-editors-wave1
           fi
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Run Wave 1 verification matrix and publish report
+      - name: Run final matrix and publish report
         shell: bash
         run: |
           set +e
-          : > "$REPORT_FILE"
-          printf 'tested_commit=%s\n' "$(git rev-parse HEAD)" >> "$REPORT_FILE"
-          printf 'shell_source=%s\n' "$SHELL_HEAD" >> "$REPORT_FILE"
-          printf 'platform_source=%s\n' "$PLATFORM_HEAD" >> "$REPORT_FILE"
-          printf 'runner_node=%s\n' "$(node --version)" >> "$REPORT_FILE"
-          printf 'runner_npm=%s\n\n' "$(npm --version)" >> "$REPORT_FILE"
-
+          : > "$TEMP_REPORT"
+          printf 'tested_commit=%s\n' "$(git rev-parse HEAD)" >> "$TEMP_REPORT"
+          printf 'shell_source=%s\n' "$SHELL_HEAD" >> "$TEMP_REPORT"
+          printf 'platform_source=%s\n' "$PLATFORM_HEAD" >> "$TEMP_REPORT"
+          printf 'runner_node=%s\n' "$(node --version)" >> "$TEMP_REPORT"
+          printf 'runner_npm=%s\n\n' "$(npm --version)" >> "$TEMP_REPORT"
           overall=0
           run_check() {
-            label="$1"
-            shift
-            printf '## %s\n' "$label" >> "$REPORT_FILE"
-            "$@"
+            label="$1"; shift
+            printf '## %s\n' "$label" >> "$TEMP_REPORT"
+            output_file="$(mktemp)"
+            "$@" >"$output_file" 2>&1
             code=$?
-            printf 'exit=%s\n\n' "$code" >> "$REPORT_FILE"
-            if [ "$code" -ne 0 ]; then overall=1; fi
+            cat "$output_file"
+            printf 'exit=%s\n' "$code" >> "$TEMP_REPORT"
+            if [ "$code" -ne 0 ]; then
+              printf 'output_tail_begin\n' >> "$TEMP_REPORT"
+              tail -c 16000 "$output_file" >> "$TEMP_REPORT"
+              printf '\noutput_tail_end\n' >> "$TEMP_REPORT"
+              overall=1
+            fi
+            printf '\n' >> "$TEMP_REPORT"
+            rm -f "$output_file"
           }
 
           run_check "git diff --check" git diff --check "$PLATFORM_HEAD"..HEAD
+          run_check "git status --short before matrix" git status --short
           run_check "npm run app-shell-overlay:smoke" npm run app-shell-overlay:smoke
           run_check "npm run shared-game-editors:smoke" npm run shared-game-editors:smoke
           run_check "npm run typecheck" npm run typecheck
@@ -394,16 +122,19 @@ jobs:
           run_check "npm run attention-profiles:smoke" npm run attention-profiles:smoke
           run_check "npm run directional-terrain:smoke" npm run directional-terrain:smoke
           run_check "npm run environment-materials:smoke" npm run environment-materials:smoke
+          run_check "npm run posture-transition:smoke" npm run posture-transition:smoke
           run_check "npm run combat-lab-scenario-system:verify" npm run combat-lab-scenario-system:verify
           run_check "npm run combat-lab-experiment:smoke" npm run combat-lab-experiment:smoke
           run_check "npm run combat-lab-batch:smoke" npm run combat-lab-batch:smoke
           run_check "npm run infantry-combat-stage9:verify" npm run infantry-combat-stage9:verify
           run_check "npm run build" npm run build
+          run_check "git status --short after matrix" git status --short
+          printf 'overall_exit=%s\n' "$overall" >> "$TEMP_REPORT"
 
-          printf 'overall_exit=%s\n' "$overall" >> "$REPORT_FILE"
+          cp "$TEMP_REPORT" "$TRACKED_REPORT"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$REPORT_FILE"
-          git commit -m "test(wave1): publish integration verification [wave1-bot]"
+          git add "$TRACKED_REPORT"
+          git commit -m "test(wave1): publish final integration verification [wave1-bot]"
           git push origin HEAD:integration/20260801-shared-game-editors-wave1
           exit "$overall"
