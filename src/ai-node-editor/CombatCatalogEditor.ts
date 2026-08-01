@@ -1,4 +1,4 @@
-import { registerAiEditorSection } from './AiEditorSectionRegistry';
+import type { GameEditorInstallation, GameEditorMountContext } from '../game-editors/GameEditorTypes';
 import {
   COMBAT_CATALOG_ID_PATTERN,
   COMBAT_CATALOG_STORAGE_KEY,
@@ -50,12 +50,11 @@ interface PreparedDraft {
 }
 
 const EXPORT_FILE_NAME = 'real-wargame-combat-catalog-v1.json';
-const installedPanels = new WeakSet<HTMLElement>();
-const storage = new CombatCatalogStorageAdapter(resolveBrowserStorage());
-const initialLoad = storage.load();
 
-let registry = initialLoad.registry;
-let loadError = initialLoad.error;
+let storage: CombatCatalogStorageAdapter;
+let registry: CombatCatalogRegistry;
+let catalogStateInitialized = false;
+let loadError: ReturnType<CombatCatalogStorageAdapter['load']>['error'] = null;
 let activeKind: CatalogKind = 'ammo';
 let includeArchived = false;
 let selection: CatalogSelection | null = null;
@@ -63,30 +62,46 @@ let returnSelection: CatalogSelection | null = null;
 let draft: CatalogEntry | null = null;
 let draftOrigin: DraftOrigin = 'saved';
 let dirty = false;
-let currentIssues: readonly CatalogValidationIssue[] = initialLoad.error?.issues ?? [];
-let message = initialLoad.error?.messageRu ?? 'Каталоги готовы к редактированию.';
+let currentIssues: readonly CatalogValidationIssue[] = [];
+let message = 'Каталоги готовы к редактированию.';
 let activePanel: HTMLElement | null = null;
 
-registerAiEditorSection({
-  id: 'combatCatalogs',
-  labelRu: 'Вооружение',
-  order: 35,
-  render: renderCombatCatalogEditor,
-  beforeLeave: requestCombatCatalogEditorLeave,
-  onDeactivate: () => { activePanel = null; },
-});
-
-function renderCombatCatalogEditor(panel: HTMLElement): void {
+export function mountCombatCatalogEditor(context: GameEditorMountContext): GameEditorInstallation {
+  ensureCatalogState();
+  const panel = context.host;
   activePanel = panel;
   panel.dataset.combatCatalogWorkbench = 'true';
-  if (!installedPanels.has(panel)) {
-    installedPanels.add(panel);
-    panel.addEventListener('click', handlePanelClick);
-    panel.addEventListener('input', handlePanelInput);
-    panel.addEventListener('change', handlePanelChange);
-  }
+  panel.addEventListener('click', handlePanelClick);
+  panel.addEventListener('input', handlePanelInput);
+  panel.addEventListener('change', handlePanelChange);
   ensureSelection();
   render();
+
+  let destroyed = false;
+  return {
+    beforeClose: requestCombatCatalogEditorLeave,
+    destroy(): void {
+      if (destroyed) return;
+      destroyed = true;
+      panel.removeEventListener('click', handlePanelClick);
+      panel.removeEventListener('input', handlePanelInput);
+      panel.removeEventListener('change', handlePanelChange);
+      if (activePanel === panel) activePanel = null;
+      panel.replaceChildren();
+      delete panel.dataset.combatCatalogWorkbench;
+    },
+  };
+}
+
+function ensureCatalogState(): void {
+  if (catalogStateInitialized) return;
+  storage = new CombatCatalogStorageAdapter(resolveBrowserStorage());
+  const initialLoad = storage.load();
+  registry = initialLoad.registry;
+  loadError = initialLoad.error;
+  currentIssues = initialLoad.error?.issues ?? [];
+  message = initialLoad.error?.messageRu ?? 'Каталоги готовы к редактированию.';
+  catalogStateInitialized = true;
 }
 
 function requestCombatCatalogEditorLeave(): boolean {
