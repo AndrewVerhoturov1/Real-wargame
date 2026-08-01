@@ -3,6 +3,7 @@ export const COMBAT_LAB_WORKSPACE_TAB_DEFINITIONS = Object.freeze([
   { tabId: 'program', labelRu: 'Программа', titleRu: 'Программа эксперимента' },
   { tabId: 'batch', labelRu: 'Серия', titleRu: 'Серия прогонов' },
   { tabId: 'parameters', labelRu: 'Параметры', titleRu: 'Параметры бойцов' },
+  { tabId: 'settings', labelRu: 'Настройка игры', titleRu: 'Настройка игры' },
   { tabId: 'metrics', labelRu: 'Метрики', titleRu: 'Метрики текущего прогона' },
   { tabId: 'journal', labelRu: 'Журнал', titleRu: 'Журнал' },
 ] as const);
@@ -14,6 +15,7 @@ export interface CombatLabWorkspaceHosts {
   readonly program: HTMLElement;
   readonly batch: HTMLElement;
   readonly parameters: HTMLElement;
+  readonly settings: HTMLElement;
   readonly metrics: HTMLElement;
   readonly journal: HTMLElement;
 }
