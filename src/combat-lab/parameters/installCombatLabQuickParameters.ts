@@ -77,10 +77,6 @@ export function installCombatLabQuickParameters(
       return;
     }
     const links = resolveCombatLabSelectedUnitProfileLinks(context.unit);
-    if (links.length === 0) {
-      sourceProfilesHost.replaceChildren();
-      return;
-    }
 
     const section = document.createElement('section');
     section.className = 'combat-lab-source-profile-links';
@@ -93,13 +89,15 @@ export function installCombatLabQuickParameters(
       row.className = 'combat-lab-source-profile-link';
       const label = document.createElement('span');
       label.className = 'combat-lab-source-profile-link-name';
-      label.textContent = `${link.labelRu}: ${link.profileId}`;
+      label.textContent = link.profileId
+        ? `${link.labelRu}: ${link.profileId}`
+        : `${link.labelRu}: не указан — редактор откроет текущий профиль`;
       const button = document.createElement('button');
       button.type = 'button';
       button.textContent = 'Открыть профиль';
       const listener: EventListener = () => onOpenSourceProfile({
         editorId: link.editorId,
-        profileId: link.profileId,
+        ...(link.profileId ? { profileId: link.profileId } : {}),
         selectedUnitId: context.unit.id,
         returnTo: '/combat-lab.html?tab=parameters',
       }, button);
