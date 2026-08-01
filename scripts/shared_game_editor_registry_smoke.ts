@@ -117,6 +117,8 @@ const fakeStorage = {
   localStorage: fakeStorage,
   confirm: () => true,
   prompt: () => null,
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
 };
 
 const { createDefaultGameEditorRegistry } = await import('../src/game-editors/createDefaultGameEditorRegistry');
