@@ -1,0 +1,82 @@
+name: Temporary Wave 1 Fast Late Responsive Patch
+
+on:
+  push:
+    branches:
+      - compiler/20260801-shared-game-editors-wave1
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: contains(github.event.head_commit.message, '[fast-responsive-override]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Apply verified late stylesheet fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "wave1-compiler-bot"
+          git config user.email "wave1-compiler-bot@users.noreply.github.com"
+
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/shared_game_editor_platform_smoke.mjs')
+          source = path.read_text()
+          marker = "const combatLabCss = read('src/combat-lab/combat-lab.css');"
+          addition = """const aiEditorUxCss = read('src/ai-node-editor/ai-node-editor-ux.css');
+          const aiEditorUxBodyRule = aiEditorUxCss.match(/(?:^|\\n)body\\s*\\{([^}]*)\\}/i)?.[1] ?? '';
+          const fixedAiEditorUxBodyMinWidth = aiEditorUxBodyRule.match(/min-width\\s*:\\s*(\\d+(?:\\.\\d+)?)px/i);
+          if (fixedAiEditorUxBodyMinWidth && Number(fixedAiEditorUxBodyMinWidth[1]) > 0) {
+            failures.push('src/ai-node-editor/ai-node-editor-ux.css: late editor styles must not restore a positive fixed body min-width');
+          }
+
+          """
+          assert addition not in source, 'late stylesheet regression contract already exists'
+          assert marker in source, 'Combat Lab contract marker not found'
+          path.write_text(source.replace(marker, addition + marker, 1))
+          PY
+          git add scripts/shared_game_editor_platform_smoke.mjs
+          git commit -m "test(wave1): reject late fixed AI editor width [red]"
+
+          set +e
+          output="$(npm run shared-game-editors:smoke 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          test "$status" -ne 0
+          grep -F "src/ai-node-editor/ai-node-editor-ux.css: late editor styles must not restore a positive fixed body min-width" <<<"$output"
+
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/ai-node-editor/ai-node-editor-ux.css')
+          source = path.read_text()
+          old = """body {
+            min-width: 1180px;
+          }
+          """
+          new = """body {
+            min-width: 0;
+          }
+          """
+          assert old in source, 'expected late fixed body width not found'
+          path.write_text(source.replace(old, new, 1))
+          PY
+          git add src/ai-node-editor/ai-node-editor-ux.css
+          git commit -m "fix(wave1): remove late AI editor width override"
+          npm run shared-game-editors:smoke
+
+          printf 'patched_sha=%s\n' "$(git rev-parse HEAD)" > .tmp-wave1-responsive-override-patched
+          git add .tmp-wave1-responsive-override-patched
+          git commit -m "chore(wave1): record late responsive patch"
+          git push origin HEAD:compiler/20260801-shared-game-editors-wave1
