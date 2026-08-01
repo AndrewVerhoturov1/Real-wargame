@@ -30,6 +30,7 @@ function expectExcludes(relativePath, snippets) {
 
 const files = [
   'src/core/tuning/GameplayTuningProfiles.ts',
+  'src/core/tuning/GameplayTuningRuntime.ts',
   'src/ui/GameplayTuningProfileStorage.ts',
   'src/ai-node-editor/GameplayTuningProfileEditor.ts',
   'src/ai-node-editor/GameplayTuningProfileEditorIntegration.ts',
@@ -62,30 +63,48 @@ expectExcludes('src/core/tuning/GameplayTuningProfiles.ts', [
   'icon',
 ]);
 
+expectIncludes('src/core/tuning/GameplayTuningRuntime.ts', [
+  'getActiveConditionProfileSnapshot',
+  'setActiveConditionProfileId',
+  'restoreActiveConditionProfileId',
+]);
+expectExcludes('src/core/tuning/GameplayTuningRuntime.ts', [
+  'localStorage',
+  'document.',
+  'window.',
+]);
+
 expectIncludes('src/ui/GameplayTuningProfileStorage.ts', [
   'real-wargame.gameplay-tuning-profiles.v1',
   'loadGameplayTuningProfiles',
   'saveGameplayTuningProfiles',
   'subscribeGameplayTuningProfiles',
   'replaceGameplayTuningRegistry',
+  'installSoldierArchetypeResolver',
 ]);
 
 expectIncludes('src/ai-node-editor/GameplayTuningProfileEditor.ts', [
-  'profileId',
+  'context.request.profileId',
   'Создать копию',
   'Переименовать',
-  'Сбросить',
+  'Сбросить реестр',
   'Удалить',
   'Импорт',
   'Экспорт',
   'beforeClose',
+  'builtIn ? \'disabled\'',
+]);
+expectExcludes('src/ai-node-editor/GameplayTuningProfileEditor.ts', [
+  'setInterval(',
+  'requestAnimationFrame(',
+  'querySelector(\'#',
 ]);
 expectIncludes('src/ai-node-editor/GameplayTuningProfileEditorIntegration.ts', [
   'mountPerceptionProfileEditor',
   'mountSoldierArchetypeEditor',
   'mountConditionProfileEditor',
-  'requestClose',
-  'destroy()',
+  'beforeClose:',
+  'editor.destroy()',
 ]);
 
 const registrySource = read('src/game-editors/createDefaultGameEditorRegistry.ts');
@@ -105,26 +124,23 @@ expectIncludes('src/core/perception/PerceptionContact.ts', [
   'profile.contact.evidenceDecayPerSecond',
   'profile.contact.uncertaintyGrowthMetersPerSecond',
 ]);
-expectIncludes('src/core/units/UnitModel.ts', [
-  'soldierArchetypeId?: string',
-  'conditionProfileId?: string',
-  'perceptionProfileId?: string',
-  'resolveSoldierArchetypeSnapshot',
-  'resolveConditionProfileSnapshot',
-  'soldierArchetypeProfile:',
-  'conditionProfile:',
+expectIncludes('src/core/behavior/BehaviorModel.ts', [
+  'SoldierArchetypeResolver',
+  'installSoldierArchetypeResolver',
+  'soldierArchetypeResolver?.(profileId)',
 ]);
 expectIncludes('src/core/combat/CombatDamage.ts', [
-  'unit.conditionProfile.wound',
+  'getActiveConditionProfileSnapshot',
+  'conditionProfile.wound.limbHitStressGain',
   'woundedMovementMultiplier',
   'severelyWoundedAimMultiplier',
-  'limbHitStressGain',
 ]);
 expectIncludes('src/core/combat/CombatSuppression.ts', [
-  'unit.conditionProfile.suppression',
-  'gainMultiplier',
-  'decayPerSecond',
-  'stressMultiplier',
+  'getActiveConditionProfileSnapshot',
+  'suppressionProfile.gainMultiplier',
+  'suppressionProfile.decayPerSecond',
+  'suppressionProfile.stressMultiplier',
+  'suppressionProfile.maximumSuppression',
 ]);
 
 if (failures.length > 0) {
