@@ -4,10 +4,6 @@
   --combat-lab-dock-gap: 10px;
 }
 
-body.app-shell-mode-combat-lab .app-shell-menu {
-  display: none !important;
-}
-
 body.app-shell-mode-combat-lab {
   overflow-x: hidden;
 }
