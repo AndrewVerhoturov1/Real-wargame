@@ -69,7 +69,7 @@ assert.equal(firstDestroyCount, 1, 'accepted switch must destroy the previous in
 workspace.destroy();
 workspace.destroy();
 assert.equal(secondDestroyCount, 1, 'workspace destroy must be idempotent');
-assert.throws(() => workspace.open({ editorId: 'first' }), /destroyed/);
+await assert.rejects(workspace.open({ editorId: 'first' }), /destroyed/);
 
 const defaultRegistry = createDefaultGameEditorRegistry();
 assert.equal(defaultRegistry.list().length, 9, 'all nine existing editors must be registered exactly once');
