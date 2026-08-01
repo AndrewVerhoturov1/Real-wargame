@@ -1,0 +1,64 @@
+tested_commit=ebbc9876222138bf127cbd41f735ba58795f4673
+shell_source=26e7cc7fe9c6fc7855d2781fc2c0a539cbb1a049
+platform_source=af9e54036658e95a8df680658be73e589efae4b4
+runner_node=v22.23.1
+runner_npm=10.9.8
+
+## git diff --check
+exit=0
+
+## npm run app-shell-overlay:smoke
+exit=1
+
+## npm run shared-game-editors:smoke
+exit=0
+
+## npm run typecheck
+exit=0
+
+## npm run combat-lab-ui-contract:smoke
+exit=0
+
+## npm run editor:smoke
+exit=0
+
+## npm run workspace-architecture-contract:smoke
+exit=0
+
+## npm run performance-contract:smoke
+exit=0
+
+## npm run graph-v2:smoke
+exit=0
+
+## npm run movement-profiles:smoke
+exit=0
+
+## npm run combat-catalog-editor:smoke
+exit=0
+
+## npm run attention-profiles:smoke
+exit=0
+
+## npm run directional-terrain:smoke
+exit=0
+
+## npm run environment-materials:smoke
+exit=0
+
+## npm run combat-lab-scenario-system:verify
+exit=0
+
+## npm run combat-lab-experiment:smoke
+exit=0
+
+## npm run combat-lab-batch:smoke
+exit=0
+
+## npm run infantry-combat-stage9:verify
+exit=1
+
+## npm run build
+exit=0
+
+overall_exit=1
