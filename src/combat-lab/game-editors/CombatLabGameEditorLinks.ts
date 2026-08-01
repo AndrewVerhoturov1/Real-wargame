@@ -47,6 +47,13 @@ export function resolveCombatLabSelectedUnitProfileLinks(
     labelRu: 'Профиль внимания',
   }));
 
+  for (const link of readUnitSourceProfileLinks(unit)) {
+    if (links.some((candidate) => (
+      candidate.editorId === link.editorId && candidate.profileId === link.profileId
+    ))) continue;
+    links.push(link);
+  }
+
   return Object.freeze(links);
 }
 
@@ -82,6 +89,21 @@ export function readCombatLabGameEditorOpenRequest(
     request,
     trigger: detail.trigger instanceof HTMLElement ? detail.trigger : null,
   });
+}
+
+function readUnitSourceProfileLinks(unit: UnitModel): readonly CombatLabSourceProfileLink[] {
+  const soldier = unit.soldier as unknown;
+  if (!isRecord(soldier) || !Array.isArray(soldier.sourceProfileLinks)) return [];
+  const links: CombatLabSourceProfileLink[] = [];
+  for (const candidate of soldier.sourceProfileLinks) {
+    if (!isRecord(candidate)) continue;
+    const editorId = stringId(candidate.editorId);
+    const profileId = stringId(candidate.profileId);
+    const labelRu = stringId(candidate.labelRu);
+    if (!editorId || !profileId || !labelRu) continue;
+    links.push(Object.freeze({ editorId, profileId, labelRu }));
+  }
+  return Object.freeze(links);
 }
 
 function firstId(...values: unknown[]): string | null {
