@@ -1,0 +1,63 @@
+name: Screenshot Capability Check
+
+on:
+  pull_request:
+    branches:
+      - ci/screenshot-capability-base-20260801t2212z-850c6f3
+
+permissions:
+  contents: read
+
+jobs:
+  browser-screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright
+        run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start real application
+        shell: bash
+        run: |
+          npm run engine:dev > /tmp/real-wargame-engine.log 2>&1 &
+          npm run dev -- --host 127.0.0.1 > /tmp/real-wargame-vite.log 2>&1 &
+          for i in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:5173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'Vite did not become ready'
+          cat /tmp/real-wargame-vite.log || true
+          exit 1
+
+      - name: Capture real browser screenshots
+        run: npx playwright test --config=ci/playwright.screenshot-capability.config.ts
+
+      - name: Upload screenshots and browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-capability-${{ github.run_id }}
+          path: |
+            artifacts/screenshot-capability/**
+            test-results/screenshot-capability/**
+            playwright-report/screenshot-capability/**
+            /tmp/real-wargame-vite.log
+            /tmp/real-wargame-engine.log
+          if-no-files-found: warn
+          retention-days: 7
