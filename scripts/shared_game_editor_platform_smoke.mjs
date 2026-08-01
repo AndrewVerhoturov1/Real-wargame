@@ -110,7 +110,8 @@ expectIncludes('src/game-editors/createDefaultGameEditorRegistry.ts', [
   "surface === 'combat-lab'",
   "? 'route'",
   "const baseRoute = '/ai-node-editor.html'",
-  "search.set('returnTo', request.returnTo)",
+  'const safeReturnTo = getSafeGameEditorReturnTarget(request.returnTo)',
+  "search.set('returnTo', safeReturnTo)",
   'mountEnvironmentProfileEditor',
   "import { mountCombatCatalogEditor } from '../ai-node-editor/CombatCatalogEditor'",
   'mount: mountCombatCatalogEditor',
@@ -119,6 +120,7 @@ expectIncludes('src/game-editors/createDefaultGameEditorRegistry.ts', [
   'mountConditionProfileEditor',
 ]);
 expectExcludes('src/game-editors/createDefaultGameEditorRegistry.ts', [
+  "search.set('returnTo', request.returnTo)",
   "import '../ai-node-editor/CombatCatalogEditor'",
   'requireLegacyAiEditorSection',
   'reusableWeaponsPanel',
