@@ -100,6 +100,8 @@ export interface UnitBehaviorRuntime {
   physicalAction: UnitPhysicalAction | null;
 }
 
+export type SoldierArchetypeResolver = (profileId: string) => SoldierParameters | null;
+
 export const DEFAULT_BEHAVIOR_PROFILE: BehaviorProfileId = 'regular';
 
 export const BEHAVIOR_PROFILES: Record<BehaviorProfileId, BehaviorSettings> = {
@@ -268,6 +270,12 @@ export const SOLDIER_PARAMETERS_BY_PROFILE: Record<BehaviorProfileId, SoldierPar
   },
 };
 
+let soldierArchetypeResolver: SoldierArchetypeResolver | null = null;
+
+export function installSoldierArchetypeResolver(resolver: SoldierArchetypeResolver | null): void {
+  soldierArchetypeResolver = resolver;
+}
+
 export const POSTURE_MOVE_MULTIPLIER: Record<UnitPosture, number> = {
   standing: 1,
   crouched: 0.65,
@@ -299,10 +307,11 @@ export function createBehaviorSettings(
 }
 
 export function createSoldierParameters(
-  profileId: BehaviorProfileId,
+  profileId: string,
   overrides: SoldierParameterOverrides = {},
 ): SoldierParameters {
-  const base = SOLDIER_PARAMETERS_BY_PROFILE[profileId];
+  const resolved = soldierArchetypeResolver?.(profileId);
+  const base = resolved ?? SOLDIER_PARAMETERS_BY_PROFILE[normalizeBehaviorProfileId(profileId)];
 
   return {
     traits: {
