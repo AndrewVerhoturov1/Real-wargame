@@ -180,18 +180,20 @@ for (const coreSource of [materialCoreSource, materialRuntimeSource]) {
 assert.match(storageAdapterSource, /window\.localStorage/, 'browser persistence must live in the UI adapter');
 assert.equal(materialRuntimeSource.includes('EnvironmentProfileStorage'), false, 'core runtime must not depend on the browser storage adapter');
 
-const sectionRegistrySource = readFileSync('src/ai-node-editor/AiEditorSectionRegistry.ts', 'utf8');
+const sharedRegistrySource = readFileSync('src/game-editors/createDefaultGameEditorRegistry.ts', 'utf8');
 const environmentIntegrationSource = readFileSync('src/ai-node-editor/EnvironmentProfileEditorIntegration.ts', 'utf8');
 const movementIntegrationSource = readFileSync('src/ai-node-editor/MovementProfileEditorIntegration.ts', 'utf8');
 const panelSource = readFileSync('src/ai-node-editor/EnvironmentProfileEditorPanel.ts', 'utf8');
 const mainSource = readFileSync('src/main.ts', 'utf8');
 assert.match(mainSource, /requestedInitialEnvironmentProfileId[\s\S]*hasProfile\(requestedInitialEnvironmentProfileId\)/, 'an explicit map profile ID must be activated when its registry entry exists');
-assert.match(environmentIntegrationSource, /labelRu:\s*'Профили местности'/, 'environment editor must register through the shared section registry');
-assert.match(environmentIntegrationSource, /order:\s*25/, 'environment editor must sit between route and movement profiles');
-assert.match(movementIntegrationSource, /order:\s*30/, 'movement editor must follow environment profiles');
-assert.match(sectionRegistrySource, /\['profiles',\s*'Профили маршрута',\s*20\]/, 'the legacy profiles tab must be labelled as route profiles');
-assert.match(sectionRegistrySource, /\['attentionProfiles',\s*'Профили внимания',\s*40\]/);
-assert.match(sectionRegistrySource, /\['blackboard',\s*'Данные бойца',\s*50\]/);
+assert.match(environmentIntegrationSource, /mountEnvironmentProfileEditor/, 'environment editor must expose a direct mount');
+assert.match(environmentIntegrationSource, /const panel = context\.host/, 'environment editor must mount into the supplied host');
+assert.match(movementIntegrationSource, /mountMovementProfileEditor/, 'movement editor must expose a direct mount');
+assert.doesNotMatch(environmentIntegrationSource, /registerAiEditorSection|AiEditorSectionRegistry/);
+assert.doesNotMatch(movementIntegrationSource, /registerAiEditorSection|AiEditorSectionRegistry/);
+assert.match(sharedRegistrySource, /id:\s*'routeProfiles'[\s\S]*labelRu:\s*'Профили маршрута'/);
+assert.match(sharedRegistrySource, /id:\s*'attentionProfiles'[\s\S]*labelRu:\s*'Профили внимания'/);
+assert.match(sharedRegistrySource, /id:\s*'soldierData'[\s\S]*labelRu:\s*'Данные бойца'/);
 for (const label of ['Покрытие', 'Потеря обзора', 'Ослабление огня', 'Сопротивление движению', 'Импорт', 'Экспорт']) assert.match(panelSource, new RegExp(label));
 assert.doesNotMatch(panelSource, /Технический id|Новое английское название/, 'normal profile operations must not require technical identifiers or English metadata');
 assert.match(panelSource, /textField\('nameRu', 'Название'/, 'material names must be editable in Russian without exposing technical IDs');

@@ -169,7 +169,7 @@ expectIncludes('src/ai-node-editor/AiEditorGameEditorPlatform.ts', [
   'definition.labelRu',
   "const initialEditorId =",
   "'behaviorGraph'",
-  'const graphRoot = document.getElementById',
+  'const graphRootElement = document.getElementById',
   'graphParking.append(graphRoot)',
   'context.host.replaceChildren(graphRoot)',
   'mountBehaviorGraph',

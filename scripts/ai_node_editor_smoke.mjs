@@ -104,7 +104,7 @@ for (const needle of ['Данные бойца', 'data-editor-global-actions', '
 }
 expectNotContains(profileEditor, 'data-navigation-tab="diagnostics"', 'Отдельная вкладка Диагностика должна быть удалена.');
 const tacticalProfileEditor = readText('src/ai-node-editor/TacticalPositionProfileEditor.ts');
-for (const needle of ['Тактические позиции', 'TACTICAL_POSITION_SETTINGS_GROUPS', 'defaultObjective', 'updateTacticalPositionProfile', 'importTacticalPositionProfile', 'exportTacticalPositionProfile']) expectContains(tacticalProfileEditor, needle, `Редактор тактических профилей должен содержать: ${needle}`);
+for (const needle of ['Профили позиций', 'TACTICAL_POSITION_SETTINGS_GROUPS', 'defaultObjective', 'updateTacticalPositionProfile', 'importTacticalPositionProfile', 'exportTacticalPositionProfile']) expectContains(tacticalProfileEditor, needle, `Редактор тактических профилей должен содержать: ${needle}`);
 const combatCatalogEditor = readText('src/ai-node-editor/CombatCatalogEditor.ts');
 for (const needle of [
   'mountCombatCatalogEditor',

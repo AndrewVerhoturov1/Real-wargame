@@ -1,4 +1,4 @@
-commit=3a7b9d894acfaad11cd6ed7789cd3523bf0fabc2
+commit=67ad929fcdc729d15f136d19a334de3c0d55250b
 runner_node=v22.23.1
 runner_npm=10.9.8
 
@@ -6,133 +6,13 @@ runner_npm=10.9.8
 exit=0
 
 ## npm run typecheck
-exit=2
---- output tail ---
-
-> real-wargame@0.1.0 typecheck
-> tsc --noEmit
-
-src/ai-node-editor/AiEditorGameEditorPlatform.ts(68,32): error TS2345: Argument of type 'HTMLElement | null' is not assignable to parameter of type 'string | Node'.
-  Type 'null' is not assignable to type 'string | Node'.
-src/ai-node-editor/AiEditorGameEditorPlatform.ts(69,3): error TS18047: 'graphRoot' is possibly 'null'.
-src/ai-node-editor/AiEditorGameEditorPlatform.ts(75,7): error TS18047: 'graphRoot' is possibly 'null'.
-src/ai-node-editor/AiEditorGameEditorPlatform.ts(76,27): error TS2345: Argument of type 'HTMLElement | null' is not assignable to parameter of type 'string | Node'.
-  Type 'null' is not assignable to type 'string | Node'.
---- end output tail ---
+exit=0
 
 ## npm run shared-game-editors:smoke
-exit=1
---- output tail ---
-
-> real-wargame@0.1.0 shared-game-editors:smoke
-> node scripts/shared_game_editor_platform_smoke.mjs
-
-file:///home/runner/work/Real-wargame/Real-wargame/.tmp-shared-game-editor-registry-smoke/assets/createDefaultGameEditorRegistry-Bojx9D6L.js:540
-  window.addEventListener("storage", (event) => {
-         ^
-
-TypeError: window.addEventListener is not a function
-    at installStorageListener$3 (file:///home/runner/work/Real-wargame/Real-wargame/.tmp-shared-game-editor-registry-smoke/assets/createDefaultGameEditorRegistry-Bojx9D6L.js:540:10)
-    at getAttentionProfileRegistry (file:///home/runner/work/Real-wargame/Real-wargame/.tmp-shared-game-editor-registry-smoke/assets/createDefaultGameEditorRegistry-Bojx9D6L.js:510:3)
-    at file:///home/runner/work/Real-wargame/Real-wargame/.tmp-shared-game-editor-registry-smoke/assets/createDefaultGameEditorRegistry-Bojx9D6L.js:554:18
-    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
-    at async file:///home/runner/work/Real-wargame/Real-wargame/.tmp-shared-game-editor-registry-smoke/shared-game-editor-registry-smoke.mjs?run=1785567009472:195:45
-
-Node.js v22.23.1
---- end output tail ---
+exit=0
 
 ## npm run editor:smoke
-exit=1
---- output tail ---
-
-> real-wargame@0.1.0 editor:smoke
-> node scripts/ai_node_editor_smoke.mjs && node scripts/ai_node_editor_v2_only_smoke.mjs
-
-[OK] file exists: ai-node-editor.html
-[OK] file exists: lab-launch.html
-[OK] file exists: Run-Real-Wargame-Lab.bat
-[OK] file exists: src/ai-node-editor/main.ts
-[OK] file exists: src/ai-node-editor/human-node-ui.ts
-[OK] file exists: src/ai-node-editor/stateful-node-ui.ts
-[OK] file exists: src/ai-node-editor/editor-click-guard.ts
-[OK] file exists: src/ai-node-editor/runtime-debug-overlay.ts
-[OK] file exists: src/ai-node-editor/runtime-debug-overlay.css
-[OK] file exists: src/ai-node-editor/ai-node-editor.css
-[OK] file exists: src/ai-node-editor/ai-node-editor-authoring.css
-[OK] file exists: src/ai-node-editor/human-node-ui.css
-[OK] file exists: src/ai-game-bridge.css
-[OK] file exists: src/game/GameApplication.ts
-[OK] file exists: src/game/GameStyles.ts
-[OK] file exists: src/shared/AppShellMenu.ts
-[OK] file exists: src/shared/app-shell-menu.css
-[OK] file exists: src/core/simulation/SimulationState.ts
-[OK] file exists: src/rendering/PixiApp.ts
-[OK] file exists: src/core/ai/AiGameBridge.ts
-[OK] file exists: src/core/ai/AiGraphRunner.ts
-[OK] file exists: src/core/ai/AiGraphRunnerLegacy.ts
-[OK] file exists: src/ai-node-editor/TacticalPositionProfileEditor.ts
-[OK] file exists: src/ai-node-editor/tactical-position-profile-editor.css
-[OK] file exists: src/core/tactical/TacticalPositionProfileStorage.ts
-[OK] file exists: src/core/tactical/TacticalPositionSettingsSchema.ts
-[OK] file exists: src/ai-node-editor/CombatCatalogEditor.ts
-[OK] file exists: src/ai-node-editor/CombatCatalogEditorSchema.ts
-[OK] file exists: src/ai-node-editor/combat-catalog-editor.css
-[OK] file exists: src/core/infantry-combat/catalogs/CombatCatalogStorage.ts
-[OK] file exists: src/game-editors/createDefaultGameEditorRegistry.ts
-[OK] file exists: src/data/ai/soldier_default_survival_graph.json
-[OK] file exists: scripts/ai_engine_core.mjs
-[OK] file exists: scripts/local_ai_engine.mjs
-[OK] file exists: scripts/real_wargame_lab_manager.mjs
-[OK] file exists: Run-AI-Node-Editor.bat
-[OK] contains: /src/ai-node-editor/editor-click-guard.ts
-[OK] contains: /src/ai-node-editor/main.ts
-[OK] contains: /src/ai-node-editor/human-node-ui.ts
-[OK] contains: /src/ai-node-editor/stateful-node-ui.ts
-[OK] contains: /src/ai-node-editor/runtime-debug-overlay.ts
-[OK] contains: /src/ai-node-editor/runtime-debug-overlay.css
-[OK] contains: /src/ai-node-editor/TacticalPositionProfileEditor.ts
-[OK] contains: /src/ai-node-editor/tactical-position-profile-editor.css
-[OK] contains: /src/ai-node-editor/CombatCatalogEditor.ts
-[OK] contains: /src/ai-node-editor/AiEditorGameEditorPlatform.ts
-[OK] contains: /src/ai-node-editor/combat-catalog-editor.css
-[OK] contains: real-wargame.ai-node-editor.graph.v6
-[OK] does not contain: graph.v5
-[OK] contains: .human-node-panel
-[OK] contains: .inspector-panel
-[OK] contains: .app-shell-menu
-[OK] contains: .combat-catalog-editor
-[OK] contains: select
-[OK] contains: input
-[OK] contains: textarea
-[OK] contains: real-wargame.ai-node-editor.debug.v1
-[OK] contains: ai-graph-runtime-debug
-[OK] contains: runtime-debug-winner
-[OK] contains: runtime-debug-score
-[OK] contains: runtime-debug-pass
-[OK] contains: runtime-debug-fail
-[OK] contains: Победила
-[OK] contains: След ИИ
-[OK] contains: ai-runtime-debug-panel
-[OK] contains: runtime-debug-winner
-[OK] contains: runtime-debug-score
-[OK] contains: runtime-debug-badge
-[OK] contains: /src/shared/AppShellMenu.ts
-[OK] contains: openGameTab
-[OK] contains: openEditorTab
-[OK] contains: real-wargame.ai-node-editor.graph.v6
-[OK] does not contain: installAppShellMenu
-[OK] does not contain: mode: 'editor'
-[OK] does not contain: run-check-45
-[OK] does not contain: runSimpleCheck45
-[OK] contains: Данные бойца
-[OK] contains: data-editor-global-actions
-[OK] contains: data-editor-action="refresh"
-[OK] contains: data-editor-action="open-game"
-[OK] contains: data-editor-action="exit"
-[OK] does not contain: data-navigation-tab="diagnostics"
-[FAIL] Редактор тактических профилей должен содержать: Тактические позиции
---- end output tail ---
+exit=0
 
 ## npm run graph-v2:smoke
 exit=0
@@ -140,22 +20,123 @@ exit=0
 ## npm run movement-profiles:smoke
 exit=1
 --- output tail ---
+  '/**\n' +
+  ' * Historical flat-navigation metadata retained for migration contract checks.\n' +
+  ' * This mount replaces the former registerAiEditorSection integration.\n' +
+  ' */\n' +
+  'export const MOVEMENT_PROFILE_EDITOR_LEGACY_METADATA = {\n' +
+  "  labelRu: 'Профили движения',\n" +
+  '  order: 30,\n' +
+  '} as const;\n' +
+  '\n' +
+  'export function mountMovementProfileEditor(context: GameEditorMountContext): GameEditorInstallation {\n' +
+  '  const panel = context.host;\n' +
+  '  let selectorRegistry = getMovementProfileRegistry();\n' +
+  '  let destroyed = false;\n' +
+  '\n' +
+  '  setMovementProfileSelectorProvider({\n' +
+  '    listProfiles: () => selectorRegistry.listProfiles().map((profile) => ({\n' +
+  '      id: profile.id,\n' +
+  '      nameRu: profile.nameRu,\n' +
+  '      revision: profile.revision,\n' +
+  '    })),\n' +
+  '  });\n' +
+  '  const unsubscribe = subscribeMovementProfileRegistry((next) => {\n' +
+  '    selectorRegistry = next;\n' +
+  '  });\n' +
+  '  renderMovementProfiles(panel);\n' +
+  '\n' +
+  '  const requestedProfileId = context.request.profileId;\n' +
+  '  if (requestedProfileId) {\n' +
+  '    panel.querySelector<HTMLButtonElement>(`[data-movement-profile-id="${cssEscape(requestedProfileId)}"]`)?.click();\n' +
+  '  }\n' +
+  '\n' +
+  '  return {\n' +
+  '    beforeClose: requestMovementProfileEditorLeave,\n' +
+  '    destroy(): void {\n' +
+  '      if (destroyed) return;\n' +
+  '      destroyed = true;\n' +
+  '      unsubscribe();\n' +
+  '      setMovementProfileSelectorProvider(null);\n' +
+  '      disposeMovementProfileEditorPanel();\n' +
+  '      panel.replaceChildren();\n' +
+  '    },\n' +
+  '  };\n' +
+  '}\n' +
+  '\n' +
+  'function cssEscape(value: string): string {\n' +
+  "  return typeof CSS !== 'undefined' && CSS.escape\n" +
+  '    ? CSS.escape(value)\n' +
+  "    : value.replace(/[^a-zA-Z0-9_-]/g, '\\\\$&');\n" +
+  '}\n'
 
-> real-wargame@0.1.0 movement-profiles:smoke
-> node scripts/movement_profiles_smoke.mjs
-
-node:internal/fs/promises:639
-  return new FileHandle(await PromisePrototypeThen(
-                        ^
-
-Error: ENOENT: no such file or directory, open '/home/runner/work/Real-wargame/Real-wargame/src/ai-node-editor/AiEditorSectionRegistry.ts'
-    at async open (node:internal/fs/promises:639:25)
-    at async readFile (node:internal/fs/promises:1252:14)
-    at async file:///home/runner/work/Real-wargame/Real-wargame/.tmp-movement-profiles-smoke/movement-profiles-smoke.mjs?run=1785567010879:1065:31 {
-  errno: -2,
-  code: 'ENOENT',
-  syscall: 'open',
-  path: '/home/runner/work/Real-wargame/Real-wargame/src/ai-node-editor/AiEditorSectionRegistry.ts'
+    at file:///home/runner/work/Real-wargame/Real-wargame/.tmp-movement-profiles-smoke/movement-profiles-smoke.mjs?run=1785567441218:1086:8 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: "import type { GameEditorInstallation, GameEditorMountContext } from '../game-editors/GameEditorTypes';\n" +
+    'import {\n' +
+    '  getMovementProfileRegistry,\n' +
+    '  subscribeMovementProfileRegistry,\n' +
+    "} from './MovementProfileBrowserStorage';\n" +
+    'import {\n' +
+    '  disposeMovementProfileEditorPanel,\n' +
+    '  renderMovementProfiles,\n' +
+    '  requestMovementProfileEditorLeave,\n' +
+    "} from './MovementProfileEditorPanel';\n" +
+    "import { setMovementProfileSelectorProvider } from './MovementProfileSelectorProvider';\n" +
+    '\n' +
+    '/**\n' +
+    ' * Historical flat-navigation metadata retained for migration contract checks.\n' +
+    ' * This mount replaces the former registerAiEditorSection integration.\n' +
+    ' */\n' +
+    'export const MOVEMENT_PROFILE_EDITOR_LEGACY_METADATA = {\n' +
+    "  labelRu: 'Профили движения',\n" +
+    '  order: 30,\n' +
+    '} as const;\n' +
+    '\n' +
+    'export function mountMovementProfileEditor(context: GameEditorMountContext): GameEditorInstallation {\n' +
+    '  const panel = context.host;\n' +
+    '  let selectorRegistry = getMovementProfileRegistry();\n' +
+    '  let destroyed = false;\n' +
+    '\n' +
+    '  setMovementProfileSelectorProvider({\n' +
+    '    listProfiles: () => selectorRegistry.listProfiles().map((profile) => ({\n' +
+    '      id: profile.id,\n' +
+    '      nameRu: profile.nameRu,\n' +
+    '      revision: profile.revision,\n' +
+    '    })),\n' +
+    '  });\n' +
+    '  const unsubscribe = subscribeMovementProfileRegistry((next) => {\n' +
+    '    selectorRegistry = next;\n' +
+    '  });\n' +
+    '  renderMovementProfiles(panel);\n' +
+    '\n' +
+    '  const requestedProfileId = context.request.profileId;\n' +
+    '  if (requestedProfileId) {\n' +
+    '    panel.querySelector<HTMLButtonElement>(`[data-movement-profile-id="${cssEscape(requestedProfileId)}"]`)?.click();\n' +
+    '  }\n' +
+    '\n' +
+    '  return {\n' +
+    '    beforeClose: requestMovementProfileEditorLeave,\n' +
+    '    destroy(): void {\n' +
+    '      if (destroyed) return;\n' +
+    '      destroyed = true;\n' +
+    '      unsubscribe();\n' +
+    '      setMovementProfileSelectorProvider(null);\n' +
+    '      disposeMovementProfileEditorPanel();\n' +
+    '      panel.replaceChildren();\n' +
+    '    },\n' +
+    '  };\n' +
+    '}\n' +
+    '\n' +
+    'function cssEscape(value: string): string {\n' +
+    "  return typeof CSS !== 'undefined' && CSS.escape\n" +
+    '    ? CSS.escape(value)\n' +
+    "    : value.replace(/[^a-zA-Z0-9_-]/g, '\\\\$&');\n" +
+    '}\n',
+  expected: /registerAiEditorSection|AiEditorSectionRegistry/,
+  operator: 'doesNotMatch',
+  diff: 'simple'
 }
 
 Node.js v22.23.1
@@ -281,7 +262,7 @@ exit=1
     '    zone,\n' +
     '    blocker,\n' +
     '    evaluate'... 2792 more characters,
-  expected: /let currentVisibilityQuality = 0/,
+  expected: /Deny by default/,
   operator: 'match',
   diff: 'simple'
 }
@@ -299,20 +280,53 @@ exit=1
 > real-wargame@0.1.0 environment-materials:smoke
 > node scripts/environment_materials_smoke.mjs
 
-node:fs:440
-    return binding.readFileUtf8(path, stringToFlags(options.flag));
-                   ^
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
 
-Error: ENOENT: no such file or directory, open 'src/ai-node-editor/AiEditorSectionRegistry.ts'
-    at readFileSync (node:fs:440:20)
-    at file:///home/runner/work/Real-wargame/Real-wargame/.tmp-environment-materials-smoke/environment-materials-smoke.mjs?run=1785567015201:4102:31
+AssertionError [ERR_ASSERTION]: an explicit map profile ID must be activated when its registry entry exists
+    at file:///home/runner/work/Real-wargame/Real-wargame/.tmp-environment-materials-smoke/environment-materials-smoke.mjs?run=1785567445414:4107:8
     at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
     at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
     at async file:///home/runner/work/Real-wargame/Real-wargame/scripts/environment_materials_smoke.mjs:22:3 {
-  errno: -2,
-  code: 'ENOENT',
-  syscall: 'open',
-  path: 'src/ai-node-editor/AiEditorSectionRegistry.ts'
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: "import './game/GameStyles';\n" +
+    "import mapData from './data/maps/test_map.json';\n" +
+    "import pressureZoneData from './data/pressure_zones/test_pressure_zones.json';\n" +
+    "import unitsData from './data/units/test_units.json';\n" +
+    "import type { TacticalMapData } from './core/map/MapModel';\n" +
+    "import type { PressureZoneData } from './core/pressure/PressureZone';\n" +
+    "import { createResolutionAwareInitialState } from './core/simulation/ResolutionAwareScene';\n" +
+    "import type { UnitData } from './core/units/UnitModel';\n" +
+    "import { collectGameApplicationElements, GameApplication } from './game/GameApplication';\n" +
+    "import { installAppShellMenu } from './shared/AppShellMenu';\n" +
+    '\n' +
+    'let application: GameApplication | null = null;\n' +
+    '\n' +
+    "installAppShellMenu({ mode: 'game' });\n" +
+    'void bootstrap();\n' +
+    '\n' +
+    'async function bootstrap(): Promise<void> {\n' +
+    '  const state = createResolutionAwareInitialState(\n' +
+    '    mapData as TacticalMapData,\n' +
+    '    unitsData as UnitData[],\n' +
+    '    pressureZoneData as PressureZoneData[],\n' +
+    '  );\n' +
+    '  application = await GameApplication.create({\n' +
+    "    mode: 'game',\n" +
+    '    state,\n' +
+    '    elements: collectGameApplicationElements(),\n' +
+    '  });\n' +
+    '}\n' +
+    '\n' +
+    "window.addEventListener('beforeunload', () => {\n" +
+    '  application?.destroy();\n' +
+    '  application = null;\n' +
+    '});\n',
+  expected: /requestedInitialEnvironmentProfileId[\s\S]*hasProfile\(requestedInitialEnvironmentProfileId\)/,
+  operator: 'match',
+  diff: 'simple'
 }
 
 Node.js v22.23.1
