@@ -107,7 +107,9 @@ expectIncludes('src/game-editors/createDefaultGameEditorRegistry.ts', [
   "surface === 'combat-lab'",
   "? 'route'",
   "const baseRoute = '/ai-node-editor.html'",
-  "search.set('returnTo', request.returnTo)",
+  'getSafeGameEditorReturnTarget',
+  'const safeReturnTo = getSafeGameEditorReturnTarget(request.returnTo)',
+  "if (safeReturnTo) search.set('returnTo', safeReturnTo)",
   'mountEnvironmentProfileEditor',
   "import { mountCombatCatalogEditor } from '../ai-node-editor/CombatCatalogEditor'",
   'mount: mountCombatCatalogEditor',
@@ -173,6 +175,7 @@ expectIncludes('src/ai-node-editor/AiEditorGameEditorPlatform.ts', [
   'graphParking.append(graphRoot)',
   'context.host.replaceChildren(graphRoot)',
   'mountBehaviorGraph',
+  'getSafeGameEditorReturnTarget',
 ]);
 expectExcludes('src/ai-node-editor/AiEditorGameEditorPlatform.ts', [
   'document.createElement(\'canvas\')',
