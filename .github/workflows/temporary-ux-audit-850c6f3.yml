@@ -67,7 +67,7 @@ jobs:
         env:
           BASE_URL: http://127.0.0.1:4173
           OUT_DIR: artifacts/ux-audit
-        run: node --import .github/ux-audit/polyfill.mjs .github/ux-audit/run.mjs
+        run: node --import ./.github/ux-audit/polyfill.mjs .github/ux-audit/run.mjs
 
       - name: Save Vite log
         if: always()
