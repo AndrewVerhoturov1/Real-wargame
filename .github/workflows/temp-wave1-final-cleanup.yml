@@ -1,0 +1,63 @@
+name: Temporary Wave 1 Final Cleanup
+
+on:
+  push:
+    branches:
+      - compiler/20260801-shared-game-editors-wave1
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: contains(github.event.head_commit.message, '[final-cleanup]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Remove all temporary Wave 1 verification services and reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "wave1-compiler-bot"
+          git config user.email "wave1-compiler-bot@users.noreply.github.com"
+
+          rm -f \
+            .github/workflows/temp-wave1-browser-diagnostic.yml \
+            .github/workflows/temp-wave1-browser-engine-verification.yml \
+            .github/workflows/temp-wave1-overflow-diagnostic.yml \
+            .github/workflows/temp-wave1-responsive-override-patch-only.yml \
+            .github/workflows/temp-wave1-responsive-override-patch.yml \
+            .github/workflows/temp-wave1-responsive-patch.yml \
+            .github/workflows/temp-wave1-unblock-patch.yml \
+            .github/workflows/temp-wave1-unblock-verify.yml \
+            .github/workflows/temp-wave1-unblock.yml \
+            .github/workflows/temp-wave1-final-cleanup.yml \
+            .tmp-wave1-browser-diagnostic \
+            .tmp-wave1-browser-diagnostic-trigger \
+            .tmp-wave1-browser-engine-trigger \
+            .tmp-wave1-browser-engine-verification \
+            .tmp-wave1-fast-responsive-override-trigger \
+            .tmp-wave1-final-cleanup-trigger \
+            .tmp-wave1-final-verify-trigger \
+            .tmp-wave1-overflow-diagnostic \
+            .tmp-wave1-overflow-diagnostic-trigger \
+            .tmp-wave1-overflow-diagnostic-trigger-2 \
+            .tmp-wave1-overflow-diagnostic-trigger-3 \
+            .tmp-wave1-patch-trigger \
+            .tmp-wave1-responsive-override \
+            .tmp-wave1-responsive-override-patched \
+            .tmp-wave1-responsive-override-trigger \
+            .tmp-wave1-responsive-patch \
+            .tmp-wave1-responsive-patch-trigger \
+            .tmp-wave1-unblock-patched \
+            .tmp-wave1-unblock-trigger \
+            .tmp-wave1-unblock-verification \
+            .tmp-wave1-verify-trigger
+
+          git add -A
+          git diff --cached --quiet && { echo 'No temporary files found to clean.'; exit 1; }
+          git commit -m "chore(wave1): remove temporary unblock verification services"
+          git push origin HEAD:compiler/20260801-shared-game-editors-wave1
