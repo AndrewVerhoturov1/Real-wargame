@@ -193,6 +193,11 @@ expectExcludes('ai-node-editor.html', [
   '/src/ai-node-editor/DirectionalTerrainProfileEditor.ts',
 ]);
 
+const combatLabCss = read('src/combat-lab/combat-lab.css');
+if (/body\.app-shell-mode-combat-lab\s+\.app-shell-menu\s*\{[^}]*display\s*:\s*none(?:\s*!important)?\s*;?[^}]*\}/i.test(combatLabCss)) {
+  failures.push('src/combat-lab/combat-lab.css: common app-shell menu must remain visible in Combat Lab');
+}
+
 if (failures.length > 0) {
   console.error('Shared game editor platform smoke failed:');
   for (const failure of failures) console.error(`- ${failure}`);
