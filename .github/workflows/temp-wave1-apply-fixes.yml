@@ -1,0 +1,81 @@
+name: Temporary Wave 1 Apply Fixes
+
+on:
+  push:
+    branches:
+      - compiler/20260801-shared-game-editors-wave1
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fixes:
+    if: contains(github.event.head_commit.message, '[apply-fixes]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: compiler/20260801-shared-game-editors-wave1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply exact source changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              source = file.read_text(encoding='utf-8')
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one replacement target, found {count}')
+              file.write_text(source.replace(old, new), encoding='utf-8')
+
+          replace_once(
+              'scripts/app_shell_overlay_behavior_smoke.ts',
+              "  tabIndex = 0;\n  innerHTML = '';\n  constructor(ownerDocument: FakeDocument, readonly tagName: string) { super(ownerDocument); }",
+              "  tabIndex = -1;\n  innerHTML = '';\n  constructor(ownerDocument: FakeDocument, readonly tagName: string) {\n    super(ownerDocument);\n    if (['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'].includes(tagName)) this.tabIndex = 0;\n  }",
+          )
+
+          replace_once(
+              'src/core/units/UnitModel.ts',
+              "export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowledge = true): void {\n  clearWeaponRuntime(unit);",
+              "export function applyInitialPostureToRuntime(\n  unit: UnitModel,\n  posture: UnitInitialState['posture'],\n): void {\n  unit.initialState.posture = posture;\n  unit.behaviorRuntime.previousPosture = posture;\n  unit.behaviorRuntime.posture = posture;\n}\n\nexport function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowledge = true): void {\n  clearWeaponRuntime(unit);",
+          )
+          replace_once(
+              'src/core/units/UnitModel.ts',
+              "  const initial = unit.initialState;\n  unit.behaviorRuntime.previousPosture = initial.posture;\n  unit.behaviorRuntime.posture = initial.posture;",
+              "  const initial = unit.initialState;\n  applyInitialPostureToRuntime(unit, initial.posture);",
+          )
+
+          replace_once(
+              'src/core/testing/combat-lab/experiment/CombatLabParticipantInitialRuntime.ts',
+              "import { applyInitialStateToRuntime, type UnitModel } from '../../../units/UnitModel';",
+              "import {\n  applyInitialPostureToRuntime,\n  applyInitialStateToRuntime,\n  type UnitModel,\n} from '../../../units/UnitModel';",
+          )
+          replace_once(
+              'src/core/testing/combat-lab/experiment/CombatLabParticipantInitialRuntime.ts',
+              "export function applyPosture(unit: UnitModel, posture: 'standing' | 'crouched' | 'prone'): void {\n  unit.initialState.posture = posture;\n  unit.behaviorRuntime.previousPosture = posture;\n  unit.behaviorRuntime.posture = posture;\n}",
+              "export function applyPosture(unit: UnitModel, posture: 'standing' | 'crouched' | 'prone'): void {\n  applyInitialPostureToRuntime(unit, posture);\n}",
+          )
+          PY
+          git diff --check
+      - run: npm ci --no-audit --no-fund
+      - run: npm run app-shell-overlay:smoke
+      - run: npm run posture-transition:smoke
+      - run: npm run infantry-combat-stage9:verify
+      - name: Commit exact product fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/app_shell_overlay_behavior_smoke.ts \
+            src/core/units/UnitModel.ts \
+            src/core/testing/combat-lab/experiment/CombatLabParticipantInitialRuntime.ts
+          git commit -m "fix(wave1): correct focus model and initial posture ownership"
+          git push origin HEAD:compiler/20260801-shared-game-editors-wave1
