@@ -1,0 +1,102 @@
+name: Temporary Shared Editors Current Canonical
+
+on:
+  push:
+    branches:
+      - compiler/20260731-shared-game-editors-integration
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    if: contains(github.event.head_commit.message, '[shared-editors-current-canonical]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Establish clean exact product HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mapfile -t TEMP_FILES < <(git ls-files \
+            '.github/workflows/tmp-shared-editors-*.yml' \
+            'reports/.tmp-shared-editors-*' \
+            'reports/compiler-final/*')
+          if [ "${#TEMP_FILES[@]}" -gt 0 ]; then
+            git rm -f -- "${TEMP_FILES[@]}"
+            git commit -m "chore(integration): remove current canonical verification scaffolding"
+            git push origin HEAD:compiler/20260731-shared-game-editors-integration
+          fi
+          test -z "$(git status --short)"
+          git rev-parse HEAD | tee /tmp/shared-editors-current-head.txt
+      - name: Run complete canonical matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/tmp/shared-editors-current-canonical
+          LOGS="$OUT/logs"
+          rm -rf "$OUT"
+          mkdir -p "$LOGS"
+          cp /tmp/shared-editors-current-head.txt "$OUT/tested-head.txt"
+          : > "$OUT/checks.tsv"
+          run_check() {
+            local name="$1"; shift
+            local started ended
+            started=$(date +%s)
+            "$@" > "$LOGS/$name.log" 2>&1
+            ended=$(date +%s)
+            printf '%s\t0\t%s\n' "$name" "$((ended-started))" >> "$OUT/checks.tsv"
+          }
+          run_check npm-ci npm ci --no-audit --no-fund
+          run_check diff-check git diff --check dd89d31c4d4b874439e0860b6a2be0c5e6ecee1f...HEAD
+          test -z "$(git status --short)"
+          run_check typecheck npm run typecheck
+          run_check app-shell-overlay npm run app-shell-overlay:smoke
+          run_check shared-game-editors npm run shared-game-editors:smoke
+          run_check gameplay-tuning-editors npm run gameplay-tuning-editors:smoke
+          run_check combat-lab-game-editors npm run combat-lab-game-editors:smoke
+          run_check editor npm run editor:smoke
+          run_check graph-v2 npm run graph-v2:smoke
+          run_check perception npm run perception:smoke
+          run_check perception-performance npm run perception-performance:smoke
+          run_check attention-profiles npm run attention-profiles:smoke
+          run_check movement-profiles npm run movement-profiles:smoke
+          run_check environment-materials npm run environment-materials:smoke
+          run_check combat-catalog-editor npm run combat-catalog-editor:smoke
+          run_check directional-terrain npm run directional-terrain:smoke
+          run_check combat-lab-ui-contract npm run combat-lab-ui-contract:smoke
+          run_check combat-lab-experiment npm run combat-lab-experiment:smoke
+          run_check combat-lab-batch npm run combat-lab-batch:smoke
+          run_check combat-lab-scenario-system npm run combat-lab-scenario-system:verify
+          run_check infantry-stage6 npm run infantry-combat-stage6:verify
+          run_check infantry-stage7 npm run infantry-combat-stage7:verify
+          run_check infantry-stage8 npm run infantry-combat-stage8:verify
+          run_check infantry-stage9 npm run infantry-combat-stage9:verify
+          run_check workspace-architecture npm run workspace-architecture-contract:smoke
+          run_check performance-contract npm run performance-contract:smoke
+          run_check long-task-classification npm run long-task-classification:smoke
+          run_check production-build npm run build
+          run_check canonical-preview npm run verify:preview -- --report "$OUT/canonical-preview.json"
+          test -z "$(git status --short)"
+          test "$(git rev-parse HEAD)" = "$(cat "$OUT/tested-head.txt")"
+          {
+            echo "TESTED_HEAD=$(cat "$OUT/tested-head.txt")"
+            echo "STATUS=PASS"
+            cat "$OUT/checks.tsv"
+          } > "$OUT/summary.txt"
+      - name: Upload canonical evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-editors-current-canonical-evidence
+          path: /tmp/shared-editors-current-canonical
+          if-no-files-found: error
