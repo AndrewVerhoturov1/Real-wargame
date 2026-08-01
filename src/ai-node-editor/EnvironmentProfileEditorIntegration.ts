@@ -5,6 +5,12 @@ import {
   requestEnvironmentProfileEditorLeave,
 } from './EnvironmentProfileEditorPanel';
 
+/** Historical flat-navigation metadata retained for migration contract checks. */
+export const ENVIRONMENT_PROFILE_EDITOR_LEGACY_METADATA = {
+  labelRu: 'Профили местности',
+  order: 25,
+} as const;
+
 export function mountEnvironmentProfileEditor(context: GameEditorMountContext): GameEditorInstallation {
   const panel = context.host;
   let destroyed = false;
