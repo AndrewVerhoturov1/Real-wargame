@@ -167,4 +167,5 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
+await import('./shared_game_editor_registry_smoke.mjs');
 console.log('Shared game editor platform smoke passed.');
