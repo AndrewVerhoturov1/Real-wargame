@@ -46,6 +46,12 @@ export interface SoldierCondition {
   stealth: number;
 }
 
+export interface SoldierSourceProfileLink {
+  readonly editorId: string;
+  readonly profileId: string;
+  readonly labelRu: string;
+}
+
 export interface SoldierParameters {
   traits: SoldierTraits;
   condition: SoldierCondition;
@@ -56,6 +62,8 @@ export interface SoldierParameters {
   /** Frozen authoritative snapshots; no registry lookup is needed during a simulation step. */
   perceptionProfile?: PerceptionProfileDefinition;
   conditionProfile?: ConditionProfileDefinition;
+  /** Generic editor links consumed without importing the editor implementations. */
+  sourceProfileLinks?: readonly SoldierSourceProfileLink[];
 }
 
 export interface UnitInitialState {
@@ -346,13 +354,34 @@ export function createSoldierParameters(
     overrides.perceptionProfileId ?? resolved?.perceptionProfileId,
     overrides.conditionProfileId ?? resolved?.conditionProfileId,
   );
+  const archetypeId = resolved?.archetypeId ?? requestedArchetypeId ?? fallbackArchetypeId;
+  const perceptionProfileId = profileSnapshots?.perceptionProfileId;
+  const conditionProfileId = profileSnapshots?.conditionProfileId;
+  const sourceProfileLinks = Object.freeze([
+    Object.freeze({
+      editorId: 'soldierArchetypes',
+      profileId: archetypeId,
+      labelRu: 'Архетип бойца',
+    }),
+    ...(perceptionProfileId ? [Object.freeze({
+      editorId: 'perceptionProfiles',
+      profileId: perceptionProfileId,
+      labelRu: 'Профиль восприятия',
+    })] : []),
+    ...(conditionProfileId ? [Object.freeze({
+      editorId: 'conditionProfiles',
+      profileId: conditionProfileId,
+      labelRu: 'Ранения и подавление',
+    })] : []),
+  ] satisfies readonly SoldierSourceProfileLink[]);
 
   return {
-    archetypeId: resolved?.archetypeId ?? requestedArchetypeId ?? fallbackArchetypeId,
-    perceptionProfileId: profileSnapshots?.perceptionProfileId,
-    conditionProfileId: profileSnapshots?.conditionProfileId,
+    archetypeId,
+    perceptionProfileId,
+    conditionProfileId,
     perceptionProfile: profileSnapshots?.perceptionProfile,
     conditionProfile: profileSnapshots?.conditionProfile,
+    sourceProfileLinks,
     traits: {
       ...base.traits,
       ...overrides.traits,
