@@ -23,7 +23,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Correct canonical integration gates
+      - name: Correct remaining compiler gates
         shell: bash
         run: |
           python - <<'PY'
@@ -34,29 +34,8 @@ jobs:
               source = file.read_text(encoding='utf-8')
               count = source.count(old)
               if count != 1:
-                  raise SystemExit(f'{path}: expected one replacement marker, found {count}: {old[:100]!r}')
+                  raise SystemExit(f'{path}: expected one replacement marker, found {count}: {old[:120]!r}')
               file.write_text(source.replace(old, new, 1), encoding='utf-8')
-
-          replace_once(
-              'scripts/combat_lab_workspace_layout_smoke.mjs',
-              "for (const tabId of ['scene', 'program', 'batch', 'parameters', 'metrics', 'journal']) {",
-              "for (const tabId of ['scene', 'program', 'batch', 'parameters', 'settings', 'metrics', 'journal']) {",
-          )
-          replace_once(
-              'scripts/combat_lab_workspace_layout_smoke.mjs',
-              "assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 6, 'Combat Lab must expose exactly six workspace tabs.');",
-              "assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 7, 'Integrated Combat Lab must expose six Stage 10 tabs plus game settings.');",
-          )
-          replace_once(
-              'scripts/combat_lab_workspace_layout_smoke.mjs',
-              "  'body.app-shell-mode-combat-lab .app-shell-menu',\n",
-              "",
-          )
-          replace_once(
-              'scripts/combat_lab_workspace_layout_smoke.mjs',
-              "assert.ok(!css.includes('right: calc(var(--combat-lab-dock-width)'), 'Laboratory dock width must not replace the production right-inspector offset.');",
-              "assert.ok(!css.includes('right: calc(var(--combat-lab-dock-width)'), 'Laboratory dock width must not replace the production right-inspector offset.');\nassert.ok(!css.includes('body.app-shell-mode-combat-lab .app-shell-menu'), 'Combat Lab must not reserve layout for the removed permanent menu strip.');",
-          )
 
           replace_once(
               'scripts/infantry_combat_stage8_verify.mjs',
@@ -118,6 +97,13 @@ jobs:
               raise SystemExit('matrix workflow: publish output marker missing')
           publish = publish.replace(old, new, 1)
           workflow = prefix + publish_marker + publish
+
+          enforce_old = "          grep -q '^overall_status=PASS$' reports/compiler-final/summary.txt"
+          enforce_new = "          grep -q '^overall_status=PASS$' \"$RUNNER_TEMP/shared-editors-final-compiler/summary.txt\""
+          if workflow.count(enforce_old) != 1:
+              raise SystemExit('matrix workflow: enforce marker missing')
+          workflow = workflow.replace(enforce_old, enforce_new, 1)
+
           workflow_path.write_text(workflow, encoding='utf-8')
           PY
 
@@ -125,21 +111,31 @@ jobs:
         shell: bash
         run: |
           npm ci --no-audit --no-fund
-          node scripts/combat_lab_workspace_layout_smoke.mjs
           node --check scripts/infantry_combat_stage8_verify.mjs
           INFANTRY_COMBAT_STAGE8_DIFF_HEAD_SHA=f93cdbdf15497498e99dd4f63a2bfd20e5414ea9 npm run infantry-combat-stage8:forbidden-scan
           npm run typecheck
           npm run shared-game-editors:smoke
           npm run combat-lab-game-editors:smoke
+          python - <<'PY'
+          from pathlib import Path
+          source = Path('.github/workflows/tmp-shared-editors-compiler-fix.yml').read_text(encoding='utf-8')
+          required = [
+              '$RUNNER_TEMP/shared-editors-final-compiler',
+              'SHARED_EDITORS_QA_OUT="$OUT"',
+              'npm run engine:dev',
+              'APPROVED_STAGE8_IMPLEMENTATION_HEAD_SHA',
+          ]
+          combined = source + Path('scripts/infantry_combat_stage8_verify.mjs').read_text(encoding='utf-8')
+          missing = [item for item in required if item not in combined]
+          if missing:
+              raise SystemExit(f'missing corrected gate fragments: {missing}')
+          PY
 
       - name: Commit corrected gates and start canonical matrix
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            scripts/combat_lab_workspace_layout_smoke.mjs \
-            scripts/infantry_combat_stage8_verify.mjs \
-            .github/workflows/tmp-shared-editors-compiler-fix.yml
-          git commit -m "fix(verification): align integrated compiler gates [compiler-matrix]"
+          git add scripts/infantry_combat_stage8_verify.mjs .github/workflows/tmp-shared-editors-compiler-fix.yml
+          git commit -m "fix(verification): isolate compiler evidence and Stage 8 scope [compiler-matrix]"
           git push origin HEAD:compiler/20260731-shared-game-editors-integration
