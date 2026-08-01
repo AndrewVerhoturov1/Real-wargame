@@ -30,6 +30,14 @@ function expectExcludes(relativePath, snippets) {
   }
 }
 
+function walkFiles(relativeDirectory) {
+  const absoluteDirectory = path.join(root, relativeDirectory);
+  return fs.readdirSync(absoluteDirectory, { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = path.join(relativeDirectory, entry.name);
+    return entry.isDirectory() ? walkFiles(relativePath) : [relativePath];
+  });
+}
+
 const platformFiles = [
   'src/game-editors/GameEditorTypes.ts',
   'src/game-editors/GameEditorRegistry.ts',
@@ -101,9 +109,14 @@ expectIncludes('src/game-editors/createDefaultGameEditorRegistry.ts', [
   "const baseRoute = '/ai-node-editor.html'",
   "search.set('returnTo', request.returnTo)",
   'mountEnvironmentProfileEditor',
-  "requireLegacyAiEditorSection('combatCatalogs')",
+  "import { mountCombatCatalogEditor } from '../ai-node-editor/CombatCatalogEditor'",
+  'mount: mountCombatCatalogEditor',
 ]);
 expectExcludes('src/game-editors/createDefaultGameEditorRegistry.ts', [
+  "import '../ai-node-editor/CombatCatalogEditor'",
+  'requireLegacyAiEditorSection',
+  'reusableWeaponsPanel',
+  'weaponsParking',
   "from '../combat-lab",
   "from '../../combat-lab",
 ]);
@@ -124,16 +137,30 @@ for (const file of [
   ]);
 }
 
-expectIncludes('src/ai-node-editor/AiEditorSectionRegistry.ts', [
-  "id !== 'combatCatalogs'",
-  'capturedCombatCatalog',
-  'The shared GameEditorRegistry remains the sole authoritative registry',
+expectIncludes('src/ai-node-editor/CombatCatalogEditor.ts', [
+  'export function mountCombatCatalogEditor',
+  'const panel = context.host',
+  'function ensureCatalogState()',
+  'new CombatCatalogStorageAdapter(resolveBrowserStorage())',
+  "panel.addEventListener('click', handlePanelClick)",
+  "panel.removeEventListener('click', handlePanelClick)",
+  'if (activePanel === panel) activePanel = null',
 ]);
-expectExcludes('src/ai-node-editor/AiEditorSectionRegistry.ts', [
-  'new Map',
-  'querySelector',
-  'document.',
+expectExcludes('src/ai-node-editor/CombatCatalogEditor.ts', [
+  'registerAiEditorSection',
+  'AiEditorSectionRegistry',
+  'installedPanels',
+  'const storage = new CombatCatalogStorageAdapter',
 ]);
+
+if (exists('src/ai-node-editor/AiEditorSectionRegistry.ts')) {
+  failures.push('src/ai-node-editor/AiEditorSectionRegistry.ts: legacy registry file must be removed');
+}
+for (const sourceFile of walkFiles('src').filter((file) => /\.[cm]?[jt]sx?$/.test(file))) {
+  if (read(sourceFile).includes('AiEditorSectionRegistry')) {
+    failures.push(`${sourceFile}: runtime import/reference to AiEditorSectionRegistry remains`);
+  }
+}
 
 expectIncludes('src/ai-node-editor/AiEditorGameEditorPlatform.ts', [
   'createDefaultGameEditorRegistry',
@@ -142,9 +169,14 @@ expectIncludes('src/ai-node-editor/AiEditorGameEditorPlatform.ts', [
   'definition.labelRu',
   "const initialEditorId =",
   "'behaviorGraph'",
+  'const graphRoot = document.getElementById',
+  'graphParking.append(graphRoot)',
+  'context.host.replaceChildren(graphRoot)',
   'mountBehaviorGraph',
 ]);
 expectExcludes('src/ai-node-editor/AiEditorGameEditorPlatform.ts', [
+  'document.createElement(\'canvas\')',
+  'new PIXI.Application',
   'Обновить',
   'Открыть игру',
   '>Выход<',
