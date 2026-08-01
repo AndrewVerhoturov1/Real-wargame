@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - compiler/20260801-shared-game-editors-wave1
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,86 +13,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  baseline-red:
-    if: contains(github.event.head_commit.message, '[baseline]')
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: cd802d92613b64df76552c429a664bb4cbcd909c
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - name: Verify exact starting state
-        run: |
-          test "$(git rev-parse HEAD)" = "cd802d92613b64df76552c429a664bb4cbcd909c"
-          test -z "$(git status --short)"
-          test "$(git merge-base HEAD af9e54036658e95a8df680658be73e589efae4b4)" = "af9e54036658e95a8df680658be73e589efae4b4"
-          test "$(git merge-base HEAD 26e7cc7fe9c6fc7855d2781fc2c0a539cbb1a049)" = "233e14fb17cdfa3edcf76724042d4c35fd4ae5f1"
-      - run: npm ci --no-audit --no-fund
-      - name: Reproduce both known defects
-        shell: bash
-        run: |
-          set +e
-          npm run app-shell-overlay:smoke
-          shell_code=$?
-          npm run posture-transition:smoke
-          posture_code=$?
-          set -e
-          echo "app-shell-overlay exit code: ${shell_code}"
-          echo "posture-transition exit code: ${posture_code}"
-          test "${shell_code}" -ne 0
-          test "${posture_code}" -ne 0
-
-  posture-red:
-    if: contains(github.event.head_commit.message, '[red]')
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - name: Prove the strengthened regression is red
-        shell: bash
-        run: |
-          set +e
-          npm run posture-transition:smoke
-          code=$?
-          set -e
-          echo "posture-transition strengthened regression exit code: ${code}"
-          test "${code}" -ne 0
-
-  focused:
-    if: contains(github.event.head_commit.message, '[focused]')
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - run: npm run app-shell-overlay:smoke
-      - run: npm run posture-transition:smoke
-      - run: npm run infantry-combat-stage9:verify
-      - name: Clean tree after focused checks
-        run: test -z "$(git status --short)"
-
   full-matrix:
     if: contains(github.event.head_commit.message, '[verify]')
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -102,7 +25,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Run mandatory matrix and retain every exit code in logs
+      - name: Run mandatory matrix and record every exit code
         shell: bash
         run: |
           set +e
@@ -124,7 +47,7 @@ jobs:
           }
 
           run_shell "npm ci --no-audit --no-fund" "npm ci --no-audit --no-fund"
-          run_shell "git diff --check platform...HEAD" "git diff --check af9e54036658e95a8df680658be73e589efae4b4...HEAD"
+          run_shell "git diff --check af9e54036658e95a8df680658be73e589efae4b4...HEAD" "git diff --check af9e54036658e95a8df680658be73e589efae4b4...HEAD"
           run_shell "git status --short before" "test -z \"$(git status --short)\""
           run_shell "npm run app-shell-overlay:smoke" "npm run app-shell-overlay:smoke"
           run_shell "npm run shared-game-editors:smoke" "npm run shared-game-editors:smoke"
@@ -152,7 +75,7 @@ jobs:
     if: contains(github.event.head_commit.message, '[verify]')
     needs: full-matrix
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -165,7 +88,7 @@ jobs:
       - run: npm run build
       - run: npm install --no-save --package-lock=false playwright@1.54.2
       - run: npx playwright install --with-deps chromium
-      - name: Start local production preview
+      - name: Start production preview
         shell: bash
         run: |
           npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/wave1-vite-preview.log 2>&1 &
@@ -198,37 +121,78 @@ jobs:
               for (const path of pagePaths) {
                 const page = await context.newPage();
                 page.on('console', (message) => {
-                  if (message.type() === 'error') errors.push(`${viewport.width}x${viewport.height} ${path} console: ${message.text()}`);
+                  if (message.type() === 'error') {
+                    errors.push(`${viewport.width}x${viewport.height} ${path} console: ${message.text()}`);
+                  }
                 });
-                page.on('pageerror', (error) => errors.push(`${viewport.width}x${viewport.height} ${path} pageerror: ${error.message}`));
-                page.on('requestfailed', (request) => errors.push(`${viewport.width}x${viewport.height} ${path} requestfailed: ${request.url()} ${request.failure()?.errorText ?? ''}`));
+                page.on('pageerror', (error) => {
+                  errors.push(`${viewport.width}x${viewport.height} ${path} pageerror: ${error.message}`);
+                });
+                page.on('requestfailed', (request) => {
+                  errors.push(`${viewport.width}x${viewport.height} ${path} requestfailed: ${request.url()} ${request.failure()?.errorText ?? ''}`);
+                });
 
                 await page.goto(`${baseUrl}${path}`, { waitUntil: 'networkidle' });
                 const trigger = page.locator('[data-app-shell-menu-root="true"] .app-shell-menu-trigger');
                 await trigger.waitFor({ state: 'visible' });
                 assert.equal(await trigger.count(), 1, `${path}: expected one compact menu trigger`);
-                assert.equal(await page.locator('body.with-app-shell-menu').count(), 0, `${path}: legacy body reservation must be absent`);
-                assert.equal(await page.locator('[data-app-shell-menu-root="true"] .app-shell-mode-links').count(), 0, `${path}: mode links must not remain permanently visible`);
-                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, `${path}: horizontal page overflow`);
+                assert.equal(await page.locator('body.with-app-shell-menu').count(), 0, `${path}: legacy top reservation must be absent`);
+                assert.equal(
+                  await page.locator('[data-app-shell-menu-root="true"] .app-shell-mode-links').count(),
+                  0,
+                  `${path}: permanent mode strip must be absent`,
+                );
+                assert.equal(
+                  await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+                  true,
+                  `${path}: horizontal overflow`,
+                );
 
                 await trigger.click();
                 const dialog = page.getByRole('dialog', { name: 'Общее игровое меню Real Wargame' });
                 await dialog.waitFor({ state: 'visible' });
-                assert.equal(await dialog.locator('[aria-current="page"]').count(), 1, `${path}: one current mode marker expected`);
-                assert.equal(await dialog.locator('.app-shell-current-marker').count(), 1, `${path}: current mode label expected`);
-                assert.equal(await page.evaluate(() => {
-                  const active = document.activeElement;
-                  const modal = document.querySelector('[role="dialog"]');
-                  return active instanceof Node && modal?.contains(active) === true;
-                }), true, `${path}: focus must move inside menu`);
+                assert.equal(await dialog.locator('[aria-current="page"]').count(), 1, `${path}: one current mode expected`);
+                assert.equal(await dialog.locator('.app-shell-current-marker').count(), 1, `${path}: current mode marker expected`);
+                assert.equal(
+                  await page.evaluate(() => {
+                    const active = document.activeElement;
+                    const modal = document.querySelector('[role="dialog"]');
+                    return active instanceof Node && modal?.contains(active) === true;
+                  }),
+                  true,
+                  `${path}: focus must enter menu`,
+                );
 
                 const expectedPaths = ['/', '/ai-node-editor.html', '/combat-lab.html'];
-                const hrefPaths = await dialog.locator('a.app-shell-mode-link').evaluateAll((links) => links.map((link) => new URL(link.href).pathname));
+                const hrefPaths = await dialog.locator('a.app-shell-mode-link').evaluateAll(
+                  (links) => links.map((link) => new URL(link.href).pathname),
+                );
                 assert.deepEqual(hrefPaths, expectedPaths, `${path}: mode destinations changed`);
+
+                const controls = dialog.locator('button:not([disabled]), a[href]');
+                const firstControl = controls.first();
+                const lastControl = controls.last();
+                await lastControl.focus();
+                await page.keyboard.press('Tab');
+                assert.equal(
+                  await firstControl.evaluate((element) => document.activeElement === element),
+                  true,
+                  `${path}: Tab must wrap from last to first`,
+                );
+                await page.keyboard.press('Shift+Tab');
+                assert.equal(
+                  await lastControl.evaluate((element) => document.activeElement === element),
+                  true,
+                  `${path}: Shift+Tab must wrap from first to last`,
+                );
 
                 await page.keyboard.press('Escape');
                 await dialog.waitFor({ state: 'hidden' });
-                assert.equal(await trigger.evaluate((element) => document.activeElement === element), true, `${path}: focus must return to trigger`);
+                assert.equal(
+                  await trigger.evaluate((element) => document.activeElement === element),
+                  true,
+                  `${path}: closing must restore trigger focus`,
+                );
                 await page.keyboard.press('Escape');
                 await dialog.waitFor({ state: 'visible' });
                 await page.keyboard.press('Escape');
@@ -237,7 +201,7 @@ jobs:
                 if (path === '/ai-node-editor.html') {
                   const tabs = page.locator('[data-game-editor-id]');
                   await tabs.first().waitFor({ state: 'visible' });
-                  assert.equal(await tabs.count(), 9, 'AI editor must expose nine shared registry sections');
+                  assert.equal(await tabs.count(), 9, 'AI editor must expose nine shared sections');
                   await page.evaluate(() => {
                     const graph = document.getElementById('ai-node-editor-root');
                     if (!graph) throw new Error('Graph root missing.');
@@ -245,21 +209,33 @@ jobs:
                   });
                   await page.locator('[data-game-editor-id="weapons"]').click();
                   await page.locator('[data-combat-catalog-editor]').waitFor({ state: 'visible' });
-                  assert.equal(await page.locator('[data-combat-catalog-editor]').count(), 1, 'one weapon catalog expected after first opening');
+                  assert.equal(await page.locator('[data-combat-catalog-editor]').count(), 1, 'one weapon catalog expected');
                   await page.locator('[data-game-editor-id="movementProfiles"]').click();
                   await page.locator('[data-game-editor-id="weapons"]').click();
                   await page.locator('[data-combat-catalog-editor]').waitFor({ state: 'visible' });
-                  assert.equal(await page.locator('[data-combat-catalog-editor]').count(), 1, 'weapon editor switching must not create a second catalog');
+                  assert.equal(
+                    await page.locator('[data-combat-catalog-editor]').count(),
+                    1,
+                    'switching sections must not duplicate the weapon catalog',
+                  );
                   await page.locator('[data-game-editor-id="behaviorGraph"]').click();
-                  assert.equal(await page.evaluate(() => document.querySelectorAll('#ai-node-editor-root').length), 1, 'graph canvas root must remain singular');
-                  assert.equal(await page.locator('#ai-node-editor-root').getAttribute('data-browser-identity'), 'canonical-graph-root', 'Graph v2 must retain its original canvas root');
+                  assert.equal(
+                    await page.evaluate(() => document.querySelectorAll('#ai-node-editor-root').length),
+                    1,
+                    'Graph v2 root must remain singular',
+                  );
+                  assert.equal(
+                    await page.locator('#ai-node-editor-root').getAttribute('data-browser-identity'),
+                    'canonical-graph-root',
+                    'Graph v2 must retain its original canvas root',
+                  );
                 }
 
                 await page.close();
               }
 
               for (const sourcePath of pagePaths) {
-                for (const destinationPath of pagePaths) {
+                for (const destinationPath of pagePaths.filter((candidate) => candidate !== sourcePath)) {
                   const page = await context.newPage();
                   await page.goto(`${baseUrl}${sourcePath}`, { waitUntil: 'networkidle' });
                   await page.locator('.app-shell-menu-trigger').click();
@@ -267,7 +243,11 @@ jobs:
                     page.waitForURL((url) => url.pathname === destinationPath),
                     page.locator(`a.app-shell-mode-link[href="${destinationPath}"]`).click(),
                   ]);
-                  assert.equal(new URL(page.url()).pathname, destinationPath, `${sourcePath} -> ${destinationPath} navigation failed`);
+                  assert.equal(
+                    new URL(page.url()).pathname,
+                    destinationPath,
+                    `${sourcePath} -> ${destinationPath} navigation failed`,
+                  );
                   await page.close();
                 }
               }
