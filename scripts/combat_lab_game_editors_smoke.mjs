@@ -108,6 +108,8 @@ expectIncludes('src/combat-lab/parameters/installCombatLabQuickParameters.ts', [
   'resolveCombatLabSelectedUnitProfileLinks',
   'onOpenSourceProfile',
   'requestCombatLabGameEditorOpen',
+  'не указан — редактор откроет текущий профиль',
+  '...(link.profileId ? { profileId: link.profileId } : {})',
   'unsubscribeSelection()',
   'unsubscribeDraft()',
 ]);
