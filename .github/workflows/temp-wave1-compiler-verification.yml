@@ -88,11 +88,15 @@ jobs:
                 await trigger.click();
                 const dialog = page.getByRole('dialog', { name: 'Общее игровое меню Real Wargame' });
                 await dialog.waitFor({ state: 'visible' });
-                await page.waitForFunction(() => {
-                  const active = document.activeElement;
-                  const modal = document.querySelector('[role="dialog"]');
-                  return active instanceof Node && modal?.contains(active) === true;
-                });
+                await dialog.locator('button:not([disabled]), a[href]').first().waitFor({ state: 'visible' });
+                assert.equal(
+                  await dialog.evaluate((modal) => {
+                    const active = document.activeElement;
+                    return active instanceof Node && modal.contains(active);
+                  }),
+                  true,
+                  `${path}: focus must enter the named common menu`,
+                );
                 assert.equal(await dialog.locator('[aria-current="page"]').count(), 1, `${path}: one current mode expected`);
                 assert.equal(await dialog.locator('.app-shell-current-marker').count(), 1, `${path}: current mode marker expected`);
 
@@ -133,11 +137,14 @@ jobs:
                 );
                 await page.keyboard.press('Escape');
                 await dialog.waitFor({ state: 'visible' });
-                await page.waitForFunction(() => {
-                  const active = document.activeElement;
-                  const modal = document.querySelector('[role="dialog"]');
-                  return active instanceof Node && modal?.contains(active) === true;
-                });
+                assert.equal(
+                  await dialog.evaluate((modal) => {
+                    const active = document.activeElement;
+                    return active instanceof Node && modal.contains(active);
+                  }),
+                  true,
+                  `${path}: Escape-opened menu must receive focus`,
+                );
                 await page.keyboard.press('Escape');
                 await dialog.waitFor({ state: 'hidden' });
 
