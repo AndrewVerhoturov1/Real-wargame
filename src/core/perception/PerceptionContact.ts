@@ -1,4 +1,5 @@
 import type { GridPosition } from '../geometry';
+import { getActivePerceptionProfileSnapshot } from '../tuning/GameplayTuningProfiles';
 
 export type PerceptionContactStage = 'cue' | 'suspicion' | 'contact' | 'identified' | 'confirmed';
 export type PerceptionContactSource = 'visual' | 'sound' | 'reported' | 'fire_pressure';
@@ -129,13 +130,17 @@ export function advanceVisualContact(
   previous: PerceptionContactMemory | null,
   input: VisualContactInput,
 ): PerceptionContactMemory {
+  const profile = getActivePerceptionProfileSnapshot();
   const detectionVariance = previous?.detectionVariance
     ?? clamp(number(input.detectionVariance, 1), 0.5, 1.5);
   const evidencePerSecond = Math.max(0, input.evidencePerSecond) * detectionVariance;
   const evidence = clamp((previous?.evidence ?? 0) + evidencePerSecond * Math.max(0, input.deltaSeconds), 0, 200);
   const stage = getContactStageForEvidence(evidence);
-  const confidence = clamp(evidence / 1.5, 0, 100);
-  const uncertaintyCells = Math.max(0.25, 6 - evidence / 35);
+  const confidence = clamp(evidence / profile.contact.confidenceEvidenceDivisor, 0, 100);
+  const uncertaintyCells = Math.max(
+    profile.contact.minimumUncertaintyCells,
+    profile.contact.initialUncertaintyCells - evidence / profile.contact.uncertaintyEvidenceDivisor,
+  );
 
   return {
     id: input.id,
@@ -163,6 +168,7 @@ export function advanceReportedContact(
   previous: PerceptionContactMemory | null,
   input: ReportedContactInput,
 ): PerceptionContactMemory {
+  const profile = getActivePerceptionProfileSnapshot();
   if (
     input.source === 'sound'
     && previous?.source === 'visual'
@@ -173,8 +179,14 @@ export function advanceReportedContact(
 
   const confidence = clamp(input.confidence, 0, 100);
   const reportedEvidence = input.source === 'sound'
-    ? Math.min(CONTACT_STAGE_THRESHOLDS.suspicion + 10, confidence * 0.85)
-    : Math.min(CONTACT_STAGE_THRESHOLDS.identified - 1, confidence * 1.1);
+    ? Math.min(
+        CONTACT_STAGE_THRESHOLDS.suspicion + 10,
+        confidence * profile.contact.soundEvidenceMultiplier,
+      )
+    : Math.min(
+        CONTACT_STAGE_THRESHOLDS.identified - 1,
+        confidence * profile.contact.reportedEvidenceMultiplier,
+      );
   const evidence = Math.max(previous?.evidence ?? 0, reportedEvidence);
   const stage = getContactStageForEvidence(evidence);
 
@@ -187,7 +199,7 @@ export function advanceReportedContact(
     source: input.source ?? 'reported',
     evidence,
     confidence: Math.max(previous?.confidence ?? 0, confidence),
-    uncertaintyCells: Math.max(0.25, input.uncertaintyCells),
+    uncertaintyCells: Math.max(profile.contact.minimumUncertaintyCells, input.uncertaintyCells),
     lastKnownPosition: { ...input.position },
     ...targetHeightMemory(input.targetHeightMeters ?? previous?.lastKnownTargetHeightMeters),
     visibleNow: false,
@@ -204,10 +216,13 @@ export function decayUnobservedContact(
   contact: PerceptionContactMemory,
   input: ContactDecayInput,
 ): PerceptionContactMemory | null {
+  const profile = getActivePerceptionProfileSnapshot();
   const delta = Math.max(0, input.deltaSeconds);
-  const evidence = Math.max(0, contact.evidence - 1.15 * delta);
-  const confidence = Math.max(0, contact.confidence - 0.55 * delta);
-  const uncertaintyGrowthCells = (0.12 / Math.max(0.001, input.metersPerCell)) * delta;
+  const evidence = Math.max(0, contact.evidence - profile.contact.evidenceDecayPerSecond * delta);
+  const confidence = Math.max(0, contact.confidence - profile.contact.confidenceDecayPerSecond * delta);
+  const uncertaintyGrowthCells = (
+    profile.contact.uncertaintyGrowthMetersPerSecond / Math.max(0.001, input.metersPerCell)
+  ) * delta;
   const uncertaintyCells = contact.uncertaintyCells + uncertaintyGrowthCells;
   const retainScheduledVisualCue = shouldRetainScheduledVisualCue(contact, input.nowSeconds);
 
@@ -266,6 +281,7 @@ function scheduledCheckIntervalSeconds(explanationRu: readonly string[]): number
 }
 
 function normalizeContact(value: Partial<PerceptionContactMemory>): PerceptionContactMemory {
+  const profile = getActivePerceptionProfileSnapshot();
   const evidence = clamp(number(value.evidence, CONTACT_STAGE_THRESHOLDS.cue), 0, 200);
   const stage = isContactStage(value.stage) ? value.stage : getContactStageForEvidence(evidence);
   return {
@@ -276,8 +292,14 @@ function normalizeContact(value: Partial<PerceptionContactMemory>): PerceptionCo
     stage,
     source: isContactSource(value.source) ? value.source : 'reported',
     evidence,
-    confidence: clamp(number(value.confidence, evidence / 1.5), 0, 100),
-    uncertaintyCells: Math.max(0.25, number(value.uncertaintyCells, 6)),
+    confidence: clamp(number(
+      value.confidence,
+      evidence / profile.contact.confidenceEvidenceDivisor,
+    ), 0, 100),
+    uncertaintyCells: Math.max(
+      profile.contact.minimumUncertaintyCells,
+      number(value.uncertaintyCells, profile.contact.initialUncertaintyCells),
+    ),
     lastKnownPosition: normalizePosition(value.lastKnownPosition),
     ...targetHeightMemory(value.lastKnownTargetHeightMeters),
     visibleNow: Boolean(value.visibleNow),
