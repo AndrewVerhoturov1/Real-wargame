@@ -14,7 +14,11 @@ import {
   serializeUnitWoundRuntime,
   totalWoundBleedingRatePerSecond,
 } from '../../../infantry-combat/runtime';
-import { applyInitialStateToRuntime, type UnitModel } from '../../../units/UnitModel';
+import {
+  applyInitialPostureToRuntime,
+  applyInitialStateToRuntime,
+  type UnitModel,
+} from '../../../units/UnitModel';
 import type { CombatLabParticipantScenePatchV1, CombatLabInitialHealthV1, CombatLabInitialWoundV1 } from './CombatLabParticipantSceneTypes';
 import { CombatLabParticipantSceneError } from './CombatLabParticipantSceneTypes';
 import { assertFiniteRange, assertIntegerRange, increment } from './CombatLabParticipantSceneSupport';
@@ -173,9 +177,7 @@ export function applyInitialHealth(unit: UnitModel, health: CombatLabInitialHeal
 }
 
 export function applyPosture(unit: UnitModel, posture: 'standing' | 'crouched' | 'prone'): void {
-  unit.initialState.posture = posture;
-  unit.behaviorRuntime.previousPosture = posture;
-  unit.behaviorRuntime.posture = posture;
+  applyInitialPostureToRuntime(unit, posture);
 }
 
 function normalizeWounds(wounds: readonly CombatLabInitialWoundV1[]): readonly CombatLabInitialWoundV1[] {

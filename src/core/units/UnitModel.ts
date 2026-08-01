@@ -460,13 +460,21 @@ function restoreAiRuntimeSnapshot(unit: UnitModel, value: unknown): void {
   unit.behaviorRuntime.lastEvent = 'ai_runtime_scene_restored';
 }
 
+export function applyInitialPostureToRuntime(
+  unit: UnitModel,
+  posture: UnitInitialState['posture'],
+): void {
+  unit.initialState.posture = posture;
+  unit.behaviorRuntime.previousPosture = posture;
+  unit.behaviorRuntime.posture = posture;
+}
+
 export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowledge = true): void {
   clearWeaponRuntime(unit);
   clearCombatRuntime(unit);
   unit.infantryCombatRuntime = createInfantryCombatUnitRuntime();
   const initial = unit.initialState;
-  unit.behaviorRuntime.previousPosture = initial.posture;
-  unit.behaviorRuntime.posture = initial.posture;
+  applyInitialPostureToRuntime(unit, initial.posture);
   unit.behaviorRuntime.stress = initial.stress;
   unit.behaviorRuntime.suppression = initial.suppression;
   unit.behaviorRuntime.ammo = initial.ammo;

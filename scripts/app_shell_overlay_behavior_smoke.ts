@@ -90,9 +90,12 @@ class FakeElement extends FakeNode {
   hidden = false;
   inert = false;
   disabled = false;
-  tabIndex = 0;
+  tabIndex = -1;
   innerHTML = '';
-  constructor(ownerDocument: FakeDocument, readonly tagName: string) { super(ownerDocument); }
+  constructor(ownerDocument: FakeDocument, readonly tagName: string) {
+    super(ownerDocument);
+    if (['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'].includes(tagName)) this.tabIndex = 0;
+  }
   setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
   getAttribute(name: string): string | null { return this.attributes.get(name) ?? null; }
   focus(): void { this.ownerDocument.activeElement = this; }
