@@ -1,4 +1,5 @@
 import '../game/GameStyles';
+import '../ui/GameplayTuningProfileStorage';
 import './ui/combat-lab-ui-tokens.css';
 import './combat-lab.css';
 import './combat-lab-workspace.css';
