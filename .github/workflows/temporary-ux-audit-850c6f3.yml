@@ -15,7 +15,7 @@ permissions:
 jobs:
   browser-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 18
     steps:
       - name: Checkout audit branch
         uses: actions/checkout@v4
@@ -67,7 +67,7 @@ jobs:
         env:
           BASE_URL: http://127.0.0.1:4173
           OUT_DIR: artifacts/ux-audit-fast
-        run: node .github/ux-audit/run-fast.mjs
+        run: node .github/ux-audit/run-ultra.mjs
 
       - name: Save Vite log
         if: always()
