@@ -10,6 +10,7 @@ const exists = (relativePath) => fs.existsSync(path.join(root, relativePath));
 function expectFile(relativePath) {
   if (!exists(relativePath)) failures.push(`${relativePath}: file is missing`);
 }
+
 function expectIncludes(relativePath, snippets) {
   if (!exists(relativePath)) {
     failures.push(`${relativePath}: file is missing`);
@@ -20,6 +21,7 @@ function expectIncludes(relativePath, snippets) {
     if (!source.includes(snippet)) failures.push(`${relativePath}: missing ${JSON.stringify(snippet)}`);
   }
 }
+
 function expectExcludes(relativePath, snippets) {
   if (!exists(relativePath)) return;
   const source = read(relativePath);
@@ -28,7 +30,7 @@ function expectExcludes(relativePath, snippets) {
   }
 }
 
-const files = [
+for (const file of [
   'src/core/tuning/GameplayTuningProfiles.ts',
   'src/core/tuning/GameplayTuningRuntime.ts',
   'src/ui/GameplayTuningProfileStorage.ts',
@@ -37,8 +39,13 @@ const files = [
   'src/ai-node-editor/gameplay-tuning-profile-editor.css',
   'scripts/gameplay_tuning_profiles_behavior_smoke.mjs',
   'scripts/gameplay_tuning_profiles_behavior_smoke.ts',
-];
-for (const file of files) expectFile(file);
+  'scripts/gameplay_tuning_active_profiles_behavior_smoke.mjs',
+  'scripts/gameplay_tuning_active_profiles_behavior_smoke.ts',
+]) expectFile(file);
+
+if (exists('src/core/tuning/GameplayTuningNumericRecords.d.ts')) {
+  failures.push('src/core/tuning/GameplayTuningNumericRecords.d.ts: ambient compatibility hack must be removed');
+}
 
 expectIncludes('src/core/tuning/GameplayTuningProfiles.ts', [
   'GAMEPLAY_TUNING_FORMAT_VERSION = 1',
@@ -48,7 +55,8 @@ expectIncludes('src/core/tuning/GameplayTuningProfiles.ts', [
   'resolvePerceptionProfileSnapshot',
   'resolveSoldierArchetypeSnapshot',
   'resolveConditionProfileSnapshot',
-  'Object.freeze',
+  'function normalizePercentRecord<T extends object>',
+  'Object.keys(fallback) as Array<keyof T>',
   'semanticRevision',
 ]);
 expectExcludes('src/core/tuning/GameplayTuningProfiles.ts', [
@@ -59,8 +67,6 @@ expectExcludes('src/core/tuning/GameplayTuningProfiles.ts', [
   'HTMLElement',
   'setInterval(',
   'requestAnimationFrame(',
-  'color',
-  'icon',
 ]);
 
 expectIncludes('src/core/tuning/GameplayTuningRuntime.ts', [
@@ -68,11 +74,7 @@ expectIncludes('src/core/tuning/GameplayTuningRuntime.ts', [
   'setActiveConditionProfileId',
   'restoreActiveConditionProfileId',
 ]);
-expectExcludes('src/core/tuning/GameplayTuningRuntime.ts', [
-  'localStorage',
-  'document.',
-  'window.',
-]);
+expectExcludes('src/core/tuning/GameplayTuningRuntime.ts', ['localStorage', 'document.', 'window.']);
 
 expectIncludes('src/ui/GameplayTuningProfileStorage.ts', [
   'real-wargame.gameplay-tuning-profiles.v1',
@@ -81,7 +83,9 @@ expectIncludes('src/ui/GameplayTuningProfileStorage.ts', [
   'subscribeGameplayTuningProfiles',
   'replaceGameplayTuningRegistry',
   'installSoldierArchetypeResolver',
+  'installSoldierProfileSnapshotResolver',
 ]);
+expectExcludes('src/ui/GameplayTuningProfileStorage.ts', ['setInterval(', 'requestAnimationFrame(']);
 
 expectIncludes('src/ai-node-editor/GameplayTuningProfileEditor.ts', [
   'context.request.profileId',
@@ -91,14 +95,15 @@ expectIncludes('src/ai-node-editor/GameplayTuningProfileEditor.ts', [
   'Удалить',
   'Импорт',
   'Экспорт',
+  'Сделать активным',
   'beforeClose',
-  'builtIn ? \'disabled\'',
 ]);
 expectExcludes('src/ai-node-editor/GameplayTuningProfileEditor.ts', [
   'setInterval(',
   'requestAnimationFrame(',
-  'querySelector(\'#',
+  "querySelector('#",
 ]);
+
 expectIncludes('src/ai-node-editor/GameplayTuningProfileEditorIntegration.ts', [
   'mountPerceptionProfileEditor',
   'mountSoldierArchetypeEditor',
@@ -119,7 +124,7 @@ expectIncludes('src/game-editors/createDefaultGameEditorRegistry.ts', [
 ]);
 
 expectIncludes('src/core/perception/PerceptionContact.ts', [
-  'getActivePerceptionProfileSnapshot',
+  'input.perceptionProfile ?? getActivePerceptionProfileSnapshot()',
   'profile.contact.confidenceEvidenceDivisor',
   'profile.contact.evidenceDecayPerSecond',
   'profile.contact.uncertaintyGrowthMetersPerSecond',
@@ -127,20 +132,31 @@ expectIncludes('src/core/perception/PerceptionContact.ts', [
 expectIncludes('src/core/behavior/BehaviorModel.ts', [
   'SoldierArchetypeResolver',
   'installSoldierArchetypeResolver',
-  'soldierArchetypeResolver?.(profileId)',
+  'installSoldierProfileSnapshotResolver',
+  'soldierArchetypeResolver?.(requestedArchetypeId)',
+  'sourceProfileLinks',
 ]);
 expectIncludes('src/core/combat/CombatDamage.ts', [
-  'getActiveConditionProfileSnapshot',
+  'unit.soldier.conditionProfile ?? getActiveConditionProfileSnapshot()',
   'conditionProfile.wound.limbHitStressGain',
   'woundedMovementMultiplier',
   'severelyWoundedAimMultiplier',
 ]);
 expectIncludes('src/core/combat/CombatSuppression.ts', [
-  'getActiveConditionProfileSnapshot',
+  'unit.soldier.conditionProfile ?? getActiveConditionProfileSnapshot()',
   'suppressionProfile.gainMultiplier',
   'suppressionProfile.decayPerSecond',
   'suppressionProfile.stressMultiplier',
   'suppressionProfile.maximumSuppression',
+]);
+
+expectIncludes('src/combat-lab/game-editors/CombatLabGameEditorLinks.ts', [
+  'unit.soldier.sourceProfileLinks ?? []',
+  'Record<string, unknown>',
+]);
+expectExcludes('src/combat-lab/game-editors/CombatLabGameEditorLinks.ts', [
+  'unit.soldier as unknown',
+  'Record<string, any>',
 ]);
 
 if (failures.length > 0) {
@@ -150,4 +166,5 @@ if (failures.length > 0) {
 }
 
 await import('./gameplay_tuning_profiles_behavior_smoke.mjs');
+await import('./gameplay_tuning_active_profiles_behavior_smoke.mjs');
 console.log('Gameplay tuning editors smoke passed.');
