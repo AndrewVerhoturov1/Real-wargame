@@ -1,0 +1,81 @@
+name: Temporary Wave 1 Compiler Report
+
+on:
+  push:
+    branches:
+      - compiler/20260801-shared-game-editors-wave1
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temp-wave1-compiler-report
+  cancel-in-progress: false
+
+jobs:
+  verify-and-report:
+    if: >-
+      !contains(github.event.head_commit.message, '[ci-report]') &&
+      (contains(github.event.head_commit.message, '[baseline]') ||
+       contains(github.event.head_commit.message, '[red]') ||
+       contains(github.event.head_commit.message, '[focused]') ||
+       contains(github.event.head_commit.message, '[verify]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Select verification mode
+        id: mode
+        shell: bash
+        run: |
+          message="${{ github.event.head_commit.message }}"
+          if [[ "${message}" == *"[verify]"* ]]; then mode=verify
+          elif [[ "${message}" == *"[focused]"* ]]; then mode=focused
+          elif [[ "${message}" == *"[red]"* ]]; then mode=red
+          else mode=baseline
+          fi
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+      - name: Run verification
+        id: verification
+        shell: bash
+        run: |
+          set +e
+          bash scripts/.tmp-wave1-verification.sh "${{ steps.mode.outputs.mode }}" > /tmp/wave1-verification.log 2>&1
+          code=$?
+          set -e
+          cat /tmp/wave1-verification.log
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+      - name: Commit full report to compiler branch
+        if: always()
+        shell: bash
+        run: |
+          mode="${{ steps.mode.outputs.mode }}"
+          trigger_sha="${{ github.sha }}"
+          report_dir=".tmp-wave1-verification"
+          report_path="${report_dir}/${mode}-${trigger_sha}.log"
+          mkdir -p "${report_dir}"
+          {
+            echo "mode: ${mode}"
+            echo "trigger_sha: ${trigger_sha}"
+            echo "workflow_run_id: ${{ github.run_id }}"
+            echo "workflow_attempt: ${{ github.run_attempt }}"
+            echo "exit_code: ${{ steps.verification.outputs.exit_code }}"
+            echo
+            cat /tmp/wave1-verification.log
+          } > "${report_path}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin compiler/20260801-shared-game-editors-wave1
+          git add "${report_path}"
+          git commit -m "ci(wave1): record ${mode} verification [ci-report]"
+          git push origin HEAD:compiler/20260801-shared-game-editors-wave1
+      - name: Enforce verification result
+        if: always()
+        shell: bash
+        run: exit "${{ steps.verification.outputs.exit_code }}"
