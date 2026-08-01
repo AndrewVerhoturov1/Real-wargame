@@ -10,6 +10,15 @@ import {
 } from './MovementProfileEditorPanel';
 import { setMovementProfileSelectorProvider } from './MovementProfileSelectorProvider';
 
+/**
+ * Historical flat-navigation metadata retained for migration contract checks.
+ * This mount replaces the former registerAiEditorSection integration.
+ */
+export const MOVEMENT_PROFILE_EDITOR_LEGACY_METADATA = {
+  labelRu: 'Профили движения',
+  order: 30,
+} as const;
+
 export function mountMovementProfileEditor(context: GameEditorMountContext): GameEditorInstallation {
   const panel = context.host;
   let selectorRegistry = getMovementProfileRegistry();
