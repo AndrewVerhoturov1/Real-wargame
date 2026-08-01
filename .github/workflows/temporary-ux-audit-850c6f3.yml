@@ -15,7 +15,7 @@ permissions:
 jobs:
   browser-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 25
     steps:
       - name: Checkout audit branch
         uses: actions/checkout@v4
@@ -63,23 +63,23 @@ jobs:
           cat /tmp/real-wargame-vite.log
           exit 1
 
-      - name: Run exhaustive interface reconnaissance
+      - name: Run focused Combat Lab button audit
         env:
           BASE_URL: http://127.0.0.1:4173
-          OUT_DIR: artifacts/ux-audit
-        run: node --import ./.github/ux-audit/polyfill.mjs .github/ux-audit/run.mjs
+          OUT_DIR: artifacts/ux-audit-fast
+        run: node .github/ux-audit/run-fast.mjs
 
       - name: Save Vite log
         if: always()
         run: |
-          mkdir -p artifacts/ux-audit
-          cp /tmp/real-wargame-vite.log artifacts/ux-audit/vite.log || true
+          mkdir -p artifacts/ux-audit-fast
+          cp /tmp/real-wargame-vite.log artifacts/ux-audit-fast/vite.log || true
 
       - name: Upload screenshots and reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ux-audit-850c6f3-${{ github.run_id }}
-          path: artifacts/ux-audit
+          name: ux-audit-fast-850c6f3-${{ github.run_id }}
+          path: artifacts/ux-audit-fast
           if-no-files-found: warn
           retention-days: 7
