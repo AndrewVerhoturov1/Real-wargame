@@ -1,0 +1,175 @@
+name: Temporary Shared Editors Compiler Correction Final
+
+on:
+  push:
+    branches:
+      - compiler/20260731-shared-game-editors-integration
+
+permissions:
+  contents: write
+
+jobs:
+  correct:
+    if: contains(github.event.head_commit.message, '[compiler-correction-final]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply complete correction package
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path_name: str, old: str, new: str) -> None:
+              path = Path(path_name)
+              source = path.read_text(encoding='utf-8')
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path_name}: expected one replacement, found {count}: {old!r}')
+              path.write_text(source.replace(old, new), encoding='utf-8')
+
+          replace_once(
+              'src/ai-node-editor/GameplayTuningProfileEditor.ts',
+              "      (this.draft as SoldierArchetypeDefinition)[reference] = target.value;\n",
+              "      const archetypeDraft = this.draft as SoldierArchetypeDefinition;\n"
+              "      this.draft = { ...archetypeDraft, [reference]: target.value } as SoldierArchetypeDefinition;\n",
+          )
+
+          css_path = Path('src/game-editors/game-editor-workspace.css')
+          css = css_path.read_text(encoding='utf-8')
+          marker = ".game-editor-return-link:hover {\n"
+          hidden_rule = ".game-editor-return-link[hidden] {\n  display: none;\n}\n\n"
+          if hidden_rule not in css:
+              if css.count(marker) != 1:
+                  raise SystemExit('game-editor-workspace.css: return-link insertion marker missing')
+              css_path.write_text(css.replace(marker, hidden_rule + marker), encoding='utf-8')
+
+          replace_once(
+              'scripts/shared_game_editors_integration_smoke.mjs',
+              "  'workspace.destroy()',\n",
+              "  'this.workspace?.destroy()',\n",
+          )
+          replace_once(
+              'scripts/shared_game_editors_integration_smoke.mjs',
+              "for (const sourceFile of walkFiles('src/core').filter((file) => /\\.[cm]?[jt]sx?$/.test(file))) {\n"
+              "  const source = read(sourceFile);\n"
+              "  if (source.includes('localStorage')) failures.push(`${sourceFile}: core runtime must not access localStorage`);\n"
+              "}\n",
+              "for (const sourceFile of [\n"
+              "  'src/core/tuning/GameplayTuningProfiles.ts',\n"
+              "  'src/core/tuning/GameplayTuningRuntime.ts',\n"
+              "  'src/core/simulation/SimulationTick.ts',\n"
+              "  'src/core/perception/PerceptionContact.ts',\n"
+              "  'src/core/combat/CombatDamage.ts',\n"
+              "  'src/core/combat/CombatSuppression.ts',\n"
+              "]) {\n"
+              "  const source = read(sourceFile);\n"
+              "  if (source.includes('localStorage')) failures.push(`${sourceFile}: tuning and hot-path runtime must not access localStorage`);\n"
+              "}\n",
+          )
+
+          replace_once(
+              'scripts/combat_lab_game_editors_smoke.mjs',
+              "  'workspace.destroy()',\n",
+              "  'this.workspace?.destroy()',\n",
+          )
+          replace_once(
+              'scripts/combat_lab_stage10_ui_integration_contract_smoke.mjs',
+              "  ['parameters', 'Параметры'],\n  ['metrics', 'Метрики'],\n",
+              "  ['parameters', 'Параметры'],\n  ['settings', 'Настройка игры'],\n  ['metrics', 'Метрики'],\n",
+          )
+          replace_once(
+              'scripts/combat_lab_stage10_ui_integration_contract_smoke.mjs',
+              "assert.equal((hosts.match(/tabId:/g) ?? []).length, 6, 'Stage 10 workspace must contain exactly six tabs.');\n",
+              "assert.equal((hosts.match(/tabId:/g) ?? []).length, 7, 'Integrated workspace must contain the six Stage 10 tabs plus game settings.');\n",
+          )
+
+          behavior_path = Path('scripts/combat_lab_game_editors_behavior_smoke.ts')
+          behavior = behavior_path.read_text(encoding='utf-8')
+          old_unit = "const unit = {\n  id: 'blue-1',\n  playerAttentionProfileId: 'focused-observe',\n"
+          new_unit = (
+              "const unit = {\n  id: 'blue-1',\n  soldier: {\n    sourceProfileLinks: [\n"
+              "      { editorId: 'routeProfiles', profileId: 'careful', labelRu: 'Повтор профиля маршрута' },\n"
+              "      { editorId: 'soldierArchetypes', profileId: 'regular', labelRu: 'Архетип бойца' },\n"
+              "      { editorId: 'perceptionProfiles', profileId: 'standard', labelRu: 'Профиль восприятия' },\n"
+              "      { editorId: 'conditionProfiles', profileId: 'standard', labelRu: 'Ранения и подавление' },\n"
+              "    ],\n  },\n  playerAttentionProfileId: 'focused-observe',\n"
+          )
+          if behavior.count(old_unit) != 1:
+              raise SystemExit('behavior smoke: main unit fixture marker missing')
+          behavior = behavior.replace(old_unit, new_unit, 1)
+
+          old_expected = "  {\n    editorId: 'attentionProfiles',\n    profileId: 'focused-observe',\n    labelRu: 'Профиль внимания',\n  },\n]);\n"
+          new_expected = (
+              "  {\n    editorId: 'attentionProfiles',\n    profileId: 'focused-observe',\n    labelRu: 'Профиль внимания',\n  },\n"
+              "  {\n    editorId: 'soldierArchetypes',\n    profileId: 'regular',\n    labelRu: 'Архетип бойца',\n  },\n"
+              "  {\n    editorId: 'perceptionProfiles',\n    profileId: 'standard',\n    labelRu: 'Профиль восприятия',\n  },\n"
+              "  {\n    editorId: 'conditionProfiles',\n    profileId: 'standard',\n    labelRu: 'Ранения и подавление',\n  },\n]);\n"
+          )
+          if behavior.count(old_expected) != 1:
+              raise SystemExit('behavior smoke: expected links marker missing')
+          behavior = behavior.replace(old_expected, new_expected, 1)
+
+          old_empty = "assert.deepEqual(resolveCombatLabSelectedUnitProfileLinks({\n  id: 'empty',\n  movementRuntime: {\n"
+          new_empty = "assert.deepEqual(resolveCombatLabSelectedUnitProfileLinks({\n  id: 'empty',\n  soldier: { sourceProfileLinks: [] },\n  movementRuntime: {\n"
+          if behavior.count(old_empty) != 1:
+              raise SystemExit('behavior smoke: empty unit marker missing')
+          behavior = behavior.replace(old_empty, new_empty, 1)
+
+          overlay_start = behavior.index('class FakeOverlayCoordinator')
+          element_start = behavior.index('class FakeElement', overlay_start)
+          function_start = behavior.index('\nfunction installFakeDom', element_start)
+          overlay_block = behavior[overlay_start:element_start].rstrip()
+          element_block = behavior[element_start:function_start].rstrip()
+          behavior = behavior[:overlay_start] + behavior[function_start:]
+          call_marker = 'installFakeDom();\n\n'
+          if behavior.count(call_marker) != 1:
+              raise SystemExit('behavior smoke: installFakeDom call marker missing')
+          behavior = behavior.replace(
+              call_marker,
+              element_block + '\n\n' + overlay_block + '\n\n' + call_marker,
+              1,
+          )
+          behavior_path.write_text(behavior, encoding='utf-8')
+
+          platform_path = Path('scripts/shared_game_editor_platform_smoke.mjs')
+          platform = platform_path.read_text(encoding='utf-8')
+          insertion = "expectIncludes('src/game-editors/game-editor-workspace.css', [\n  '.game-editor-return-link[hidden]',\n  'display: none',\n]);\n\n"
+          platform_marker = "const aiEditorCss = read('src/ai-node-editor/ai-node-editor.css');\n"
+          if insertion not in platform:
+              if platform.count(platform_marker) != 1:
+                  raise SystemExit('shared editor platform smoke: CSS marker missing')
+              platform = platform.replace(platform_marker, insertion + platform_marker)
+          platform_path.write_text(platform, encoding='utf-8')
+          PY
+      - name: Run focused correction gate
+        shell: bash
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run shared-game-editors:smoke
+          npm run combat-lab-game-editors:smoke
+          npm run combat-lab-scenario-system:verify
+          npm run build
+      - name: Commit correction package
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/ai-node-editor/GameplayTuningProfileEditor.ts \
+            src/game-editors/game-editor-workspace.css \
+            scripts/shared_game_editors_integration_smoke.mjs \
+            scripts/shared_game_editor_platform_smoke.mjs \
+            scripts/combat_lab_game_editors_smoke.mjs \
+            scripts/combat_lab_stage10_ui_integration_contract_smoke.mjs \
+            scripts/combat_lab_game_editors_behavior_smoke.ts
+          git commit -m "fix(integration): align shared editor contracts and return visibility"
+          git push origin HEAD:compiler/20260731-shared-game-editors-integration
