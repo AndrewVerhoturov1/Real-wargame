@@ -1,4 +1,3 @@
-import type { GameEditorMountContext } from '../game-editors/GameEditorTypes';
 import {
   getGameplayTuningRegistry,
   type ConditionProfileDefinition,
@@ -11,6 +10,7 @@ import {
   getActiveConditionProfileId,
   setActiveConditionProfileId,
 } from '../core/tuning/GameplayTuningRuntime';
+import type { GameEditorMountContext } from '../game-editors/GameEditorTypes';
 import {
   replaceStoredGameplayTuningProfiles,
   resetGameplayTuningProfiles,
@@ -20,6 +20,7 @@ import {
 
 export type GameplayTuningEditorKind = 'perception' | 'archetype' | 'condition';
 type EditableProfile = PerceptionProfileDefinition | SoldierArchetypeDefinition | ConditionProfileDefinition;
+type ArchetypeReferenceKey = 'perceptionProfileId' | 'conditionProfileId';
 
 interface NumberFieldDefinition {
   readonly path: string;
@@ -77,6 +78,9 @@ export class GameplayTuningProfileEditor {
     const profile = this.draft;
     const builtIn = profile.builtIn;
     const active = this.isActiveProfile(profile.id);
+    const archetypeReferences = this.kind === 'archetype'
+      ? this.renderArchetypeReferences(profile as SoldierArchetypeDefinition, builtIn)
+      : '';
     this.context.host.innerHTML = `
       <div class="gameplay-tuning-editor" data-gameplay-tuning-editor="${this.kind}">
         <aside class="gameplay-tuning-editor-list-panel">
@@ -106,13 +110,14 @@ export class GameplayTuningProfileEditor {
             <div>
               <span class="gameplay-tuning-editor-kicker">${builtIn ? 'Встроенный профиль' : 'Пользовательский профиль'} · ${escapeHtml(profile.id)}</span>
               <h2>${escapeHtml(profile.nameRu)}</h2>
-              <p>${builtIn ? 'Встроенные значения неизменяемы. Создайте копию для настройки.' : 'Поля меняют только существующие расчёты runtime и проходят ту же нормализацию, что импорт.'}</p>
+              <p>${builtIn ? 'Встроенные значения неизменяемы. Создайте копию для настройки.' : 'Поля меняют только существующие расчёты и проходят ту же нормализацию, что импорт.'}</p>
             </div>
             <div class="gameplay-tuning-editor-active">
               ${this.kind === 'archetype' ? '' : `<button type="button" data-tuning-action="activate" ${active ? 'disabled' : ''}>${active ? 'Активный профиль' : 'Сделать активным'}</button>`}
             </div>
           </header>
           <div class="gameplay-tuning-editor-fields">
+            ${archetypeReferences}
             ${this.fieldDefinitions().map((field) => renderNumberField(profile, field, builtIn)).join('')}
           </div>
           <footer class="gameplay-tuning-editor-save-bar">
@@ -124,8 +129,31 @@ export class GameplayTuningProfileEditor {
       </div>`;
   }
 
+  private renderArchetypeReferences(
+    profile: SoldierArchetypeDefinition,
+    disabled: boolean,
+  ): string {
+    return `
+      <label class="gameplay-tuning-editor-field gameplay-tuning-editor-reference">
+        <span class="gameplay-tuning-editor-field-label">Профиль восприятия</span>
+        <select data-tuning-reference="perceptionProfileId" ${disabled ? 'disabled' : ''}>
+          ${this.registry.listPerceptionProfiles().map((item) => option(item.id, item.nameRu, item.id === profile.perceptionProfileId)).join('')}
+        </select>
+        <small>Снимок этого профиля копируется в бойца при создании и затем не меняется самопроизвольно.</small>
+      </label>
+      <label class="gameplay-tuning-editor-field gameplay-tuning-editor-reference">
+        <span class="gameplay-tuning-editor-field-label">Ранения и подавление</span>
+        <select data-tuning-reference="conditionProfileId" ${disabled ? 'disabled' : ''}>
+          ${this.registry.listConditionProfiles().map((item) => option(item.id, item.nameRu, item.id === profile.conditionProfileId)).join('')}
+        </select>
+        <small>Снимок задаёт штрафы ранений и параметры подавления именно для созданного бойца.</small>
+      </label>`;
+  }
+
   private handleClick(event: Event): void {
-    const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-tuning-profile-id], [data-tuning-action]') : null;
+    const target = event.target instanceof Element
+      ? event.target.closest<HTMLElement>('[data-tuning-profile-id], [data-tuning-action]')
+      : null;
     if (!target) return;
     const profileId = target.dataset.tuningProfileId;
     if (profileId) {
@@ -153,6 +181,14 @@ export class GameplayTuningProfileEditor {
       if (file) void this.importFile(file);
       return;
     }
+    if (target instanceof HTMLSelectElement) {
+      const reference = target.dataset.tuningReference as ArchetypeReferenceKey | undefined;
+      if (!reference || this.kind !== 'archetype' || this.draft.builtIn) return;
+      (this.draft as SoldierArchetypeDefinition)[reference] = target.value;
+      this.dirty = true;
+      this.render();
+      return;
+    }
     if (!(target instanceof HTMLInputElement)) return;
     const path = target.dataset.tuningPath;
     if (!path || this.draft.builtIn) return;
@@ -174,8 +210,7 @@ export class GameplayTuningProfileEditor {
 
   private copySelected(): void {
     const source = this.requireSelected();
-    const suggested = `${source.id}-copy`;
-    const requestedId = window.prompt('Устойчивый идентификатор копии', suggested);
+    const requestedId = window.prompt('Устойчивый идентификатор копии', `${source.id}-copy`);
     const profileId = normalizeProfileId(requestedId);
     if (!profileId) return;
     if (this.hasProfile(profileId)) {
@@ -322,7 +357,7 @@ export class GameplayTuningProfileEditor {
 
   private editorDescription(): string {
     if (this.kind === 'perception') return 'Качество накопления, сохранения и уточнения контактов.';
-    if (this.kind === 'archetype') return 'Исходные характеристики бойца, копируемые в его состояние при создании.';
+    if (this.kind === 'archetype') return 'Исходные характеристики и ссылки на профили, копируемые в бойца при создании.';
     return 'Действующие штрафы ранений и параметры накопления подавления.';
   }
 
@@ -360,10 +395,10 @@ const ARCHETYPE_FIELDS: readonly NumberFieldDefinition[] = [
 ];
 
 const CONDITION_FIELDS: readonly NumberFieldDefinition[] = [
-  field('wound.woundedMovementMultiplier', 'Движение после лёгкого ранения', 0, 2, 0.01, '×', 'Множитель скорости для состояния wounded.'),
-  field('wound.severelyWoundedMovementMultiplier', 'Движение после тяжёлого ранения', 0, 2, 0.01, '×', 'Множитель скорости для состояния severely wounded.'),
-  field('wound.woundedAimMultiplier', 'Прицеливание после лёгкого ранения', 0, 2, 0.01, '×', 'Множитель точности для состояния wounded.'),
-  field('wound.severelyWoundedAimMultiplier', 'Прицеливание после тяжёлого ранения', 0, 2, 0.01, '×', 'Множитель точности для состояния severely wounded.'),
+  field('wound.woundedMovementMultiplier', 'Движение после лёгкого ранения', 0, 1, 0.01, '×', 'Множитель скорости для состояния wounded.'),
+  field('wound.severelyWoundedMovementMultiplier', 'Движение после тяжёлого ранения', 0, 1, 0.01, '×', 'Множитель скорости для состояния severely wounded.'),
+  field('wound.woundedAimMultiplier', 'Прицеливание после лёгкого ранения', 0, 1, 0.01, '×', 'Множитель точности для состояния wounded.'),
+  field('wound.severelyWoundedAimMultiplier', 'Прицеливание после тяжёлого ранения', 0, 1, 0.01, '×', 'Множитель точности для состояния severely wounded.'),
   field('wound.limbHitStressGain', 'Стресс от попадания в конечность', 0, 100, 1, 'ед.', 'Разовый прирост уже существующего стресса.'),
   field('wound.bodyHitStressGain', 'Стресс от попадания в корпус или голову', 0, 100, 1, 'ед.', 'Разовый прирост уже существующего стресса.'),
   field('suppression.gainMultiplier', 'Накопление подавления', 0, 4, 0.01, '×', 'Множитель подавления от попаданий, близких пролётов и ударов рядом.'),
@@ -397,6 +432,10 @@ function renderNumberField(profile: EditableProfile, definition: NumberFieldDefi
     </label>`;
 }
 
+function option(id: string, nameRu: string, selected: boolean): string {
+  return `<option value="${escapeAttribute(id)}" ${selected ? 'selected' : ''}>${escapeHtml(nameRu)} · ${escapeHtml(id)}</option>`;
+}
+
 function getNumberAtPath(root: Record<string, unknown>, path: string): number {
   let current: unknown = root;
   for (const segment of path.split('.')) current = isRecord(current) ? current[segment] : undefined;
@@ -412,7 +451,7 @@ function setNumberAtPath(root: Record<string, unknown>, path: string, value: num
     if (!isRecord(next)) current[segment] = {};
     current = current[segment] as Record<string, unknown>;
   }
-  current[segments.at(-1)!] = value;
+  current[segments[segments.length - 1]!] = value;
 }
 
 function cloneProfile<T extends EditableProfile>(profile: T): T {
