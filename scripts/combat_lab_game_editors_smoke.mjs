@@ -96,24 +96,25 @@ expectIncludes('src/ai-node-editor/AiEditorGameEditorPlatform.ts', [
   'data-game-editor-return',
 ]);
 
-expectIncludes('src/combat-lab/CombatLabExtension.ts', [
+expectIncludes('src/combat-lab/main.ts', [
   'CombatLabGameEditors',
-  'this.workspace.hosts.settings',
-  'this.gameEditors.destroy()',
+  'workspaceHosts.settings',
+  'gameEditorsInstallation?.destroy()',
+  './game-editors/combat-lab-game-editors.css',
 ]);
 
 expectIncludes('src/combat-lab/parameters/installCombatLabQuickParameters.ts', [
-  'onOpenSourceProfile',
-  'requestCombatLabGameEditorOpen',
-]);
-expectIncludes('src/combat-lab/ui/CombatLabQuickParametersPanel.ts', [
   'sourceProfilesHost',
   'resolveCombatLabSelectedUnitProfileLinks',
   'onOpenSourceProfile',
+  'requestCombatLabGameEditorOpen',
+  'unsubscribeSelection()',
+  'unsubscribeDraft()',
 ]);
-
-expectIncludes('src/combat-lab/main.ts', [
-  './game-editors/combat-lab-game-editors.css',
+expectExcludes('src/combat-lab/parameters/installCombatLabQuickParameters.ts', [
+  'setInterval(',
+  'requestAnimationFrame(',
+  'localStorage',
 ]);
 
 if (failures.length > 0) {
