@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { runVerificationCommand } from './infantry_combat_verification_cache.mjs';
 
 const REQUIRED_BASE_SHA = 'f7eea38163be07c70d83314b5b6f3a1ae1cb5855';
+const APPROVED_STAGE8_IMPLEMENTATION_HEAD_SHA = 'f93cdbdf15497498e99dd4f63a2bfd20e5414ea9';
 const repoRoot = process.cwd();
 const baseWorktree = path.join(repoRoot, '.tmp-stage8-performance-base');
 const verificationCachePath = path.join(
@@ -43,8 +44,12 @@ const matrixChecks = [
 ];
 
 const previousCachePath = process.env.INFANTRY_COMBAT_VERIFICATION_CACHE;
+const previousStage8DiffHead = process.env.INFANTRY_COMBAT_STAGE8_DIFF_HEAD_SHA;
 rmSync(verificationCachePath, { force: true });
 process.env.INFANTRY_COMBAT_VERIFICATION_CACHE = verificationCachePath;
+if (previousStage8DiffHead === undefined) {
+  process.env.INFANTRY_COMBAT_STAGE8_DIFF_HEAD_SHA = APPROVED_STAGE8_IMPLEMENTATION_HEAD_SHA;
+}
 
 try {
   console.log(`Node.js ${process.version}`);
@@ -58,6 +63,8 @@ try {
   rmSync(verificationCachePath, { force: true });
   if (previousCachePath === undefined) delete process.env.INFANTRY_COMBAT_VERIFICATION_CACHE;
   else process.env.INFANTRY_COMBAT_VERIFICATION_CACHE = previousCachePath;
+  if (previousStage8DiffHead === undefined) delete process.env.INFANTRY_COMBAT_STAGE8_DIFF_HEAD_SHA;
+  else process.env.INFANTRY_COMBAT_STAGE8_DIFF_HEAD_SHA = previousStage8DiffHead;
 }
 
 function runRequiredCheck(command, args) {
