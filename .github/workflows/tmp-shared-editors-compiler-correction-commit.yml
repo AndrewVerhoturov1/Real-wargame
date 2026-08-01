@@ -47,6 +47,16 @@ jobs:
               "assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 6, 'Combat Lab must expose exactly six workspace tabs.');",
               "assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 7, 'Integrated Combat Lab must expose six Stage 10 tabs plus game settings.');",
           )
+          replace_once(
+              'scripts/combat_lab_workspace_layout_smoke.mjs',
+              "  'body.app-shell-mode-combat-lab .app-shell-menu',\n",
+              "",
+          )
+          replace_once(
+              'scripts/combat_lab_workspace_layout_smoke.mjs',
+              "assert.ok(!css.includes('right: calc(var(--combat-lab-dock-width)'), 'Laboratory dock width must not replace the production right-inspector offset.');",
+              "assert.ok(!css.includes('right: calc(var(--combat-lab-dock-width)'), 'Laboratory dock width must not replace the production right-inspector offset.');\nassert.ok(!css.includes('body.app-shell-mode-combat-lab .app-shell-menu'), 'Combat Lab must not reserve layout for the removed permanent menu strip.');",
+          )
 
           replace_once(
               'scripts/infantry_combat_stage8_verify.mjs',
