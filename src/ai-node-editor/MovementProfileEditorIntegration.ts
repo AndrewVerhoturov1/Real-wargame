@@ -12,7 +12,7 @@ import { setMovementProfileSelectorProvider } from './MovementProfileSelectorPro
 
 /**
  * Historical flat-navigation metadata retained for migration contract checks.
- * This mount replaces the former registerAiEditorSection integration.
+ * The shared platform mount replaces the former flat-navigation hook.
  */
 export const MOVEMENT_PROFILE_EDITOR_LEGACY_METADATA = {
   labelRu: 'Профили движения',
