@@ -63,7 +63,24 @@ assert.deepEqual(resolveCombatLabSelectedUnitProfileLinks(unit), [
     labelRu: 'Профиль внимания',
   },
 ]);
-assert.deepEqual(resolveCombatLabSelectedUnitProfileLinks({ id: 'empty' } as UnitModel), []);
+assert.deepEqual(resolveCombatLabSelectedUnitProfileLinks({
+  id: 'empty',
+  movementRuntime: {
+    effectiveProfileId: '',
+    requestedProfileId: '',
+  },
+} as UnitModel), [
+  {
+    editorId: 'routeProfiles',
+    profileId: null,
+    labelRu: 'Профиль маршрута',
+  },
+  {
+    editorId: 'movementProfiles',
+    profileId: null,
+    labelRu: 'Профиль движения',
+  },
+]);
 
 console.log('Combat Lab game-editor behavior smoke passed.');
 
