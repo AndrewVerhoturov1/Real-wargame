@@ -24,6 +24,7 @@ const checks = [
   nodeCheck('deployment source contract', 'write_deployment_source_smoke.mjs', 30_000),
   nodeCheck('deployment pages contract', 'deployment_pages_smoke_contract.mjs', 30_000),
   nodeCheck('manual Vercel policy contract', 'manual_vercel_deploy_skill_smoke.mjs', 30_000),
+  nodeCheck('Visual skill discoverability contract', 'visual_skill_discoverability_smoke.mjs', 30_000),
   nodeCheck('manual Vercel workflow contract', 'manual_vercel_preview_workflow_smoke.mjs', 30_000),
   nodeCheck('Combat Lab shared renderer contract', 'combat_lab_shared_renderer_contract_smoke.mjs', 30_000),
   nodeCheck('Combat Lab full game contract', 'combat_lab_full_game_contract_smoke.mjs', 30_000),
