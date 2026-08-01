@@ -23,7 +23,10 @@ const gameMain = readFileSync('src/main.ts', 'utf8');
 const combatLabMain = readFileSync('src/combat-lab/main.ts', 'utf8');
 const editorEntry = readFileSync('src/shared/AiEditorShellMenuEntry.ts', 'utf8');
 
-assert.equal(packageJson.scripts?.['app-shell-overlay:smoke'], 'node scripts/app_shell_overlay_smoke.mjs');
+assert.equal(
+  packageJson.scripts?.['app-shell-overlay:smoke'],
+  'node scripts/app_shell_overlay_smoke.mjs && node scripts/app_shell_overlay_behavior_smoke.mjs',
+);
 
 assert.match(shell, /getAppOverlayCoordinator/);
 assert.match(shell, /const installations = new WeakMap<Document/);
