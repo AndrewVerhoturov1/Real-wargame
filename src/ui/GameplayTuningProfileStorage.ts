@@ -36,7 +36,7 @@ export function loadGameplayTuningProfiles(
     if (parsed.formatVersion !== GAMEPLAY_TUNING_FORMAT_VERSION) {
       return createDefaultGameplayTuningRegistry();
     }
-    return new GameplayTuningRegistry(parsed);
+    return restoreBuiltInProfiles(new GameplayTuningRegistry(parsed));
   } catch {
     return createDefaultGameplayTuningRegistry();
   }
@@ -46,7 +46,9 @@ export function saveGameplayTuningProfiles(
   registry: GameplayTuningRegistry = getGameplayTuningRegistry(),
   storage: Storage | null = resolveBrowserStorage(),
 ): void {
+  restoreBuiltInProfiles(registry);
   replaceGameplayTuningRegistry(registry);
+  restoreActiveConditionProfileId(getActiveConditionProfileId());
   storage?.setItem(GAMEPLAY_TUNING_STORAGE_KEY, JSON.stringify(registry.exportBundle()));
   storage?.setItem(GAMEPLAY_TUNING_ACTIVE_CONDITION_KEY, getActiveConditionProfileId());
   for (const listener of listeners) listener(registry);
@@ -56,7 +58,7 @@ export function replaceStoredGameplayTuningProfiles(
   bundle: Partial<GameplayTuningBundleV1>,
   storage: Storage | null = resolveBrowserStorage(),
 ): GameplayTuningRegistry {
-  const registry = new GameplayTuningRegistry(bundle);
+  const registry = restoreBuiltInProfiles(new GameplayTuningRegistry(bundle));
   saveGameplayTuningProfiles(registry, storage);
   return registry;
 }
@@ -76,6 +78,20 @@ export function resetGameplayTuningProfiles(
 export function subscribeGameplayTuningProfiles(listener: GameplayTuningListener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+function restoreBuiltInProfiles(registry: GameplayTuningRegistry): GameplayTuningRegistry {
+  const defaults = createDefaultGameplayTuningRegistry();
+  for (const profile of defaults.listPerceptionProfiles()) {
+    if (profile.builtIn) registry.resetPerceptionProfile(profile.id);
+  }
+  for (const profile of defaults.listSoldierArchetypes()) {
+    if (profile.builtIn) registry.resetSoldierArchetype(profile.id);
+  }
+  for (const profile of defaults.listConditionProfiles()) {
+    if (profile.builtIn) registry.resetConditionProfile(profile.id);
+  }
+  return registry;
 }
 
 function readActiveConditionProfileId(storage: Storage | null = resolveBrowserStorage()): string | null {
