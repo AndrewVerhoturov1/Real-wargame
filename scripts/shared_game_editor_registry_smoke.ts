@@ -126,7 +126,12 @@ assert.equal(combatCatalogReads, 0, 'importing the shared platform must not load
 
 const defaultRegistry = createDefaultGameEditorRegistry();
 assert.equal(combatCatalogReads, 0, 'creating the default registry must not load combat catalog storage');
-assert.equal(defaultRegistry.list().length, 9, 'all nine existing editors must be registered exactly once');
+assert.equal(defaultRegistry.list().length, 12, 'all twelve shared editors must be registered exactly once');
+assert.deepEqual(
+  ['perceptionProfiles', 'soldierArchetypes', 'conditionProfiles'].map((id) => defaultRegistry.require(id).id),
+  ['perceptionProfiles', 'soldierArchetypes', 'conditionProfiles'],
+  'gameplay tuning editor ids must resolve through the one shared registry',
+);
 assert.equal(defaultRegistry.require('behaviorGraph').activationFor('ai-editor'), 'hidden');
 assert.equal(defaultRegistry.require('behaviorGraph').activationFor('combat-lab'), 'route');
 assert.match(
