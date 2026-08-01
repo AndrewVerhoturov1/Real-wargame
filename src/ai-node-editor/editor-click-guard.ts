@@ -1,6 +1,7 @@
 export {};
 
 const EDITOR_CONTROL_SELECTOR = [
+  '.game-editor-shell',
   '.human-node-panel',
   '.inspector-panel',
   '.developer-json-details',
