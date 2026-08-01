@@ -6,13 +6,13 @@ on:
       - compiler/20260731-shared-game-editors-integration
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
-    if: contains(github.event.head_commit.message, '[parameters-host-regression]')
+    if: contains(github.event.head_commit.message, '[parameters-host-fix]')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,5 +21,64 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci --no-audit --no-fund
-      - run: npm run combat-lab-game-editors:smoke
+
+      - name: Apply minimal parameters host ownership fix
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              source = file.read_text(encoding='utf-8')
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one marker, found {count}: {old!r}')
+              file.write_text(source.replace(old, new, 1), encoding='utf-8')
+
+          replace_once(
+              'src/combat-lab/CombatLabExtension.ts',
+              "      host: this.layout.scenePanelHost,\n      getSelectedUnitId: () => session.state.selectedUnitId,",
+              "      host: this.layout.scenePanelHost,\n      parametersHost: this.layout.parametersPanelHost,\n      getSelectedUnitId: () => session.state.selectedUnitId,",
+          )
+
+          replace_once(
+              'src/combat-lab/parameters/installCombatLabQuickParameters.ts',
+              "  const host = workspaceHosts.parameters;\n  const sourceProfilesHost = document.createElement('div');",
+              "  const host = workspaceHosts.parameters;\n  const installationRoot = document.createElement('section');\n  installationRoot.className = 'combat-lab-quick-parameters-installation';\n  const sourceProfilesHost = document.createElement('div');",
+          )
+          replace_once(
+              'src/combat-lab/parameters/installCombatLabQuickParameters.ts',
+              "  quickParametersHost.className = 'combat-lab-quick-parameters-host';\n  host.replaceChildren(sourceProfilesHost, quickParametersHost);",
+              "  quickParametersHost.className = 'combat-lab-quick-parameters-host';\n  installationRoot.append(sourceProfilesHost, quickParametersHost);\n  const manualDivider = host.querySelector<HTMLElement>('.combat-lab-workspace-divider');\n  if (manualDivider) host.insertBefore(installationRoot, manualDivider);\n  else host.append(installationRoot);",
+          )
+          replace_once(
+              'src/combat-lab/parameters/installCombatLabQuickParameters.ts',
+              "      panel.destroy();\n      host.replaceChildren();",
+              "      panel.destroy();\n      installationRoot.remove();",
+          )
+          PY
+
+      - name: Verify regression and affected contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run combat-lab-game-editors:smoke
+          npm run combat-lab-ui-contract:smoke
+          npm run combat-lab-experiment:smoke
+          npm run typecheck
+          npm run build
+          git diff --check
+
+      - name: Commit verified fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/combat-lab/CombatLabExtension.ts \
+            src/combat-lab/parameters/installCombatLabQuickParameters.ts
+          git commit -m "fix(combat-lab): preserve inspector and profile links"
+          git push origin HEAD:compiler/20260731-shared-game-editors-integration
