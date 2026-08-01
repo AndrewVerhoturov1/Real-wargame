@@ -1,0 +1,224 @@
+name: Temporary Wave 1 AI Editor Responsive Patch
+
+on:
+  push:
+    branches:
+      - compiler/20260801-shared-game-editors-wave1
+
+permissions:
+  contents: write
+
+jobs:
+  responsive-patch:
+    if: contains(github.event.head_commit.message, '[responsive-patch]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Add fixed body-width regression contract and verify RED
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "wave1-compiler-bot"
+          git config user.email "wave1-compiler-bot@users.noreply.github.com"
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/shared_game_editor_platform_smoke.mjs')
+          source = path.read_text()
+          marker = "const combatLabCss = read('src/combat-lab/combat-lab.css');"
+          addition = """const aiEditorCss = read('src/ai-node-editor/ai-node-editor.css');
+          const aiEditorBodyRule = aiEditorCss.match(/(?:^|\\n)body\\s*\\{([^}]*)\\}/i)?.[1] ?? '';
+          const fixedAiEditorBodyMinWidth = aiEditorBodyRule.match(/min-width\\s*:\\s*(\\d+(?:\\.\\d+)?)px/i);
+          if (fixedAiEditorBodyMinWidth && Number(fixedAiEditorBodyMinWidth[1]) > 0) {
+            failures.push('src/ai-node-editor/ai-node-editor.css: editor body must not enforce a positive fixed min-width');
+          }
+
+          """
+          assert addition not in source, 'responsive regression contract already exists'
+          assert marker in source, 'Combat Lab contract marker not found'
+          path.write_text(source.replace(marker, addition + marker, 1))
+          PY
+          git add scripts/shared_game_editor_platform_smoke.mjs
+          git commit -m "test(wave1): reject fixed AI editor body width [red]"
+          set +e
+          output="$(npm run shared-game-editors:smoke 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          test "$status" -ne 0
+          grep -F "src/ai-node-editor/ai-node-editor.css: editor body must not enforce a positive fixed min-width" <<<"$output"
+      - name: Remove inherited fixed AI editor body width and verify GREEN
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/ai-node-editor/ai-node-editor.css')
+          source = path.read_text()
+          old = '  min-width: 1180px;'
+          new = '  min-width: 0;'
+          assert old in source, 'expected inherited fixed body min-width not found'
+          path.write_text(source.replace(old, new, 1))
+          PY
+          git add src/ai-node-editor/ai-node-editor.css
+          git commit -m "fix(wave1): allow AI editor viewport to shrink"
+          npm run shared-game-editors:smoke
+      - name: Build and install browser verifier
+        run: |
+          npm run build
+          npm install --no-save --package-lock=false playwright@1.54.2
+          npx playwright install --with-deps chromium
+      - name: Start production preview
+        shell: bash
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/wave1-vite-preview.log 2>&1 &
+          echo $! > /tmp/wave1-vite-preview.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/wave1-vite-preview.log
+          exit 1
+      - name: Verify complete browser acceptance at both viewports
+        shell: bash
+        run: |
+          cat > scripts/.tmp-wave1-browser-verification.mjs <<'EOF'
+          import assert from 'node:assert/strict';
+          import { chromium } from 'playwright';
+
+          const baseUrl = 'http://127.0.0.1:4173';
+          const pagePaths = ['/', '/ai-node-editor.html', '/combat-lab.html'];
+          const viewports = [
+            { width: 1440, height: 900 },
+            { width: 1100, height: 760 },
+          ];
+          const browser = await chromium.launch({ headless: true });
+          const errors = [];
+
+          try {
+            for (const viewport of viewports) {
+              const context = await browser.newContext({ viewport });
+              for (const path of pagePaths) {
+                const page = await context.newPage();
+                page.on('console', (message) => {
+                  if (message.type() === 'error') errors.push(`${viewport.width}x${viewport.height} ${path} console: ${message.text()}`);
+                });
+                page.on('pageerror', (error) => errors.push(`${viewport.width}x${viewport.height} ${path} pageerror: ${error.message}`));
+                page.on('requestfailed', (request) => errors.push(`${viewport.width}x${viewport.height} ${path} requestfailed: ${request.url()} ${request.failure()?.errorText ?? ''}`));
+
+                await page.goto(`${baseUrl}${path}`, { waitUntil: 'networkidle' });
+                const trigger = page.locator('[data-app-shell-menu-root="true"] .app-shell-menu-trigger');
+                await trigger.waitFor({ state: 'visible' });
+                assert.equal(await trigger.count(), 1, `${viewport.width}x${viewport.height} ${path}: expected one compact menu trigger`);
+                assert.equal(await page.locator('body.with-app-shell-menu').count(), 0, `${viewport.width}x${viewport.height} ${path}: legacy top reservation must be absent`);
+                assert.equal(await page.locator('[data-app-shell-menu-root="true"] .app-shell-mode-links').count(), 0, `${viewport.width}x${viewport.height} ${path}: permanent mode strip must be absent`);
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, `${viewport.width}x${viewport.height} ${path}: horizontal overflow`);
+
+                await trigger.click();
+                const dialog = page.getByRole('dialog', { name: 'Общее игровое меню Real Wargame' });
+                await dialog.waitFor({ state: 'visible' });
+                await dialog.locator('button:not([disabled]), a[href]').first().waitFor({ state: 'visible' });
+                assert.equal(await dialog.evaluate((modal) => {
+                  const active = document.activeElement;
+                  return active instanceof Node && modal.contains(active);
+                }), true, `${viewport.width}x${viewport.height} ${path}: focus must enter the named common menu`);
+                assert.equal(await dialog.locator('[aria-current="page"]').count(), 1, `${viewport.width}x${viewport.height} ${path}: one current mode expected`);
+                assert.equal(await dialog.locator('.app-shell-current-marker').count(), 1, `${viewport.width}x${viewport.height} ${path}: current mode marker expected`);
+
+                const expectedPaths = ['/', '/ai-node-editor.html', '/combat-lab.html'];
+                const hrefPaths = await dialog.locator('a.app-shell-mode-link').evaluateAll((links) => links.map((link) => new URL(link.href).pathname));
+                assert.deepEqual(hrefPaths, expectedPaths, `${viewport.width}x${viewport.height} ${path}: mode destinations changed`);
+
+                const controls = dialog.locator('button:not([disabled]), a[href]');
+                const firstControl = controls.first();
+                const lastControl = controls.last();
+                assert.equal(await firstControl.evaluate((element) => document.activeElement === element), true, `${viewport.width}x${viewport.height} ${path}: initial focus must target the first menu control`);
+                await lastControl.focus();
+                await page.keyboard.press('Tab');
+                assert.equal(await firstControl.evaluate((element) => document.activeElement === element), true, `${viewport.width}x${viewport.height} ${path}: Tab must wrap from last to first`);
+                await page.keyboard.press('Shift+Tab');
+                assert.equal(await lastControl.evaluate((element) => document.activeElement === element), true, `${viewport.width}x${viewport.height} ${path}: Shift+Tab must wrap from first to last`);
+
+                await page.keyboard.press('Escape');
+                await dialog.waitFor({ state: 'hidden' });
+                assert.equal(await trigger.evaluate((element) => document.activeElement === element), true, `${viewport.width}x${viewport.height} ${path}: closing must restore trigger focus`);
+                await page.keyboard.press('Escape');
+                await dialog.waitFor({ state: 'visible' });
+                assert.equal(await dialog.evaluate((modal) => {
+                  const active = document.activeElement;
+                  return active instanceof Node && modal.contains(active);
+                }), true, `${viewport.width}x${viewport.height} ${path}: Escape-opened menu must receive focus`);
+                await page.keyboard.press('Escape');
+                await dialog.waitFor({ state: 'hidden' });
+
+                if (path === '/ai-node-editor.html') {
+                  const tabs = page.locator('[data-game-editor-id]');
+                  await tabs.first().waitFor({ state: 'visible' });
+                  assert.equal(await tabs.count(), 9, 'AI editor must expose nine shared sections');
+                  await page.evaluate(() => {
+                    const graph = document.getElementById('ai-node-editor-root');
+                    if (!graph) throw new Error('Graph root missing.');
+                    graph.dataset.browserIdentity = 'canonical-graph-root';
+                  });
+                  await page.locator('[data-game-editor-id="weapons"]').click();
+                  await page.locator('[data-combat-catalog-editor]').waitFor({ state: 'visible' });
+                  assert.equal(await page.locator('[data-combat-catalog-editor]').count(), 1, 'one weapon catalog expected');
+                  await page.locator('[data-game-editor-id="movementProfiles"]').click();
+                  await page.locator('[data-game-editor-id="weapons"]').click();
+                  await page.locator('[data-combat-catalog-editor]').waitFor({ state: 'visible' });
+                  assert.equal(await page.locator('[data-combat-catalog-editor]').count(), 1, 'switching sections must not duplicate the weapon catalog');
+                  await page.locator('[data-game-editor-id="behaviorGraph"]').click();
+                  assert.equal(await page.evaluate(() => document.querySelectorAll('#ai-node-editor-root').length), 1, 'Graph v2 root must remain singular');
+                  assert.equal(await page.locator('#ai-node-editor-root').getAttribute('data-browser-identity'), 'canonical-graph-root', 'Graph v2 must retain its original canvas root');
+                }
+                await page.close();
+              }
+
+              for (const sourcePath of pagePaths) {
+                for (const destinationPath of pagePaths.filter((candidate) => candidate !== sourcePath)) {
+                  const page = await context.newPage();
+                  await page.goto(`${baseUrl}${sourcePath}`, { waitUntil: 'networkidle' });
+                  await page.locator('.app-shell-menu-trigger').click();
+                  await Promise.all([
+                    page.waitForURL((url) => url.pathname === destinationPath),
+                    page.locator(`a.app-shell-mode-link[href="${destinationPath}"]`).click(),
+                  ]);
+                  assert.equal(new URL(page.url()).pathname, destinationPath, `${viewport.width}x${viewport.height} ${sourcePath} -> ${destinationPath} navigation failed`);
+                  await page.close();
+                }
+              }
+              await context.close();
+            }
+
+            assert.deepEqual(errors, [], `Browser errors:\n${errors.join('\n')}`);
+            console.log('Wave 1 browser verification passed at 1440x900 and 1100x760.');
+          } finally {
+            await browser.close();
+          }
+          EOF
+
+          set +e
+          node scripts/.tmp-wave1-browser-verification.mjs > /tmp/wave1-responsive-browser.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/wave1-responsive-browser.log
+          rm -f scripts/.tmp-wave1-browser-verification.mjs
+          if [ -f /tmp/wave1-vite-preview.pid ]; then kill "$(cat /tmp/wave1-vite-preview.pid)" || true; fi
+          {
+            echo "tested_sha=$(git rev-parse HEAD)"
+            echo "browser_exit=${status}"
+            cat /tmp/wave1-responsive-browser.log
+          } > .tmp-wave1-responsive-patch
+          git add .tmp-wave1-responsive-patch
+          git commit -m "chore(wave1): record responsive patch browser result"
+          git push origin HEAD:compiler/20260801-shared-game-editors-wave1
+          exit "$status"
