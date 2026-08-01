@@ -1,0 +1,116 @@
+name: Wave 1 Shared Game Editors Clean Rerun
+
+on:
+  push:
+    branches:
+      - integration/20260801-shared-game-editors-wave1
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-verify:
+    if: ${{ contains(github.event.head_commit.message, '[wave1-fix]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SHELL_HEAD: 26e7cc7fe9c6fc7855d2781fc2c0a539cbb1a049
+      PLATFORM_HEAD: af9e54036658e95a8df680658be73e589efae4b4
+      TRACKED_REPORT: .wave1-shared-game-editors-verification.txt
+      TEMP_REPORT: /tmp/wave1-shared-game-editors-verification.txt
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Fix integrated shell regression contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const path = 'scripts/app_shell_overlay_smoke.mjs';
+          const source = readFileSync(path, 'utf8');
+          const before = "assert.equal(packageJson.scripts?.['app-shell-overlay:smoke'], 'node scripts/app_shell_overlay_smoke.mjs');";
+          const after = "assert.equal(packageJson.scripts?.['app-shell-overlay:smoke'], 'node scripts/app_shell_overlay_smoke.mjs && node scripts/app_shell_overlay_behavior_smoke.mjs');";
+          if (!source.includes(before)) throw new Error('Expected legacy shell smoke assertion was not found.');
+          writeFileSync(path, source.replace(before, after));
+          NODE
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/app_shell_overlay_smoke.mjs
+          git commit -m "test(wave1): execute structural and behavioral shell smoke [wave1-bot]"
+          git push origin HEAD:integration/20260801-shared-game-editors-wave1
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify clean integration tree
+        shell: bash
+        run: |
+          set +e
+          : > "$TEMP_REPORT"
+          printf 'tested_commit=%s\n' "$(git rev-parse HEAD)" >> "$TEMP_REPORT"
+          printf 'shell_source=%s\n' "$SHELL_HEAD" >> "$TEMP_REPORT"
+          printf 'platform_source=%s\n' "$PLATFORM_HEAD" >> "$TEMP_REPORT"
+          printf 'runner_node=%s\n' "$(node --version)" >> "$TEMP_REPORT"
+          printf 'runner_npm=%s\n\n' "$(npm --version)" >> "$TEMP_REPORT"
+
+          overall=0
+          run_check() {
+            label="$1"
+            shift
+            printf '## %s\n' "$label" >> "$TEMP_REPORT"
+            output_file="$(mktemp)"
+            "$@" >"$output_file" 2>&1
+            code=$?
+            cat "$output_file"
+            printf 'exit=%s\n' "$code" >> "$TEMP_REPORT"
+            if [ "$code" -ne 0 ]; then
+              printf 'output_tail_begin\n' >> "$TEMP_REPORT"
+              tail -c 16000 "$output_file" >> "$TEMP_REPORT"
+              printf '\noutput_tail_end\n' >> "$TEMP_REPORT"
+              overall=1
+            fi
+            printf '\n' >> "$TEMP_REPORT"
+            rm -f "$output_file"
+          }
+
+          run_check "git diff --check" git diff --check "$PLATFORM_HEAD"..HEAD
+          run_check "git status --short before matrix" git status --short
+          run_check "npm run app-shell-overlay:smoke" npm run app-shell-overlay:smoke
+          run_check "npm run shared-game-editors:smoke" npm run shared-game-editors:smoke
+          run_check "npm run typecheck" npm run typecheck
+          run_check "npm run combat-lab-ui-contract:smoke" npm run combat-lab-ui-contract:smoke
+          run_check "npm run editor:smoke" npm run editor:smoke
+          run_check "npm run workspace-architecture-contract:smoke" npm run workspace-architecture-contract:smoke
+          run_check "npm run performance-contract:smoke" npm run performance-contract:smoke
+          run_check "npm run graph-v2:smoke" npm run graph-v2:smoke
+          run_check "npm run movement-profiles:smoke" npm run movement-profiles:smoke
+          run_check "npm run combat-catalog-editor:smoke" npm run combat-catalog-editor:smoke
+          run_check "npm run attention-profiles:smoke" npm run attention-profiles:smoke
+          run_check "npm run directional-terrain:smoke" npm run directional-terrain:smoke
+          run_check "npm run environment-materials:smoke" npm run environment-materials:smoke
+          run_check "npm run combat-lab-scenario-system:verify" npm run combat-lab-scenario-system:verify
+          run_check "npm run combat-lab-experiment:smoke" npm run combat-lab-experiment:smoke
+          run_check "npm run combat-lab-batch:smoke" npm run combat-lab-batch:smoke
+          run_check "npm run infantry-combat-stage9:verify" npm run infantry-combat-stage9:verify
+          run_check "npm run build" npm run build
+          run_check "git status --short after matrix" git status --short
+
+          printf 'overall_exit=%s\n' "$overall" >> "$TEMP_REPORT"
+          cp "$TEMP_REPORT" "$TRACKED_REPORT"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$TRACKED_REPORT"
+          git commit -m "test(wave1): publish clean integration verification [wave1-bot]"
+          git push origin HEAD:integration/20260801-shared-game-editors-wave1
+          exit "$overall"
