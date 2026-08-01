@@ -58,6 +58,7 @@ expectIncludes('src/game-editors/GameEditorRegistry.ts', [
   'Embedded editor has no mount function',
   'Route editor has no route factory',
   'GROUP_ORDER',
+  'GROUP_LABEL_RU',
   'Object.freeze',
 ]);
 expectExcludes('src/game-editors/GameEditorRegistry.ts', ['document.', 'window.', 'querySelector', 'localStorage']);
@@ -66,7 +67,7 @@ expectIncludes('src/game-editors/GameEditorWorkspace.ts', [
   'beforeClose',
   'installation.destroy()',
   'transitionRevision',
-  'assertCurrentTransition',
+  'isCurrentTransition',
   'host.replaceChildren()',
 ]);
 expectExcludes('src/game-editors/GameEditorWorkspace.ts', [
