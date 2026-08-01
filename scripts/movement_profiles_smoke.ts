@@ -124,7 +124,6 @@ const viewSource = await readFile(new URL('../src/ai-node-editor/MovementProfile
 const schemaSource = await readFile(new URL('../src/ai-node-editor/MovementProfileEditorSchema.ts', import.meta.url), 'utf8');
 const panelSource = await readFile(new URL('../src/ai-node-editor/MovementProfileEditorPanel.ts', import.meta.url), 'utf8');
 const integrationSource = await readFile(new URL('../src/ai-node-editor/MovementProfileEditorIntegration.ts', import.meta.url), 'utf8');
-const sectionRegistrySource = await readFile(new URL('../src/ai-node-editor/AiEditorSectionRegistry.ts', import.meta.url), 'utf8');
 const browserStorageSource = await readFile(new URL('../src/ai-node-editor/MovementProfileBrowserStorage.ts', import.meta.url), 'utf8');
 const editorSource = `${viewSource}\n${schemaSource}\n${panelSource}`;
 
@@ -142,10 +141,11 @@ assert.match(panelSource, /Остаться/);
 assert.match(panelSource, /MovementProfileImportError/);
 assert.match(panelSource, /disposeMovementProfileEditorPanel/);
 assert.doesNotMatch(editorSource, /Технический id/);
-assert.match(integrationSource, /registerAiEditorSection/);
-assert.doesNotMatch(integrationSource, /querySelector|createElement|insertBefore/);
-assert.match(sectionRegistrySource, /Профили маршрута/);
-assert.match(sectionRegistrySource, /beforeLeave/);
+assert.match(integrationSource, /mountMovementProfileEditor/);
+assert.match(integrationSource, /const panel = context\.host/);
+assert.match(integrationSource, /beforeClose:\s*requestMovementProfileEditorLeave/);
+assert.doesNotMatch(integrationSource, /registerAiEditorSection|AiEditorSectionRegistry/);
+assert.doesNotMatch(integrationSource, /document\.querySelector|document\.createElement|insertBefore/);
 assert.match(browserStorageSource, /localStorage/);
 assert.match(browserStorageSource, /StorageEvent/);
 
