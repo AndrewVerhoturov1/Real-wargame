@@ -18,6 +18,7 @@ import type {
 } from './GameEditorTypes';
 
 export interface DefaultGameEditorRegistryOptions {
+  /** Existing graph root owned by the AI editor composition layer. */
   readonly mountBehaviorGraph?: (context: GameEditorMountContext) => GameEditorInstallation;
 }
 
@@ -33,7 +34,9 @@ export function createDefaultGameEditorRegistry(
       labelRu: 'Граф поведения',
       group: 'behavior',
       order: 10,
-      activationFor: (surface) => surface === 'ai-editor' ? 'embedded' : 'route',
+      activationFor: (surface) => surface === 'combat-lab'
+        ? 'route'
+        : options.mountBehaviorGraph ? 'embedded' : 'hidden',
       mount: options.mountBehaviorGraph,
       route: behaviorGraphRoute,
     },
@@ -106,28 +109,29 @@ export function createDefaultGameEditorRegistry(
 }
 
 function behaviorGraphRoute(request: GameEditorOpenRequest): string {
+  const baseRoute = '/ai-node-editor.html';
   const search = new URLSearchParams();
   search.set('editor', 'behaviorGraph');
   if (request.returnTo) search.set('returnTo', request.returnTo);
   if (request.selectedUnitId) search.set('selectedUnitId', request.selectedUnitId);
-  return `/ai-node-editor.html?${search.toString()}`;
+  return `${baseRoute}?${search.toString()}`;
 }
 
 function mountWeaponsEditor(context: GameEditorMountContext): GameEditorInstallation {
-  const legacy = requireLegacyAiEditorSection('combatCatalogs');
+  const capturedPanel = requireLegacyAiEditorSection('combatCatalogs');
   const panel = reusableWeaponsPanel ?? document.createElement('div');
   reusableWeaponsPanel = panel;
   weaponsParking ??= document.createDocumentFragment();
   panel.hidden = false;
   context.host.replaceChildren(panel);
-  legacy.render(panel);
+  capturedPanel.render(panel);
   let destroyed = false;
   return {
-    beforeClose: legacy.beforeLeave,
+    beforeClose: capturedPanel.beforeLeave,
     destroy(): void {
       if (destroyed) return;
       destroyed = true;
-      legacy.onDeactivate?.();
+      capturedPanel.onDeactivate?.();
       panel.hidden = true;
       weaponsParking?.append(panel);
     },
