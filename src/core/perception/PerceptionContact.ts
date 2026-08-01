@@ -1,5 +1,8 @@
 import type { GridPosition } from '../geometry';
-import { getActivePerceptionProfileSnapshot } from '../tuning/GameplayTuningProfiles';
+import {
+  getActivePerceptionProfileSnapshot,
+  type PerceptionProfileDefinition,
+} from '../tuning/GameplayTuningProfiles';
 
 export type PerceptionContactStage = 'cue' | 'suspicion' | 'contact' | 'identified' | 'confirmed';
 export type PerceptionContactSource = 'visual' | 'sound' | 'reported' | 'fire_pressure';
@@ -45,6 +48,7 @@ export interface VisualContactInput {
   nowSeconds: number;
   source?: PerceptionContactSource;
   explanationRu?: string[];
+  readonly perceptionProfile?: PerceptionProfileDefinition;
 }
 
 export interface ReportedContactInput {
@@ -59,12 +63,14 @@ export interface ReportedContactInput {
   nowSeconds: number;
   source?: Extract<PerceptionContactSource, 'reported' | 'fire_pressure' | 'sound'>;
   explanationRu?: string[];
+  readonly perceptionProfile?: PerceptionProfileDefinition;
 }
 
 export interface ContactDecayInput {
   deltaSeconds: number;
   nowSeconds: number;
   metersPerCell: number;
+  readonly perceptionProfile?: PerceptionProfileDefinition;
 }
 
 export const CONTACT_STAGE_THRESHOLDS = {
@@ -130,7 +136,7 @@ export function advanceVisualContact(
   previous: PerceptionContactMemory | null,
   input: VisualContactInput,
 ): PerceptionContactMemory {
-  const profile = getActivePerceptionProfileSnapshot();
+  const profile = input.perceptionProfile ?? getActivePerceptionProfileSnapshot();
   const detectionVariance = previous?.detectionVariance
     ?? clamp(number(input.detectionVariance, 1), 0.5, 1.5);
   const evidencePerSecond = Math.max(0, input.evidencePerSecond) * detectionVariance;
@@ -168,7 +174,7 @@ export function advanceReportedContact(
   previous: PerceptionContactMemory | null,
   input: ReportedContactInput,
 ): PerceptionContactMemory {
-  const profile = getActivePerceptionProfileSnapshot();
+  const profile = input.perceptionProfile ?? getActivePerceptionProfileSnapshot();
   if (
     input.source === 'sound'
     && previous?.source === 'visual'
@@ -216,7 +222,7 @@ export function decayUnobservedContact(
   contact: PerceptionContactMemory,
   input: ContactDecayInput,
 ): PerceptionContactMemory | null {
-  const profile = getActivePerceptionProfileSnapshot();
+  const profile = input.perceptionProfile ?? getActivePerceptionProfileSnapshot();
   const delta = Math.max(0, input.deltaSeconds);
   const evidence = Math.max(0, contact.evidence - profile.contact.evidenceDecayPerSecond * delta);
   const confidence = Math.max(0, contact.confidence - profile.contact.confidenceDecayPerSecond * delta);
