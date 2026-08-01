@@ -1,0 +1,51 @@
+name: Temporary Shared Editors Compiler Repro
+
+on:
+  push:
+    branches:
+      - compiler/20260731-shared-game-editors-integration
+
+permissions:
+  contents: write
+
+jobs:
+  reproduce:
+    if: contains(github.event.head_commit.message, '[compiler-repro]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout compiler branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reproduce shared editor smoke on exact product head
+        shell: bash
+        run: |
+          set -u
+          PRODUCT_SHA=c0298cedce53626264cad59815e6f04bdc5ca1c9
+          git worktree add /tmp/shared-editors-product "$PRODUCT_SHA"
+          cd /tmp/shared-editors-product
+          npm ci --no-audit --no-fund > /tmp/compiler-repro-install.log 2>&1
+          set +e
+          npm run shared-game-editors:smoke > /tmp/compiler-repro-command.log 2>&1
+          EXIT_CODE=$?
+          set -e
+          cd "$GITHUB_WORKSPACE"
+          mkdir -p reports
+          {
+            echo "tested_product_sha=$PRODUCT_SHA"
+            echo "command=npm run shared-game-editors:smoke"
+            echo "exit_code=$EXIT_CODE"
+            echo
+            echo "--- install ---"
+            cat /tmp/compiler-repro-install.log
+            echo
+            echo "--- command ---"
+            cat /tmp/compiler-repro-command.log
+          } > reports/.tmp-shared-editors-compiler-repro.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/.tmp-shared-editors-compiler-repro.txt
+          git commit -m "test(integration): record compiler smoke reproduction"
+          git push origin HEAD:compiler/20260731-shared-game-editors-integration
