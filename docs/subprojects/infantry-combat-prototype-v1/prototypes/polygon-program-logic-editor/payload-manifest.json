@@ -1,0 +1,21 @@
+{
+  "format": "polygon-gzip-base64-parts-v1",
+  "sourceFile": "polygon-program-logic-editor-v8.2.html",
+  "sourceSha256": "71bee9ec9a6719931d4c46e8b1b939ca6fa95ea24a2d5fda9887c1a344c6889e",
+  "gzipSha256": "cbb0d7c9191162b6e7c2b0f1236fd6d7812f2993773fb44952a55f7262ce38c0",
+  "sourceBytes": 590334,
+  "gzipBytes": 128202,
+  "base64Characters": 170936,
+  "parts": 9,
+  "partFiles": [
+    "payload/part-01.js",
+    "payload/part-02.js",
+    "payload/part-03.js",
+    "payload/part-04.js",
+    "payload/part-05.js",
+    "payload/part-06.js",
+    "payload/part-07.js",
+    "payload/part-08.js",
+    "payload/part-09.js"
+  ]
+}
