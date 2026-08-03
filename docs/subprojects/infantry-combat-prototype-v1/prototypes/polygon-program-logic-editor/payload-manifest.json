@@ -6,7 +6,7 @@
   "sourceBytes": 590334,
   "gzipBytes": 128202,
   "base64Characters": 170936,
-  "parts": 9,
+  "parts": 14,
   "partFiles": [
     "payload/part-01.js",
     "payload/part-02.js",
@@ -16,6 +16,11 @@
     "payload/part-06.js",
     "payload/part-07.js",
     "payload/part-08.js",
-    "payload/part-09.js"
+    "payload/part-09.js",
+    "payload/part-10.js",
+    "payload/part-11.js",
+    "payload/part-12.js",
+    "payload/part-13.js",
+    "payload/part-14.js"
   ]
 }
