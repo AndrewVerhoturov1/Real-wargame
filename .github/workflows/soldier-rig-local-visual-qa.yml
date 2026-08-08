@@ -1,0 +1,98 @@
+name: Soldier Rig Local Visual QA
+
+on:
+  pull_request:
+    branches:
+      - ci/soldier-rig-local-visual-base-20260809-18364bb
+
+permissions:
+  contents: read
+
+jobs:
+  browser-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PRODUCT_SHA: 18364bb8cbd723d5c5d2c4f23594aec816fe65f5
+      PRODUCT_REF: feature/20260808-soldier-topdown-appearance-codex
+      BASE_URL: http://127.0.0.1:4173
+    steps:
+      - name: Checkout QA harness
+        uses: actions/checkout@v4
+
+      - name: Checkout exact product SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 0
+          path: product
+
+      - name: Verify exact product identity
+        working-directory: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test "$(git ls-remote origin "refs/heads/$PRODUCT_REF" | awk '{print $1}')" = "$PRODUCT_SHA"
+          test -z "$(git status --short)"
+          echo "Verified product source: $PRODUCT_REF @ $PRODUCT_SHA"
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: product/package-lock.json
+
+      - name: Install exact product dependencies
+        working-directory: product
+        run: npm ci --no-audit --no-fund
+
+      - name: Run soldier rig contract
+        working-directory: product
+        run: node scripts/soldier_topdown_prototype_smoke.mjs
+
+      - name: Build exact product
+        working-directory: product
+        env:
+          REAL_WARGAME_BRANCH: ${{ env.PRODUCT_REF }}
+          REAL_WARGAME_COMMIT_SHA: ${{ env.PRODUCT_SHA }}
+        run: npm run build:app
+
+      - name: Start exact production preview
+        working-directory: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npm run preview -- --host 127.0.0.1 --port 4173 > "$RUNNER_TEMP/vite-preview.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/vite-preview.pid"
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:4173/soldier-topdown-prototype.html > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/vite-preview.log" >&2
+          exit 1
+
+      - name: Install Playwright
+        run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run exact-rig visual scenario
+        run: npx playwright test --config=ci/playwright.soldier-rig-local.config.ts
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soldier-rig-local-visual-${{ github.run_id }}
+          path: |
+            artifacts/soldier-rig-local/**
+            test-results/**
+            playwright-report/**
+            ${{ runner.temp }}/vite-preview.log
+          if-no-files-found: warn
+          retention-days: 14
