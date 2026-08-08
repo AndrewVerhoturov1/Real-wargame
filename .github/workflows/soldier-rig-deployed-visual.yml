@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      TARGET_URL: https://repo-biw27i7xi-111s-projects-807221af.vercel.app
+      TARGET_URL: https://repo-gk74mhn8p-111s-projects-807221af.vercel.app
       EXPECTED_PRODUCT_SHA: 18364bb8cbd723d5c5d2c4f23594aec816fe65f5
       CANONICAL_FEATURE_BRANCH: feature/20260808-soldier-topdown-appearance-codex
     steps:
