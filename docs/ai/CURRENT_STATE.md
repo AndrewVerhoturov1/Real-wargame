@@ -11,7 +11,7 @@ Generated from canonical repository and subproject metadata.
 - **Stable branch:** `main`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
 - **PixiJS major:** 8
-- **Updated:** 2026-07-22
+- **Updated:** 2026-08-02
 
 ## Delivery policy
 

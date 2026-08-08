@@ -49,6 +49,14 @@ Read only:
 4. `docs/subprojects/<active-id>/STATUS.md`;
 5. the relevant skill from `docs/ai/SKILLS_INDEX.md`.
 
+Before answering or planning any screenshot, visual-inspection, browser, UI-layout, deployed-page, Chrome, Chromium or Playwright request, always read:
+
+```text
+.agents/skills/real-wargame-screenshots/SKILL.md
+```
+
+The user does not need to name this skill. It selects the direct-browser or deployed-Vercel execution route.
+
 For runtime-affecting work also read:
 
 ```text
@@ -152,7 +160,13 @@ When the user reports a product problem:
 
 Visual verification permission is separate from deployment permission.
 
-When a suitable deployment already exists:
+Always start with:
+
+```text
+.agents/skills/real-wargame-screenshots/SKILL.md
+```
+
+The router applies this execution decision when a suitable deployment already exists:
 
 ```text
 direct controlled browser available

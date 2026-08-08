@@ -23,6 +23,33 @@ docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md
 docs/workflow/MANUAL_VERCEL_DEPLOYMENT.md
 ```
 
+## Mandatory screenshot and visual-QA routing
+
+For any request involving screenshots, visual inspection, browser verification, UI layout, a deployed page, Chrome, Chromium or Playwright, read this router **до ответа и до составления плана**:
+
+```text
+.agents/skills/real-wargame-screenshots/SKILL.md
+```
+
+The user does not need to name the skill. Typical triggers include:
+
+```text
+скриншот / скриншоты / сделай скрины;
+покажи экран;
+открой игру;
+зайди на деплой;
+посмотри интерфейс;
+проверь верстку;
+проверь визуально;
+проверь глазами;
+открой в браузере;
+проверь Combat Lab;
+проверь редактор ИИ;
+можешь ли ты зайти на сайт.
+```
+
+Do not claim that browser access is unavailable before reading the router and applying its direct-browser versus deployed-Vercel fallback decision.
+
 ## 2. Communication
 
 Use simple Russian and put the practical result first.
@@ -204,7 +231,13 @@ Do not wait for automatic Vercel and do not invent URLs.
 
 Visual permission is separate from deployment permission.
 
-When a deployment already exists:
+Always start with:
+
+```text
+.agents/skills/real-wargame-screenshots/SKILL.md
+```
+
+The router selects the execution skill:
 
 ```text
 direct browser available
