@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Полигон · действия и логика программы v8.2</title>
+<meta name="prototype-version" content="polygon-program-logic-editor-v8.2-20260804">
+</head>
+<body>
+<p id="polygon-loader-status" style="font:14px system-ui;padding:20px">Загрузка прототипа…</p>
+<script>window.__polygonPayloadChunks=[];</script>
+<script src="payload/part-01.js"></script>
+<script src="payload/part-02.js"></script>
+<script src="payload/part-03.js"></script>
+<script src="payload/part-04.js"></script>
+<script src="payload/part-05.js"></script>
+<script src="payload/part-06.js"></script>
+<script src="payload/part-07.js"></script>
+<script src="payload/part-08.js"></script>
+<script src="payload/part-09.js"></script>
+<script src="payload/part-10.js"></script>
+<script src="payload/part-11.js"></script>
+<script src="payload/part-12.js"></script>
+<script src="payload/part-13.js"></script>
+<script src="payload/part-14.js"></script>
+<script>
+(async()=>{
+  const encoded=window.__polygonPayloadChunks.join('');
+  const compressed=Uint8Array.from(atob(encoded),character=>character.charCodeAt(0));
+  const stream=new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const html=await new Response(stream).text();
+  document.open();
+  document.write(html);
+  document.close();
+})().catch(error=>{
+  document.body.innerHTML='<pre style="white-space:pre-wrap;font:14px monospace;padding:20px;color:#8b1e1e">Не удалось открыть прототип: '+String(error)+'</pre>';
+  console.error(error);
+});
+</script>
+</body>
+</html>
