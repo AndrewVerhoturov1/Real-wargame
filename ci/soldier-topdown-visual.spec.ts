@@ -142,7 +142,7 @@ test('deployed Soviet soldier prototype passes exact-SHA visual QA', async ({ pa
     }
     evidence.stage = 'low-movement-phases-captured';
 
-    await choosePreset(page, 'ground', /Лёжа и ползком/);
+    await choosePreset(page, 'ground', /Лёжа, прицеливание и ползание/);
     for (const phase of [10, 35, 60]) {
       await setPhase(page, phase);
       await shot(stage, `09-ground-phase-${phase}.png`, evidence);
