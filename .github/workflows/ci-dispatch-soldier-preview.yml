@@ -1,7 +1,7 @@
-name: CI Exact Soldier Preview
+name: CI Exact Soldier Preview Target
 
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - ci/20260809-soldier-deploy-base
     types: [opened, synchronize, reopened]
@@ -10,39 +10,41 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-exact-soldier-preview-dae07063b796e0c1fe3945c4da859c8248da44fa
+  group: ci-exact-soldier-preview-target-dae07063b796e0c1fe3945c4da859c8248da44fa
   cancel-in-progress: false
 
 jobs:
   exact-preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 60
     env:
       TARGET_REF: feature/20260808-soldier-topdown-appearance-codex
       EXPECTED_SHA: dae07063b796e0c1fe3945c4da859c8248da44fa
       EXPECTED_VERCEL_PROJECT_NAME: repo
     steps:
-      - name: Checkout exact product commit
+      - name: Checkout exact product commit only
         uses: actions/checkout@v4
         with:
           ref: ${{ env.EXPECTED_SHA }}
           fetch-depth: 0
 
-      - name: Verify exact branch head before installation
+      - name: Verify exact source before installation
+        id: source
         shell: bash
         run: |
           set -euo pipefail
           actual_sha="$(git rev-parse HEAD)"
-          remote_sha="$(git rev-parse refs/remotes/origin/$TARGET_REF)"
-          echo "Requested ref: $TARGET_REF"
-          echo "Expected SHA: $EXPECTED_SHA"
-          echo "Checked out SHA: $actual_sha"
-          echo "Remote feature HEAD: $remote_sha"
+          branch_sha="$(git ls-remote origin "refs/heads/$TARGET_REF" | awk '{print $1}')"
+          main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          preview_sha="$(git ls-remote origin refs/heads/real-wargame-preview | awk '{print $1}')"
           test "$actual_sha" = "$EXPECTED_SHA"
-          test "$remote_sha" = "$EXPECTED_SHA"
-          git fetch --no-tags origin main:refs/remotes/origin/main real-wargame-preview:refs/remotes/origin/real-wargame-preview
-          test "$actual_sha" != "$(git rev-parse refs/remotes/origin/main)"
-          test "$actual_sha" != "$(git rev-parse refs/remotes/origin/real-wargame-preview)"
+          test "$branch_sha" = "$EXPECTED_SHA"
+          test "$actual_sha" != "$main_sha"
+          test "$actual_sha" != "$preview_sha"
+          test -z "$(git status --short)"
+          echo "ref=$TARGET_REF" >> "$GITHUB_OUTPUT"
+          echo "sha=$actual_sha" >> "$GITHUB_OUTPUT"
+          echo "Verified source: $TARGET_REF @ $actual_sha"
 
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
@@ -66,10 +68,42 @@ jobs:
         id: gate
         shell: bash
         run: |
-          set -euo pipefail
+          set -o pipefail
           report="$RUNNER_TEMP/preview-verification.json"
-          npm run verify:preview -- --report "$report"
+          log="$RUNNER_TEMP/preview-verification.log"
+          set +e
+          npm run verify:preview -- --report "$report" 2>&1 | tee "$log"
+          status="${PIPESTATUS[0]}"
+          set -e
           echo "report=$report" >> "$GITHUB_OUTPUT"
+          echo "log=$log" >> "$GITHUB_OUTPUT"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Upload verification diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soldier-topdown-verification-dae07063-target
+          path: |
+            ${{ steps.gate.outputs.report }}
+            ${{ steps.gate.outputs.log }}
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce successful verification gate
+        run: test "${{ steps.gate.outputs.status }}" = "0"
+
+      - name: Confirm Vercel credentials are available
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_ORG_ID"
+          test -n "$VERCEL_PROJECT_ID"
 
       - name: Pull permanent Vercel project settings
         env:
@@ -94,16 +128,16 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          REAL_WARGAME_BRANCH: ${{ env.TARGET_REF }}
-          REAL_WARGAME_COMMIT_SHA: ${{ env.EXPECTED_SHA }}
+          REAL_WARGAME_BRANCH: ${{ steps.source.outputs.ref }}
+          REAL_WARGAME_COMMIT_SHA: ${{ steps.source.outputs.sha }}
         run: npx --yes vercel@56.4.1 build --token="$VERCEL_TOKEN"
 
       - name: Add exact deployment identity
         run: >-
           node scripts/write_deployment_source.mjs
           --root .vercel/output/static
-          --ref "$TARGET_REF"
-          --sha "$EXPECTED_SHA"
+          --ref "${{ steps.source.outputs.ref }}"
+          --sha "${{ steps.source.outputs.sha }}"
           --report "${{ steps.gate.outputs.report }}"
 
       - name: Verify prebuilt output pages
@@ -113,18 +147,17 @@ jobs:
           npm run verify:deployment-pages -- --root .vercel/output/static --require-source
           test -f .vercel/output/static/soldier-topdown-prototype.html
 
-      - name: Reconfirm feature HEAD before publication
+      - name: Reconfirm feature HEAD immediately before publication
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags origin "$TARGET_REF"
-          latest_sha="$(git rev-parse FETCH_HEAD)"
+          latest_sha="$(git ls-remote origin "refs/heads/$TARGET_REF" | awk '{print $1}')"
           echo "Feature HEAD immediately before publication: $latest_sha"
           test "$latest_sha" = "$EXPECTED_SHA"
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Publish one prebuilt Preview deployment
-        id: deploy
+        id: publish
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -136,21 +169,25 @@ jobs:
           deployment_url="$(printf '%s\n' "$deployment_url" | tail -n 1 | tr -d '\r')"
           [[ "$deployment_url" =~ ^https://[^[:space:]]+$ ]]
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
-          echo "Preview URL: $deployment_url"
+          echo "Published Preview: $deployment_url"
 
       - name: Wait for READY and inspect deployment
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx --yes vercel@56.4.1 inspect "${{ steps.deploy.outputs.url }}" --wait --token="$VERCEL_TOKEN"
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: >-
+          npx --yes vercel@56.4.1 inspect "${{ steps.publish.outputs.url }}"
+          --wait --token="$VERCEL_TOKEN"
 
-      - name: Verify published pages and exact identity
-        id: published
+      - name: Read deployment ID and status
+        id: deployment
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          DEPLOYMENT_URL: ${{ steps.publish.outputs.url }}
         run: |
           set -euo pipefail
           deployment_host="${DEPLOYMENT_URL#https://}"
@@ -162,11 +199,21 @@ jobs:
             --output "$response"
           RESPONSE="$response" node <<'NODE'
           const fs = require('node:fs');
-          const d = JSON.parse(fs.readFileSync(process.env.RESPONSE, 'utf8'));
-          if (d.projectId !== process.env.VERCEL_PROJECT_ID) throw new Error('wrong permanent Vercel project');
-          if (d.readyState !== 'READY') throw new Error(`deployment not READY: ${d.readyState}`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `id=${d.id}\nstatus=${d.readyState}\n`);
+          const deployment = JSON.parse(fs.readFileSync(process.env.RESPONSE, 'utf8'));
+          if (deployment.projectId !== process.env.VERCEL_PROJECT_ID) throw new Error('Wrong Vercel project.');
+          if (deployment.readyState !== 'READY') throw new Error(`Deployment is ${deployment.readyState ?? 'unknown'}.`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `id=${deployment.id}\nstatus=${deployment.readyState}\n`);
           NODE
+
+      - name: Verify published pages and exact identity
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_URL: ${{ steps.publish.outputs.url }}
+          EXPECTED_REF: ${{ steps.source.outputs.ref }}
+          EXPECTED_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
           npx --yes vercel@56.4.1 curl / --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > /dev/null
           npx --yes vercel@56.4.1 curl /ai-node-editor.html --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > /dev/null
           npx --yes vercel@56.4.1 curl /soldier-topdown-prototype.html --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > /dev/null
@@ -175,38 +222,50 @@ jobs:
           SOURCE_FILE="$source_file" node <<'NODE'
           const fs = require('node:fs');
           const source = JSON.parse(fs.readFileSync(process.env.SOURCE_FILE, 'utf8'));
-          if (source.ref !== process.env.TARGET_REF || source.sourceSha !== process.env.EXPECTED_SHA) {
-            throw new Error(`deployment identity mismatch: ${source.ref} @ ${source.sourceSha}`);
-          }
+          if (source.ref !== process.env.EXPECTED_REF || source.sourceSha !== process.env.EXPECTED_SHA) throw new Error('Published deployment identity mismatch.');
           NODE
-          mkdir -p artifacts/exact-preview
-          cp "$source_file" artifacts/exact-preview/deployment-source.json
-          cp "${{ steps.gate.outputs.report }}" artifacts/exact-preview/preview-verification.json
-          cp "$response" artifacts/exact-preview/vercel-deployment.json
-          printf '%s\n' "$DEPLOYMENT_URL" > artifacts/exact-preview/preview-url.txt
 
-      - name: Upload exact Preview evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: exact-soldier-preview-${{ env.EXPECTED_SHA }}
-          path: artifacts/exact-preview
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Publish run summary
-        if: always()
+      - name: Save deployment result
+        if: success()
         shell: bash
         run: |
+          cat > "$RUNNER_TEMP/soldier-topdown-deployment-result.json" <<JSON
           {
-            echo '## Exact Soldier Preview'
+            "ref": "${{ steps.source.outputs.ref }}",
+            "sha": "${{ steps.source.outputs.sha }}",
+            "deploymentId": "${{ steps.deployment.outputs.id }}",
+            "status": "${{ steps.deployment.outputs.status }}",
+            "url": "${{ steps.publish.outputs.url }}",
+            "prototypeUrl": "${{ steps.publish.outputs.url }}/soldier-topdown-prototype.html"
+          }
+          JSON
+
+      - name: Upload deployment result
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soldier-topdown-deployment-result-dae07063-target
+          path: ${{ runner.temp }}/soldier-topdown-deployment-result.json
+          retention-days: 14
+
+      - name: Publish deployment summary
+        if: always()
+        shell: bash
+        env:
+          RUN_STATUS: ${{ job.status }}
+          VERIFIED_SHA: ${{ steps.source.outputs.sha }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
+          DEPLOYMENT_URL: ${{ steps.publish.outputs.url }}
+          DEPLOYMENT_STATUS: ${{ steps.deployment.outputs.status }}
+        run: |
+          {
+            echo '## Soldier top-down exact Preview deployment'
             echo
-            echo "- product ref: $TARGET_REF"
-            echo "- product SHA: $EXPECTED_SHA"
-            echo "- deployment URL: ${{ steps.deploy.outputs.url }}"
-            echo "- deployment ID: ${{ steps.published.outputs.id }}"
-            echo "- Vercel status: ${{ steps.published.outputs.status }}"
-            echo '- focused check: `node scripts/soldier_topdown_prototype_smoke.mjs`'
-            echo '- TypeScript: `npm run typecheck`'
-            echo '- production build: `npm run build`'
-            echo '- canonical gate: `npm run verify:preview -- --report ...`'
+            echo "- status: ${RUN_STATUS:-unknown}"
+            echo "- ref: $TARGET_REF"
+            echo "- verified SHA: ${VERIFIED_SHA:-not verified}"
+            echo "- deployment ID: ${DEPLOYMENT_ID:-not created}"
+            echo "- Preview URL: ${DEPLOYMENT_URL:-not created}"
+            echo "- prototype URL: ${DEPLOYMENT_URL:-not created}/soldier-topdown-prototype.html"
+            echo "- Vercel status: ${DEPLOYMENT_STATUS:-not available}"
           } >> "$GITHUB_STEP_SUMMARY"
