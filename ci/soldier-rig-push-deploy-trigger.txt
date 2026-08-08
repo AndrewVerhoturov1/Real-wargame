@@ -1,0 +1,3 @@
+Trigger one-shot exact Preview deployment.
+Product ref: feature/20260808-soldier-topdown-appearance-codex
+Product SHA: 18364bb8cbd723d5c5d2c4f23594aec816fe65f5
