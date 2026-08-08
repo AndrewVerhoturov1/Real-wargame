@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-exact-soldier-preview-88eb2c2e059c523d7f9bb64b01e0ff1b00edf3f5
+  group: ci-exact-soldier-preview-dae07063b796e0c1fe3945c4da859c8248da44fa
   cancel-in-progress: false
 
 jobs:
@@ -19,24 +19,27 @@ jobs:
     timeout-minutes: 55
     env:
       TARGET_REF: feature/20260808-soldier-topdown-appearance-codex
-      EXPECTED_SHA: 88eb2c2e059c523d7f9bb64b01e0ff1b00edf3f5
+      EXPECTED_SHA: dae07063b796e0c1fe3945c4da859c8248da44fa
       EXPECTED_VERCEL_PROJECT_NAME: repo
     steps:
-      - name: Checkout exact feature ref
+      - name: Checkout exact product commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.TARGET_REF }}
+          ref: ${{ env.EXPECTED_SHA }}
           fetch-depth: 0
 
-      - name: Verify exact source before installation
+      - name: Verify exact branch head before installation
         shell: bash
         run: |
           set -euo pipefail
           actual_sha="$(git rev-parse HEAD)"
+          remote_sha="$(git rev-parse refs/remotes/origin/$TARGET_REF)"
           echo "Requested ref: $TARGET_REF"
           echo "Expected SHA: $EXPECTED_SHA"
           echo "Checked out SHA: $actual_sha"
+          echo "Remote feature HEAD: $remote_sha"
           test "$actual_sha" = "$EXPECTED_SHA"
+          test "$remote_sha" = "$EXPECTED_SHA"
           git fetch --no-tags origin main:refs/remotes/origin/main real-wargame-preview:refs/remotes/origin/real-wargame-preview
           test "$actual_sha" != "$(git rev-parse refs/remotes/origin/main)"
           test "$actual_sha" != "$(git rev-parse refs/remotes/origin/real-wargame-preview)"
@@ -109,6 +112,16 @@ jobs:
           set -euo pipefail
           npm run verify:deployment-pages -- --root .vercel/output/static --require-source
           test -f .vercel/output/static/soldier-topdown-prototype.html
+
+      - name: Reconfirm feature HEAD before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$TARGET_REF"
+          latest_sha="$(git rev-parse FETCH_HEAD)"
+          echo "Feature HEAD immediately before publication: $latest_sha"
+          test "$latest_sha" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Publish one prebuilt Preview deployment
         id: deploy
