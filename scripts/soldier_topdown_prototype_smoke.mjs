@@ -10,6 +10,11 @@ const required = [
   'src/soldier-topdown/SoldierRenderer.ts',
   'src/soldier-topdown/SoldierPrototypePage.ts',
   'src/soldier-topdown/soldier-topdown-prototype.css',
+  'src/soldier-topdown/rig/core.ts',
+  'src/soldier-topdown/rig/prims.ts',
+  'src/soldier-topdown/rig/weapons.ts',
+  'src/soldier-topdown/rig/poses.ts',
+  'src/soldier-topdown/rig/render.ts',
 ];
 
 for (const file of required) {
@@ -22,6 +27,23 @@ for (const pose of ['idle','ready','walk','run','crouch','crouchMove','crouchRun
 }
 for (const weapon of ['mosin','ppsh41','dp27']) {
   if (!renderer.includes(`'${weapon}'`)) throw new Error(`missing weapon ${weapon}`);
+}
+for (const token of [
+  "crouch:'crouch_idle'",
+  "crouchMove:'crouch_walk'",
+  "crouchRun:'crouch_run'",
+  "proneAim:'prone_aim'",
+  "standAim:'aim_stand'",
+  "crouchAim:'aim_crouch'",
+  "ppsh41:'ppsh'",
+  'showSkeleton',
+]) {
+  if (!renderer.includes(token)) throw new Error(`missing rig adapter token ${token}`);
+}
+
+const core = read('src/soldier-topdown/rig/core.ts');
+for (const joint of ['hip: pt()','chest: pt()','neck: pt()','head: pt()','shL: pt()','shR: pt()','elL: pt()','elR: pt()','hdL: pt()','hdR: pt()','hipL: pt()','hipR: pt()','knL: pt()','knR: pt()','ftL: pt()','ftR: pt()','wpn: pt()','wpnA: 0']) {
+  if (!core.includes(joint)) throw new Error(`missing rig joint ${joint}`);
 }
 
 const page = read('src/soldier-topdown/SoldierPrototypePage.ts');
