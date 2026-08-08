@@ -1,0 +1,204 @@
+name: Soldier Rig Exact Preview QA
+
+on:
+  pull_request:
+    branches:
+      - ci/soldier-rig-preview-base-20260809-18364bb
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soldier-rig-preview-18364bb
+  cancel-in-progress: false
+
+jobs:
+  verify-deploy-visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      PRODUCT_REF: feature/20260808-soldier-topdown-appearance-codex
+      PRODUCT_SHA: 18364bb8cbd723d5c5d2c4f23594aec816fe65f5
+      EXPECTED_VERCEL_PROJECT_NAME: repo
+    steps:
+      - name: Checkout CI harness
+        uses: actions/checkout@v4
+
+      - name: Checkout exact product SHA
+        uses: actions/checkout@v4
+        with:
+          ref: 18364bb8cbd723d5c5d2c4f23594aec816fe65f5
+          fetch-depth: 0
+          path: product
+
+      - name: Verify exact product identity
+        shell: bash
+        working-directory: product
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$PRODUCT_SHA" ]]; then
+            echo "Source mismatch: expected $PRODUCT_SHA, got $actual_sha" >&2
+            exit 1
+          fi
+          echo "Verified product source: $PRODUCT_REF @ $actual_sha"
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: product/package-lock.json
+
+      - name: Install exact product dependencies
+        working-directory: product
+        run: npm ci --no-audit --no-fund
+
+      - name: Run canonical Preview verification gate
+        id: gate
+        shell: bash
+        working-directory: product
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/preview-verification.json"
+          npm run verify:preview -- --report "$report"
+          echo "report=$report" >> "$GITHUB_OUTPUT"
+
+      - name: Pull permanent Vercel project settings
+        working-directory: product
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel@56.4.1 pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Verify permanent Vercel project link
+        working-directory: product
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: >-
+          node scripts/verify_vercel_project_link.mjs
+          --file .vercel/project.json
+          --expected-org-id "$VERCEL_ORG_ID"
+          --expected-project-id "$VERCEL_PROJECT_ID"
+          --expected-project-name "$EXPECTED_VERCEL_PROJECT_NAME"
+
+      - name: Build Vercel output once
+        working-directory: product
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          REAL_WARGAME_BRANCH: feature/20260808-soldier-topdown-appearance-codex
+          REAL_WARGAME_COMMIT_SHA: 18364bb8cbd723d5c5d2c4f23594aec816fe65f5
+        run: npx --yes vercel@56.4.1 build --token="$VERCEL_TOKEN"
+
+      - name: Add exact deployment identity
+        working-directory: product
+        run: >-
+          node scripts/write_deployment_source.mjs
+          --root .vercel/output/static
+          --ref "$PRODUCT_REF"
+          --sha "$PRODUCT_SHA"
+          --report "${{ steps.gate.outputs.report }}"
+
+      - name: Verify prebuilt output pages
+        working-directory: product
+        run: npm run verify:deployment-pages -- --root .vercel/output/static --require-source
+
+      - name: Publish one prebuilt Preview deployment
+        id: deploy
+        shell: bash
+        working-directory: product
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          deployment_url="$(npx --yes vercel@56.4.1 deploy --prebuilt --yes --token="$VERCEL_TOKEN")"
+          deployment_url="$(printf '%s\n' "$deployment_url" | tail -n 1 | tr -d '\r')"
+          if [[ ! "$deployment_url" =~ ^https://[^[:space:]]+$ ]]; then
+            echo 'Vercel CLI did not return a valid deployment URL.' >&2
+            exit 1
+          fi
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "Published Preview: $deployment_url"
+
+      - name: Wait for Vercel READY
+        working-directory: product
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: >-
+          npx --yes vercel@56.4.1 inspect "${{ steps.deploy.outputs.url }}"
+          --wait --token="$VERCEL_TOKEN"
+
+      - name: Verify published identity and required pages
+        shell: bash
+        working-directory: product
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          npx --yes vercel@56.4.1 curl / --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > /dev/null
+          npx --yes vercel@56.4.1 curl /ai-node-editor.html --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > /dev/null
+          source_file="$RUNNER_TEMP/published-deployment-source.json"
+          npx --yes vercel@56.4.1 curl /deployment-source.json --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > "$source_file"
+          SOURCE_FILE="$source_file" node <<'NODE'
+          const fs = require('node:fs');
+          const source = JSON.parse(fs.readFileSync(process.env.SOURCE_FILE, 'utf8'));
+          if (source.ref !== process.env.PRODUCT_REF || source.sourceSha !== process.env.PRODUCT_SHA) {
+            throw new Error(`Published identity mismatch: ${source.ref} @ ${source.sourceSha}`);
+          }
+          if (source.verificationStatus !== 'passed') {
+            throw new Error(`Preview verification status is ${source.verificationStatus}`);
+          }
+          if ((source.skippedChecks ?? []).length !== 0) {
+            throw new Error('Preview deployment contains skipped checks.');
+          }
+          console.log(`Published identity verified: ${source.ref} @ ${source.sourceSha}`);
+          NODE
+
+      - name: Install Playwright QA dependency
+        run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run deployed prototype visual scenario
+        env:
+          TARGET_URL: ${{ steps.deploy.outputs.url }}
+          EXPECTED_PRODUCT_SHA: 18364bb8cbd723d5c5d2c4f23594aec816fe65f5
+          CANONICAL_FEATURE_BRANCH: feature/20260808-soldier-topdown-appearance-codex
+        run: npx playwright test --config=ci/playwright.soldier-topdown-visual.config.ts
+
+      - name: Publish run summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Soldier Rig Exact Preview QA'
+            echo
+            echo "- product ref: $PRODUCT_REF"
+            echo "- product SHA: $PRODUCT_SHA"
+            echo "- Preview URL: ${{ steps.deploy.outputs.url }}"
+            echo "- job status: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soldier-rig-evidence-${{ github.run_id }}
+          path: |
+            artifacts/vercel-e2e/**
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
