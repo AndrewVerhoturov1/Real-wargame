@@ -175,7 +175,7 @@ raf = requestAnimationFrame(frame);
 window.addEventListener('beforeunload', () => { cancelAnimationFrame(raf); resizeObserver.disconnect(); }, { once: true });
 
 function must<T extends Element>(selector: string): T { const element = document.querySelector<T>(selector); if (!element) throw new Error(`Missing ${selector}`); return element; }
-const deg = (value: number): number => (value * Math.PI) / 180;
+function deg(value: number): number { return (value * Math.PI) / 180; }
 function animationSpeed(pose: SoldierPoseId): number { switch (pose) { case 'walk': return 0.9; case 'run': return 1.7; case 'crouchMove': return 0.7; case 'crouchRun': return 1.35; case 'crawl': return 0.55; default: return 0.22; } }
 function galleryPhase(pose: SoldierPoseId): number { switch (pose) { case 'walk': return 0.13; case 'run': return 0.16; case 'crouchMove': return 0.18; case 'crouchRun': return 0.16; case 'crawl': return 0.12; default: return 0; } }
 function stateFor(pose: SoldierPoseId, weapon: SoldierWeaponId, size: number, bodyDeg = 0, attentionDeg = bodyDeg, weaponDeg = bodyDeg, phase = galleryPhase(pose)): SoldierRenderState {
