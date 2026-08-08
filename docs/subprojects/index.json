@@ -23,6 +23,20 @@
       "superseded_by": null,
       "status_path": "docs/subprojects/infantry-combat-prototype-v1/STATUS.md",
       "metadata_path": "docs/subprojects/infantry-combat-prototype-v1/subproject.json"
+    },
+    {
+      "id": "soldier-topdown-appearance",
+      "title": "Внешний вид солдат сверху",
+      "status": "planned",
+      "updated_at": "2026-08-08",
+      "goal": "Выбрать внешний вид солдат в виде сверху: сравнить варианты силуэта, читаемости, цветов сторон, типов солдат, оружия и состояний.",
+      "current_focus": "Исследование вариантов внешнего вида солдат сверху: силуэт, читаемость, цвета сторон, типы солдат, оружие и состояния. Внешний вид ещё не выбран.",
+      "next_step": "Собрать и сравнить варианты силуэта, читаемости, цветов сторон, типов солдат, оружия и состояний; зафиксировать выбор в решении.",
+      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+      "last_verified_commit": null,
+      "superseded_by": null,
+      "status_path": "docs/subprojects/soldier-topdown-appearance/STATUS.md",
+      "metadata_path": "docs/subprojects/soldier-topdown-appearance/subproject.json"
     }
   ]
 }

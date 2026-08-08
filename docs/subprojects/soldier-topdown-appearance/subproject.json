@@ -1,0 +1,39 @@
+{
+  "id": "soldier-topdown-appearance",
+  "title": "Внешний вид солдат сверху",
+  "status": "planned",
+  "updated_at": "2026-08-08",
+  "goal": "Выбрать внешний вид солдат в виде сверху: сравнить варианты силуэта, читаемости, цветов сторон, типов солдат, оружия и состояний.",
+  "current_focus": "Исследование вариантов внешнего вида солдат сверху: силуэт, читаемость, цвета сторон, типы солдат, оружие и состояния. Внешний вид ещё не выбран.",
+  "next_step": "Собрать и сравнить варианты силуэта, читаемости, цветов сторон, типов солдат, оружия и состояний; зафиксировать выбор в решении.",
+  "key_decisions": [
+    "Статус planned: внешний вид солдат сверху ещё не выбран и требует сравнения вариантов."
+  ],
+  "must_read_first": [
+    "AGENTS.md",
+    "docs/subprojects/soldier-topdown-appearance/SUBPROJECT.md",
+    "docs/subprojects/soldier-topdown-appearance/subproject.json",
+    "docs/subprojects/soldier-topdown-appearance/JOURNAL.md"
+  ],
+  "main_files": [],
+  "test_files": [],
+  "manual_docs": [],
+  "do_not_read_by_default": [],
+  "commands": [
+    "python scripts/subproject_context.py soldier-topdown-appearance --brief"
+  ],
+  "important_sessions": [],
+  "context_sources": [],
+  "safety_rules": [
+    "Не переносить изменения в main или real-wargame-preview без явного разрешения пользователя.",
+    "Не выбирать внешний вид без сравнения вариантов и записи решения.",
+    "Не добавлять неподтверждённые файлы кода в main_files до проверки."
+  ],
+  "suggested_verification": [
+    "npm run docs:sync"
+  ],
+  "zworker": {
+    "boundaries": [],
+    "expected_answer_format": "ZIP with answer.md at root"
+  }
+}
