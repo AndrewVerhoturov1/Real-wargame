@@ -1,4 +1,4 @@
-name: Combat Lab Exact Push Deploy
+name: Soldier Rig Exact Push Deploy
 
 on:
   push:
@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      PRODUCT_BRANCH: feature/20260726-shooting-stage-09v-combat-lab
-      PRODUCT_SHA: 5e8d45ae32c27a2c4c23e9627904e4c1c7dd1bcb
+      PRODUCT_BRANCH: feature/20260808-soldier-topdown-appearance-codex
+      PRODUCT_SHA: 18364bb8cbd723d5c5d2c4f23594aec816fe65f5
       EXPECTED_PROJECT_NAME: repo
       EXPECTED_PROJECT_ID: prj_oYeFUOItTdUkzawQT99c1WcUvBss
       EXPECTED_TEAM_ID: team_OghO4H75wJnpy5zyfySmPuSS
@@ -42,6 +42,9 @@ jobs:
 
       - name: Install exact dependencies
         run: npm ci --no-audit --no-fund
+
+      - name: Run soldier rig contract
+        run: node scripts/soldier_topdown_prototype_smoke.mjs
 
       - name: Run canonical Preview gate
         id: gate
@@ -94,8 +97,15 @@ jobs:
           npm run verify:deployment-pages -- --root .vercel/output/static --require-source
           test -f .vercel/output/static/index.html
           test -f .vercel/output/static/ai-node-editor.html
-          test -f .vercel/output/static/combat-lab.html
+          test -f .vercel/output/static/soldier-topdown-prototype.html
           test -f .vercel/output/static/deployment-source.json
+
+      - name: Reconfirm feature HEAD before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')" = "$PRODUCT_SHA"
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
 
       - name: Publish one prebuilt Preview
         id: publish
@@ -109,6 +119,7 @@ jobs:
           deployment_url="$(npx --yes vercel@56.4.1 deploy --prebuilt --yes --token="$VERCEL_TOKEN" | tail -n 1 | tr -d '\r')"
           [[ "$deployment_url" =~ ^https://[^[:space:]]+$ ]] || { echo 'Vercel CLI did not return a deployment URL.' >&2; exit 1; }
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "Published Preview: $deployment_url"
 
       - name: Wait for Vercel READY
         env:
@@ -146,7 +157,7 @@ jobs:
           DEPLOYMENT_URL: ${{ steps.publish.outputs.url }}
         run: |
           set -euo pipefail
-          for page in / /ai-node-editor.html /combat-lab.html; do
+          for page in / /ai-node-editor.html /soldier-topdown-prototype.html; do
             npx --yes vercel@56.4.1 curl "$page" --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > /dev/null
           done
           source_file="$RUNNER_TEMP/published-deployment-source.json"
@@ -155,7 +166,8 @@ jobs:
           const fs = require('node:fs');
           const source = JSON.parse(fs.readFileSync(process.env.SOURCE_FILE, 'utf8'));
           if (source.ref !== process.env.PRODUCT_BRANCH || source.sourceSha !== process.env.PRODUCT_SHA) throw new Error('Published source identity mismatch.');
-          if (source.status !== 'passed') throw new Error(`Published verification status is ${source.status}`);
+          if (source.verificationStatus !== 'passed') throw new Error(`Published verification status is ${source.verificationStatus}`);
+          if ((source.skippedChecks ?? []).length !== 0) throw new Error('Published deployment contains skipped checks.');
           NODE
 
       - name: Save deployment evidence
@@ -166,10 +178,10 @@ jobs:
           DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
           DEPLOYMENT_STATUS: ${{ steps.deployment.outputs.status }}
         run: |
-          mkdir -p artifacts/combat-lab-deployment
+          mkdir -p artifacts/soldier-rig-deployment
           node <<'NODE'
           const fs = require('node:fs');
-          fs.writeFileSync('artifacts/combat-lab-deployment/deployment-result.json', JSON.stringify({
+          fs.writeFileSync('artifacts/soldier-rig-deployment/deployment-result.json', JSON.stringify({
             branch: process.env.PRODUCT_BRANCH,
             sourceSha: process.env.PRODUCT_SHA,
             deploymentUrl: process.env.DEPLOYMENT_URL || null,
@@ -177,13 +189,13 @@ jobs:
             status: process.env.DEPLOYMENT_STATUS || null,
           }, null, 2));
           NODE
-          cp "${{ steps.gate.outputs.report }}" artifacts/combat-lab-deployment/preview-verification.json 2>/dev/null || true
+          cp "${{ steps.gate.outputs.report }}" artifacts/soldier-rig-deployment/preview-verification.json 2>/dev/null || true
 
       - name: Upload deployment evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: combat-lab-exact-push-deployment-${{ github.run_id }}
-          path: artifacts/combat-lab-deployment/**
+          name: soldier-rig-exact-push-deployment-${{ github.run_id }}
+          path: artifacts/soldier-rig-deployment/**
           if-no-files-found: warn
           retention-days: 14
