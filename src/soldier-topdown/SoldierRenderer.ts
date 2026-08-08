@@ -81,7 +81,7 @@ function drawWeapon(ctx:CanvasRenderingContext2D,state:SoldierRenderState,g:Weap
   segment(ctx,g.rear,woodEnd,spec.width+1.2,C.wood,1.2);segment(ctx,woodEnd,g.muzzle,spec.width,C.metal,1.1);
   ctx.save();ctx.translate(g.receiver.x,g.receiver.y);ctx.rotate(state.weaponDirection);ctx.fillStyle=C.metal;ctx.strokeStyle=C.outline;ctx.lineWidth=1.2;ctx.beginPath();ctx.roundRect(-spec.receiver/2,-4,spec.receiver,8,1.2);ctx.fill();ctx.stroke();
   if(state.weapon==='ppsh41'){ctx.beginPath();ctx.arc(2.6,1.2,4,0,TAU);ctx.fill();ctx.stroke();ctx.strokeStyle=C.metalLight;ctx.beginPath();ctx.arc(2.6,1.2,2.6,0,TAU);ctx.stroke()}
-  if(state.weapon==='dp27'){ctx.beginPath();ctx.ellipse(0,-1,5.7,5.2,0,0,TAU);ctx.fill();ctx.stroke();ctx.strokeStyle=C.metalLight;ctx.beginPath();ctx.arc(0,-1,3.3,0,TAU);ctx.stroke()}
+  if(state.weapon==='dp27'){ctx.beginPath();ctx.ellipse(0,-1,6.2,5.6,0,0,TAU);ctx.fill();ctx.stroke();ctx.strokeStyle=C.metalLight;ctx.beginPath();ctx.arc(0,-1,3.3,0,TAU);ctx.stroke()}
   ctx.restore();
   if(state.weapon==='dp27'){const root=add(g.muzzle,mul(f,-5.5));segment(ctx,root,add(add(root,mul(f,4.5)),mul(r,-4)),1.2,C.metal,.55);segment(ctx,root,add(add(root,mul(f,4.5)),mul(r,4)),1.2,C.metal,.55)}
 }
@@ -106,7 +106,7 @@ function guides(ctx:CanvasRenderingContext2D,state:SoldierRenderState,o:SoldierR
 }
 export function drawSoldierTopDown(ctx:CanvasRenderingContext2D,x:number,y:number,state:SoldierRenderState,o:SoldierRenderOptions={}):void{
   const scale=Math.max(.18,state.size/BASE),s=shape(state.pose,((state.phase%1)+1)%1);ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);ctx.globalAlpha=o.opacity??1;
-  if(state.selected){ctx.save();ctx.strokeStyle=C.select;ctx.lineWidth=1.25;ctx.setLineDash([3,3]);ctx.beginPath();if(s.prone)ctx.ellipse(0,2,14,27,state.bodyDirection,0,TAU);else ctx.ellipse(0,2,s.low?16.5:15,s.low?15:14,0,0,TAU);ctx.stroke();ctx.restore()}
+  if(state.selected){ctx.save();ctx.globalAlpha*=.58;ctx.strokeStyle=C.select;ctx.lineWidth=1;ctx.setLineDash([2.5,3.5]);ctx.beginPath();if(s.prone)ctx.ellipse(0,2,14,27,state.bodyDirection,0,TAU);else ctx.ellipse(0,2,s.low?16.5:15,s.low?15:14,0,0,TAU);ctx.stroke();ctx.restore()}
   if(o.showShadow!==false){ctx.save();ctx.globalAlpha*=.18;ctx.fillStyle='#0c0f0b';ctx.beginPath();if(s.prone)ctx.ellipse(2,4,8,22,state.bodyDirection,0,TAU);else ctx.ellipse(2,3,s.low?13:11.5,s.low?10.5:9.5,state.bodyDirection,0,TAU);ctx.fill();ctx.restore()}
   drawLegs(ctx,state,s);drawTorso(ctx,state,s);const g=weaponGeom(state,s);drawWeapon(ctx,state,g);drawArms(ctx,state,s,g);const head=drawHead(ctx,state,s);guides(ctx,state,o,head);ctx.restore();
 }
