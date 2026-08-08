@@ -1,0 +1,63 @@
+{
+  "id": "soldier-topdown-appearance",
+  "title": "Отображение солдат видом сверху",
+  "status": "active",
+  "updated_at": "2026-08-08",
+  "goal": "Исследовать и зафиксировать требования к читаемому отображению солдат видом сверху для тактической игры без утверждения конкретного внешнего стиля до отдельного решения пользователя.",
+  "current_focus": "Составить проверяемые критерии силуэта, различения сторон, типов бойцов, оружия и состояний.",
+  "next_step": "Изучить текущий рендер юнитов и данные солдат, затем подготовить сравнение вариантов по читаемости.",
+  "key_decisions": [
+    "Конкретный внешний стиль солдат пока не выбран: исследование фиксирует требования и критерии, но не утверждает дизайн.",
+    "Внешний стиль считается утверждённым только после отдельного явного решения пользователя."
+  ],
+  "current_task": "Исследование внешнего вида солдат видом сверху",
+  "current_branch": "feature/20260808-soldier-topdown-appearance",
+  "blockers": [],
+  "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+  "must_read_first": [
+    "AGENTS.md",
+    "docs/subprojects/soldier-topdown-appearance/SUBPROJECT.md",
+    "docs/subprojects/soldier-topdown-appearance/subproject.json",
+    "docs/subprojects/soldier-topdown-appearance/JOURNAL.md"
+  ],
+  "main_files": [
+    "src/ui/SceneExport.ts",
+    "src/ui/UnitBarPresentation.ts"
+  ],
+  "test_files": [],
+  "manual_docs": [],
+  "do_not_read_by_default": [],
+  "commands": [
+    "python scripts/subproject_context.py soldier-topdown-appearance --brief",
+    "npm run docs:sync"
+  ],
+  "important_sessions": [],
+  "context_sources": [
+    "AGENTS.md",
+    "docs/ai/repo-context.json",
+    "docs/ai/SKILLS_INDEX.md",
+    "docs/performance/PERFORMANCE_PRINCIPLES.md",
+    "docs/architecture/ENGINE_MIGRATION_READINESS.md",
+    ".agents/skills/real-wargame-pixijs/SKILL.md",
+    ".agents/skills/real-wargame-performance/SKILL.md"
+  ],
+  "safety_rules": [
+    "Не менять main.",
+    "Не переносить изменения в real-wargame-preview без отдельного GO.",
+    "Не добавлять код или графику без отдельной постановки.",
+    "Внешний стиль не считать утверждённым до отдельного решения пользователя.",
+    "Рендерер не является источником игровой истины.",
+    "Не затрагивать несвязанные изменения рабочего дерева."
+  ],
+  "suggested_verification": [
+    "npm run docs:sync",
+    "python scripts/subproject_context.py soldier-topdown-appearance --brief"
+  ],
+  "zworker": {
+    "boundaries": [
+      "Только исследование и документация.",
+      "Без кода, графики, main, preview-transfer и деплоя."
+    ],
+    "expected_answer_format": "ZIP with answer.md at root"
+  }
+}

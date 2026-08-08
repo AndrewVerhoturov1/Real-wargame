@@ -11,7 +11,7 @@ Generated from canonical repository and subproject metadata.
 - **Stable branch:** `main`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
 - **PixiJS major:** 8
-- **Updated:** 2026-07-22
+- **Updated:** 2026-08-08
 
 ## Delivery policy
 
@@ -28,3 +28,12 @@ Generated from canonical repository and subproject metadata.
 - **Next step:** Реализовать общий runtime anchor → action port → требуемая поза → observation/fire → return с отменой, сохранением и диагностикой.
 - **Last verified commit:** `86071bb3d0c4ebd95adf4e87ee4d575fa7108da3`
 - **Status:** [generated status](../subprojects/infantry-combat-prototype-v1/STATUS.md)
+
+## Active subproject: Отображение солдат видом сверху
+
+- **ID:** `soldier-topdown-appearance`
+- **Updated:** 2026-08-08
+- **Current focus:** Составить проверяемые критерии силуэта, различения сторон, типов бойцов, оружия и состояний.
+- **Next step:** Изучить текущий рендер юнитов и данные солдат, затем подготовить сравнение вариантов по читаемости.
+- **Last verified commit:** not recorded
+- **Status:** [generated status](../subprojects/soldier-topdown-appearance/STATUS.md)

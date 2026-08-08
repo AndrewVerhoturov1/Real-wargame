@@ -35,7 +35,8 @@
     "userShouldNotNeedGitOrTerminal": true
   },
   "activeSubprojects": [
-    "infantry-combat-prototype-v1"
+    "infantry-combat-prototype-v1",
+    "soldier-topdown-appearance"
   ],
   "delivery": {
     "preferred": "feature-branch-with-explicit-manual-vercel-preview",
@@ -100,5 +101,5 @@
     "pixiJs": ".agents/skills/real-wargame-pixijs/SKILL.md",
     "aiRuntime": ".agents/skills/real-wargame-ai-runtime/SKILL.md"
   },
-  "updatedAt": "2026-07-22"
+  "updatedAt": "2026-08-08"
 }

@@ -3,13 +3,28 @@
   "workingBranch": "real-wargame-preview",
   "canonicalLauncher": "Run-Real-Wargame-Lab.bat",
   "activeSubprojects": [
-    "infantry-combat-prototype-v1"
+    "infantry-combat-prototype-v1",
+    "soldier-topdown-appearance"
   ],
   "generatedFrom": [
     "docs/ai/repo-context.json",
     "docs/subprojects/*/subproject.json"
   ],
   "subprojects": [
+    {
+      "id": "soldier-topdown-appearance",
+      "title": "Отображение солдат видом сверху",
+      "status": "active",
+      "updated_at": "2026-08-08",
+      "goal": "Исследовать и зафиксировать требования к читаемому отображению солдат видом сверху для тактической игры без утверждения конкретного внешнего стиля до отдельного решения пользователя.",
+      "current_focus": "Составить проверяемые критерии силуэта, различения сторон, типов бойцов, оружия и состояний.",
+      "next_step": "Изучить текущий рендер юнитов и данные солдат, затем подготовить сравнение вариантов по читаемости.",
+      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+      "last_verified_commit": null,
+      "superseded_by": null,
+      "status_path": "docs/subprojects/soldier-topdown-appearance/STATUS.md",
+      "metadata_path": "docs/subprojects/soldier-topdown-appearance/subproject.json"
+    },
     {
       "id": "infantry-combat-prototype-v1",
       "title": "Первый прототип пехотного боя",
