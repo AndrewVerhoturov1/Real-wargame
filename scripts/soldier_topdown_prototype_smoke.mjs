@@ -28,6 +28,12 @@ const page = read('src/soldier-topdown/SoldierPrototypePage.ts');
 for (const token of ['bodyDirection','attentionDirection','weaponDirection','24','32','48','64']) {
   if (!page.includes(token)) throw new Error(`missing page control token ${token}`);
 }
+if (!page.includes('function deg(')) {
+  throw new Error('degree conversion helper must be a hoisted function because gallery boot runs before helper declarations');
+}
+if (page.includes('const deg =')) {
+  throw new Error('degree conversion helper must not use a temporal-dead-zone const declaration');
+}
 
 const vite = read('vite.config.ts');
 if (!vite.includes('soldier-topdown-prototype.html')) throw new Error('vite input missing soldier prototype');
