@@ -1,0 +1,45 @@
+name: Soldier Rig Deployed Visual QA
+
+on:
+  pull_request:
+    branches:
+      - ci/soldier-rig-deployed-visual-base-20260809-18364bb
+
+permissions:
+  contents: read
+
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TARGET_URL: https://repo-f633gr6zk-111s-projects-807221af.vercel.app
+      EXPECTED_PRODUCT_SHA: 18364bb8cbd723d5c5d2c4f23594aec816fe65f5
+      CANONICAL_FEATURE_BRANCH: feature/20260808-soldier-topdown-appearance-codex
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Playwright
+        run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run deployed prototype visual scenario
+        run: npx playwright test --config=ci/playwright.soldier-rig-deployed.config.ts
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soldier-rig-deployed-evidence-${{ github.run_id }}
+          path: |
+            artifacts/soldier-rig-deployed/**
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
