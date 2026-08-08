@@ -1,0 +1,47 @@
+name: Soldier Topdown Deployed Visual QA
+
+on:
+  pull_request:
+    branches:
+      - ci/soldier-visual-base-20260808t214600z-dae07063
+
+permissions:
+  contents: read
+
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TARGET_URL: https://repo-5shv667wv-111s-projects-807221af.vercel.app/soldier-topdown-prototype.html
+      EXPECTED_PRODUCT_SHA: dae07063b796e0c1fe3945c4da859c8248da44fa
+      CANONICAL_FEATURE_BRANCH: feature/20260808-soldier-topdown-appearance-codex
+    steps:
+      - name: Checkout temporary visual harness
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Playwright
+        run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run deployed soldier visual scenario
+        run: npx playwright test --config=ci/playwright.soldier-visual.config.ts
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soldier-topdown-vercel-e2e-${{ github.run_id }}
+          path: |
+            artifacts/vercel-e2e/**
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
