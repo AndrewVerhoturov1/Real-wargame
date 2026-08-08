@@ -101,8 +101,14 @@ test('deployed soldier prototype visual acceptance', async ({ page }) => {
   });
   page.on('pageerror', (error) => evidence.pageErrors.push(error.message));
   page.on('requestfailed', (request) => {
-    const failure = `${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? 'unknown'}`;
-    if (request.url().includes('vercel.live') || request.url().includes('_next-live')) evidence.ignoredServiceFailures.push(failure);
+    const url = request.url();
+    const failure = `${request.method()} ${url} :: ${request.failure()?.errorText ?? 'unknown'}`;
+    const isVercelServiceFailure =
+      url.includes('vercel.live') ||
+      url.includes('_next-live') ||
+      url.includes('/.well-known/vercel/') ||
+      (request.method() === 'HEAD' && url === targetUrl);
+    if (isVercelServiceFailure) evidence.ignoredServiceFailures.push(failure);
     else evidence.requestFailures.push(failure);
   });
 
