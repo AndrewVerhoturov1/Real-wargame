@@ -1,0 +1,3 @@
+Temporary control-plane trigger for exact-SHA manual Preview deployment.
+Product source: feature/20260808-soldier-topdown-appearance-codex @ 88eb2c2e059c523d7f9bb64b01e0ff1b00edf3f5
+Do not merge.
