@@ -11,7 +11,7 @@ Generated from canonical repository and subproject metadata.
 - **Stable branch:** `main`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
 - **PixiJS major:** 8
-- **Updated:** 2026-08-02
+- **Updated:** 2026-08-10
 
 ## Delivery policy
 
@@ -28,3 +28,12 @@ Generated from canonical repository and subproject metadata.
 - **Next step:** Реализовать общий runtime anchor → action port → требуемая поза → observation/fire → return с отменой, сохранением и диагностикой.
 - **Last verified commit:** `86071bb3d0c4ebd95adf4e87ee4d575fa7108da3`
 - **Status:** [generated status](../subprojects/infantry-combat-prototype-v1/STATUS.md)
+
+## Active subproject: Полигон — редактор эксперимента
+
+- **ID:** `polygon-prototype`
+- **Updated:** 2026-08-10
+- **Current focus:** Версия v44 с интегрированным отображением пехоты тактическими знаками принята как текущая базовая версия Полигона. Готовыми считаются «Редактор юнита», «Редактор карты» и «Программа». Остальная оболочка Полигона ещё не разработана как законченная рабочая часть.
+- **Next step:** Спроектировать и реализовать оставшуюся оболочку Полигона: «Серия», «Метрики», «Журнал», правую контекстную панель и верхние общие элементы управления, сохранив три принятых редактора и интегрированное отображение пехоты без перепроектирования.
+- **Last verified commit:** not recorded
+- **Status:** [generated status](../subprojects/polygon-prototype/STATUS.md)
