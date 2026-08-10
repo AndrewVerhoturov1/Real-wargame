@@ -36,7 +36,8 @@
   },
   "activeSubprojects": [
     "infantry-combat-prototype-v1",
-    "polygon-prototype"
+    "polygon-prototype",
+    "soldier-topdown-appearance"
   ],
   "delivery": {
     "preferred": "feature-branch-with-explicit-manual-vercel-preview",
@@ -124,6 +125,7 @@
     "docs/ai/WEB_CHAT_START.md",
     "docs/subprojects/infantry-combat-prototype-v1/STATUS.md",
     "docs/subprojects/polygon-prototype/STATUS.md",
+    "docs/subprojects/soldier-topdown-appearance/STATUS.md",
     "docs/architecture/ENGINE_MIGRATION_READINESS.md",
     "docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md",
     "docs/workflow/MANUAL_VERCEL_DEPLOYMENT.md",
@@ -137,5 +139,5 @@
     "pixiJs": ".agents/skills/real-wargame-pixijs/SKILL.md",
     "aiRuntime": ".agents/skills/real-wargame-ai-runtime/SKILL.md"
   },
-  "updatedAt": "2026-08-10"
+  "updatedAt": "2026-08-11"
 }

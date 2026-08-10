@@ -1,40 +1,70 @@
 {
   "id": "soldier-topdown-appearance",
-  "title": "Внешний вид солдат сверху",
-  "status": "planned",
-  "updated_at": "2026-08-08",
-  "goal": "Выбрать внешний вид солдат в виде сверху: сравнить варианты силуэта, читаемости, цветов сторон, типов солдат, оружия и состояний.",
-  "current_focus": "Исследование вариантов внешнего вида солдат сверху: силуэт, читаемость, цвета сторон, типы солдат, оружие и состояния. Внешний вид ещё не выбран.",
-  "next_step": "Собрать и сравнить варианты силуэта, читаемости, цветов сторон, типов солдат, оружия и состояний; зафиксировать выбор в решении.",
+  "title": "Отображение солдат видом сверху",
+  "status": "active",
+  "updated_at": "2026-08-10",
+  "goal": "Зафиксировать и развивать принятую систему читаемых тактических знаков пехоты для 2D-карты: поза, направление, оружие, действия, состояния, роли и уровни детализации по масштабу.",
+  "current_focus": "Принята система условных знаков: круг для стоящего, скруглённый треугольник для присевшего, вытянутый прямоугольник для лежащего, оружие закреплено внутри знака справа у условного плеча; определены состояния и три уровня детализации.",
+  "next_step": "Использовать UNIT_SYMBOL_SYSTEM.md как канонический визуальный контракт при переносе принятого HTML-прототипа в штатный рендер карты и редактора юнитов без отдельной демонстрационной сцены.",
   "key_decisions": [
-    "Статус planned: внешний вид солдат сверху ещё не выбран и требует сравнения вариантов."
+    "Внешний визуальный язык пехоты утверждён пользователем 2026-08-10 и зафиксирован в UNIT_SYMBOL_SYSTEM.md.",
+    "Боец отображается простым тактическим знаком, а не человеческой фигуркой: стоя — круг, присев — аккуратный симметричный скруглённый треугольник вершиной вперёд, лёжа — вытянутый прямоугольник с небольшим скруглением.",
+    "Оружие является отдельным подвижным элементом, но его основание закреплено внутри знака немного правее центра, примерно у условного правого плеча; при действиях меняется угол оружия, а не точка его крепления.",
+    "Подавление показывается четырьмя отдельными скруглёнными уголками, ранение — круглым медицинским значком, смерть — серым полупрозрачным лежащим телом с небольшим крестом.",
+    "На дальнем масштабе обычный боец становится точкой, ДП — квадратом, командир — звездой; оружие и направления скрываются, а отделение объединяется штрихованной областью.",
+    "Система должна быть штатным отображением настоящих данных юнитов и редактора; отдельная демонстрационная сцена в конечном файле не нужна.",
+    "Рендерер показывает состояние игры и не является источником игровой истины."
   ],
+  "current_task": "Закрепление принятого визуального языка пехотных юнитов и подготовка к штатной интеграции",
+  "current_branch": "feature/20260808-soldier-topdown-appearance-codex",
+  "blockers": [],
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
   "must_read_first": [
     "AGENTS.md",
     "docs/subprojects/soldier-topdown-appearance/SUBPROJECT.md",
     "docs/subprojects/soldier-topdown-appearance/subproject.json",
+    "docs/subprojects/soldier-topdown-appearance/UNIT_SYMBOL_SYSTEM.md",
     "docs/subprojects/soldier-topdown-appearance/JOURNAL.md"
   ],
-  "main_files": [],
+  "main_files": [
+    "src/ui/SceneExport.ts",
+    "src/ui/UnitBarPresentation.ts"
+  ],
   "test_files": [],
-  "manual_docs": [],
+  "manual_docs": [
+    "docs/subprojects/soldier-topdown-appearance/UNIT_SYMBOL_SYSTEM.md"
+  ],
   "do_not_read_by_default": [],
   "commands": [
-    "python scripts/subproject_context.py soldier-topdown-appearance --brief"
-  ],
-  "important_sessions": [],
-  "context_sources": [],
-  "safety_rules": [
-    "Не переносить изменения в main или real-wargame-preview без явного разрешения пользователя.",
-    "Не выбирать внешний вид без сравнения вариантов и записи решения.",
-    "Не добавлять неподтверждённые файлы кода в main_files до проверки."
-  ],
-  "suggested_verification": [
+    "python scripts/subproject_context.py soldier-topdown-appearance --brief",
     "npm run docs:sync"
   ],
+  "important_sessions": [],
+  "context_sources": [
+    "AGENTS.md",
+    "docs/ai/repo-context.json",
+    "docs/ai/SKILLS_INDEX.md",
+    "docs/performance/PERFORMANCE_PRINCIPLES.md",
+    "docs/architecture/ENGINE_MIGRATION_READINESS.md",
+    ".agents/skills/real-wargame-pixijs/SKILL.md",
+    ".agents/skills/real-wargame-performance/SKILL.md"
+  ],
+  "safety_rules": [
+    "Не менять main.",
+    "Не переносить изменения в real-wargame-preview без отдельного GO.",
+    "Не менять принятый базовый визуальный язык без отдельного явного решения пользователя.",
+    "Рендерер не является источником игровой истины.",
+    "Не затрагивать несвязанные изменения рабочего дерева."
+  ],
+  "suggested_verification": [
+    "npm run docs:sync",
+    "python scripts/subproject_context.py soldier-topdown-appearance --brief"
+  ],
   "zworker": {
-    "boundaries": [],
+    "boundaries": [
+      "Работать в границах подпроекта отображения солдат.",
+      "Не менять main и не переносить в real-wargame-preview без отдельного GO."
+    ],
     "expected_answer_format": "ZIP with answer.md at root"
   }
 }

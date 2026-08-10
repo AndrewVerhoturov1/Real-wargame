@@ -11,7 +11,7 @@ Generated from canonical repository and subproject metadata.
 - **Stable branch:** `main`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
 - **PixiJS major:** 8
-- **Updated:** 2026-08-10
+- **Updated:** 2026-08-11
 
 ## Delivery policy
 
@@ -37,3 +37,12 @@ Generated from canonical repository and subproject metadata.
 - **Next step:** Спроектировать и реализовать оставшуюся оболочку Полигона: «Серия», «Метрики», «Журнал», правую контекстную панель и верхние общие элементы управления, сохранив три принятых редактора и интегрированное отображение пехоты без перепроектирования.
 - **Last verified commit:** not recorded
 - **Status:** [generated status](../subprojects/polygon-prototype/STATUS.md)
+
+## Active subproject: Отображение солдат видом сверху
+
+- **ID:** `soldier-topdown-appearance`
+- **Updated:** 2026-08-10
+- **Current focus:** Принята система условных знаков: круг для стоящего, скруглённый треугольник для присевшего, вытянутый прямоугольник для лежащего, оружие закреплено внутри знака справа у условного плеча; определены состояния и три уровня детализации.
+- **Next step:** Использовать UNIT_SYMBOL_SYSTEM.md как канонический визуальный контракт при переносе принятого HTML-прототипа в штатный рендер карты и редактора юнитов без отдельной демонстрационной сцены.
+- **Last verified commit:** not recorded
+- **Status:** [generated status](../subprojects/soldier-topdown-appearance/STATUS.md)
