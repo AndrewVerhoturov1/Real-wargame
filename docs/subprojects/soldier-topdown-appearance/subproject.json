@@ -9,6 +9,7 @@
   "key_decisions": [
     "Статус planned: внешний вид солдат сверху ещё не выбран и требует сравнения вариантов."
   ],
+  "canonical_launcher": "Run-Real-Wargame-Lab.bat",
   "must_read_first": [
     "AGENTS.md",
     "docs/subprojects/soldier-topdown-appearance/SUBPROJECT.md",

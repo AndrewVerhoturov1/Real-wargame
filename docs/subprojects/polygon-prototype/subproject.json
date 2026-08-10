@@ -1,0 +1,57 @@
+{
+  "id": "polygon-prototype",
+  "title": "Полигон — редактор эксперимента",
+  "status": "active",
+  "updated_at": "2026-08-10",
+  "goal": "Собрать единый прототип подготовки тактического эксперимента Real Wargame: карта, участники, программа, запуск, серия прогонов, метрики и журнал.",
+  "current_focus": "Версия v44 с интегрированным отображением пехоты тактическими знаками принята как текущая базовая версия Полигона. Готовыми считаются «Редактор юнита», «Редактор карты» и «Программа». Остальная оболочка Полигона ещё не разработана как законченная рабочая часть.",
+  "next_step": "Спроектировать и реализовать оставшуюся оболочку Полигона: «Серия», «Метрики», «Журнал», правую контекстную панель и верхние общие элементы управления, сохранив три принятых редактора и интегрированное отображение пехоты без перепроектирования.",
+  "key_decisions": [
+    "v44 infantry-integrated — текущая принятая база автономного прототипа Полигона.",
+    "Готовы: «Редактор юнита», «Редактор карты», «Программа».",
+    "В текущую принятую версию встроено отображение пехоты простыми тактическими знаками с тремя уровнями детализации.",
+    "Не готовы: «Серия», «Метрики», «Журнал», законченная правая панель и законченная верхняя панель.",
+    "Ближайшая цель — достроить оболочку вокруг трёх уже принятых редакторов, а не начинать их заново."
+  ],
+  "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+  "must_read_first": [
+    "AGENTS.md",
+    "docs/subprojects/polygon-prototype/STATUS.md",
+    "docs/subprojects/polygon-prototype/SUBPROJECT.md",
+    "docs/subprojects/polygon-prototype/JOURNAL.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_V44.md",
+    "docs/subprojects/infantry-combat-prototype-v1/POLYGON_MAP_EDITOR_RESEARCH.md",
+    "docs/subprojects/infantry-combat-prototype-v1/prototypes/polygon-program-logic-editor/README.md",
+    "docs/prototypes/polygon-interface-v1/README.md"
+  ],
+  "main_files": [
+    "docs/subprojects/polygon-prototype/ACCEPTED_V44.md"
+  ],
+  "test_files": [],
+  "manual_docs": [
+    "docs/subprojects/polygon-prototype/SUBPROJECT.md",
+    "docs/subprojects/polygon-prototype/JOURNAL.md"
+  ],
+  "do_not_read_by_default": [],
+  "commands": [
+    "npm run docs:sync"
+  ],
+  "important_sessions": [],
+  "context_sources": [
+    "polygon-map-editor-unified-v44-infantry-integrated-v2(1).html"
+  ],
+  "safety_rules": [
+    "v44 является принятым прототипом интерфейса и авторинга, но не источником истины игровой симуляции.",
+    "Не считать видимые заглушки «Серия», «Метрики» и «Журнал» готовыми функциями.",
+    "Не ломать и не перепроектировать принятые редакторы «Редактор юнита», «Редактор карты» и «Программа» без отдельной задачи.",
+    "Не заменять интегрированное отображение пехоты реалистичными фигурами без отдельного решения пользователя.",
+    "Не переносить изменения в main без отдельного явного разрешения пользователя."
+  ],
+  "suggested_verification": [
+    "npm run docs:sync"
+  ],
+  "zworker": {
+    "boundaries": [],
+    "expected_answer_format": "ZIP with answer.md at root"
+  }
+}
