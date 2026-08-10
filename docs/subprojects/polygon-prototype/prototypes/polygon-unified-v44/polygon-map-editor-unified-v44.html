@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Полигон · принятый прототип v44</title>
+<style>body{font:14px system-ui,sans-serif;margin:32px;color:#222}code{background:#f2f2ee;padding:2px 5px}.err{color:#9b1c1c}</style>
+</head>
+<body>
+<p id="status">Восстанавливается принятый прототип Полигона v44…</p>
+<script src="payload/part-01.js"></script>
+<script src="payload/part-02.js"></script>
+<script src="payload/part-03.js"></script>
+<script src="payload/part-04.js"></script>
+<script src="payload/part-05.js"></script>
+<script src="payload/part-06.js"></script>
+<script src="payload/part-07.js"></script>
+<script src="payload/part-08.js"></script>
+<script src="payload/part-09.js"></script>
+<script src="payload/part-10.js"></script>
+<script src="payload/part-11.js"></script>
+<script src="payload/part-12.js"></script>
+<script src="payload/part-13.js"></script>
+<script src="payload/part-14.js"></script>
+<script src="payload/part-15.js"></script>
+<script src="payload/part-16.js"></script>
+<script src="payload/part-17.js"></script>
+<script src="payload/part-18.js"></script>
+<script src="payload/part-19.js"></script>
+<script src="payload/part-20.js"></script>
+<script src="payload/part-21.js"></script>
+<script src="payload/part-22.js"></script>
+<script src="payload/part-23.js"></script>
+<script>
+(async()=>{
+ const status=document.getElementById('status');
+ try{
+  const chunks=window.__POLYGON_V44_PAYLOAD||[];
+  if(chunks.length!==23||chunks.some(x=>typeof x!=='string')) throw new Error('Не все части payload загружены');
+  const b64=chunks.join('');
+  const raw=atob(b64);
+  const gz=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++)gz[i]=raw.charCodeAt(i);
+  const stream=new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const html=await new Response(stream).blob();
+  const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));
+  location.replace(url);
+ }catch(error){status.className='err';status.textContent='Не удалось открыть v44: '+error.message;console.error(error);}
+})();
+</script>
+</body>
+</html>
