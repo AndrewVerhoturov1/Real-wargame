@@ -3,7 +3,8 @@
   "workingBranch": "real-wargame-preview",
   "canonicalLauncher": "Run-Real-Wargame-Lab.bat",
   "activeSubprojects": [
-    "infantry-combat-prototype-v1"
+    "infantry-combat-prototype-v1",
+    "polygon-prototype"
   ],
   "generatedFrom": [
     "docs/ai/repo-context.json",
@@ -23,6 +24,20 @@
       "superseded_by": null,
       "status_path": "docs/subprojects/infantry-combat-prototype-v1/STATUS.md",
       "metadata_path": "docs/subprojects/infantry-combat-prototype-v1/subproject.json"
+    },
+    {
+      "id": "polygon-prototype",
+      "title": "Полигон — редактор эксперимента",
+      "status": "active",
+      "updated_at": "2026-08-10",
+      "goal": "Собрать единый прототип подготовки тактического эксперимента Real Wargame: карта, участники, программа, запуск, серия прогонов, метрики и журнал.",
+      "current_focus": "Версия v44 принята как текущая базовая версия Полигона. Готовыми считаются три основных рабочих раздела: «Редактор юнита», «Редактор карты» и «Программа». Остальная оболочка Полигона ещё не проектировалась как законченная рабочая часть.",
+      "next_step": "Спроектировать и реализовать оставшуюся оболочку Полигона: «Серия», «Метрики», «Журнал», правую контекстную панель и верхние общие элементы управления, сохранив три принятых редактора без перепроектирования.",
+      "canonical_launcher": null,
+      "last_verified_commit": null,
+      "superseded_by": null,
+      "status_path": "docs/subprojects/polygon-prototype/STATUS.md",
+      "metadata_path": "docs/subprojects/polygon-prototype/subproject.json"
     },
     {
       "id": "soldier-topdown-appearance",
