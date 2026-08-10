@@ -13,6 +13,20 @@
   ],
   "subprojects": [
     {
+      "id": "soldier-topdown-appearance",
+      "title": "Отображение солдат видом сверху",
+      "status": "active",
+      "updated_at": "2026-08-10",
+      "goal": "Зафиксировать и развивать принятую систему читаемых тактических знаков пехоты для 2D-карты: поза, направление, оружие, действия, состояния, роли и уровни детализации по масштабу.",
+      "current_focus": "Принята система условных знаков: круг для стоящего, скруглённый треугольник для присевшего, вытянутый прямоугольник для лежащего, оружие закреплено внутри знака справа у условного плеча; определены состояния и три уровня детализации.",
+      "next_step": "Использовать UNIT_SYMBOL_SYSTEM.md как канонический визуальный контракт при переносе принятого HTML-прототипа в штатный рендер карты и редактора юнитов без отдельной демонстрационной сцены.",
+      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+      "last_verified_commit": null,
+      "superseded_by": null,
+      "status_path": "docs/subprojects/soldier-topdown-appearance/STATUS.md",
+      "metadata_path": "docs/subprojects/soldier-topdown-appearance/subproject.json"
+    },
+    {
       "id": "infantry-combat-prototype-v1",
       "title": "Первый прототип пехотного боя",
       "status": "active",
@@ -39,20 +53,6 @@
       "superseded_by": null,
       "status_path": "docs/subprojects/polygon-prototype/STATUS.md",
       "metadata_path": "docs/subprojects/polygon-prototype/subproject.json"
-    },
-    {
-      "id": "soldier-topdown-appearance",
-      "title": "Отображение солдат видом сверху",
-      "status": "active",
-      "updated_at": "2026-08-10",
-      "goal": "Зафиксировать и развивать принятую систему читаемых тактических знаков пехоты для 2D-карты: поза, направление, оружие, действия, состояния, роли и уровни детализации по масштабу.",
-      "current_focus": "Принята система условных знаков: круг для стоящего, скруглённый треугольник для присевшего, вытянутый прямоугольник для лежащего, оружие закреплено внутри знака справа у условного плеча; определены состояния и три уровня детализации.",
-      "next_step": "Использовать UNIT_SYMBOL_SYSTEM.md как канонический визуальный контракт при переносе принятого HTML-прототипа в штатный рендер карты и редактора юнитов без отдельной демонстрационной сцены.",
-      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-      "last_verified_commit": null,
-      "superseded_by": null,
-      "status_path": "docs/subprojects/soldier-topdown-appearance/STATUS.md",
-      "metadata_path": "docs/subprojects/soldier-topdown-appearance/subproject.json"
     }
   ]
 }
