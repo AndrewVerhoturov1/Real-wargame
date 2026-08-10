@@ -13,6 +13,7 @@
     "Не готовы: «Серия», «Метрики», «Журнал», законченная правая панель и законченная верхняя панель.",
     "Ближайшая цель — достроить оболочку вокруг трёх уже принятых редакторов, а не начинать их заново."
   ],
+  "canonical_launcher": "Run-Real-Wargame-Lab.bat",
   "must_read_first": [
     "AGENTS.md",
     "docs/subprojects/polygon-prototype/STATUS.md",
