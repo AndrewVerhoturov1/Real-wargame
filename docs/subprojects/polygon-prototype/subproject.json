@@ -1,0 +1,41 @@
+{
+  "id": "polygon-prototype",
+  "title": "Полигон — редактор эксперимента",
+  "status": "active",
+  "updated_at": "2026-08-10",
+  "goal": "Собрать единый автономный прототип подготовки эксперимента Real Wargame: карта, участники, программа, запуск, серия, метрики и журнал.",
+  "current_focus": "Принят v44 как текущая базовая версия Полигона. Рабочими считаются три главных редактора: «Редактор юнита», «Редактор карты» и «Программа». Остальные разделы оболочки слева, правая панель вне готовых сценариев и верхняя панель ещё не проектировались как законченные рабочие части.",
+  "next_step": "Спроектировать и реализовать оставшуюся оболочку Полигона: «Серия», «Метрики», «Журнал», содержимое правой панели и верхние общие элементы управления, не ломая три принятых редактора.",
+  "canonical_launcher": "docs/subprojects/polygon-prototype/prototypes/polygon-unified-v44/polygon-map-editor-unified-v44.html",
+  "last_verified_commit": null,
+  "must_read_first": [
+    "AGENTS.md",
+    "docs/subprojects/polygon-prototype/SUBPROJECT.md",
+    "docs/subprojects/polygon-prototype/STATUS.md",
+    "docs/subprojects/polygon-prototype/JOURNAL.md",
+    "docs/subprojects/polygon-prototype/prototypes/polygon-unified-v44/README.md",
+    "docs/subprojects/infantry-combat-prototype-v1/POLYGON_MAP_EDITOR_RESEARCH.md",
+    "docs/subprojects/infantry-combat-prototype-v1/prototypes/polygon-program-logic-editor/README.md"
+  ],
+  "main_files": [
+    "docs/subprojects/polygon-prototype/prototypes/polygon-unified-v44/polygon-map-editor-unified-v44.html",
+    "docs/subprojects/polygon-prototype/prototypes/polygon-unified-v44/payload-manifest.json",
+    "docs/subprojects/polygon-prototype/prototypes/polygon-unified-v44/payload"
+  ],
+  "test_files": [],
+  "manual_docs": [
+    "docs/subprojects/polygon-prototype/SUBPROJECT.md",
+    "docs/subprojects/polygon-prototype/JOURNAL.md"
+  ],
+  "suggested_verification": [
+    "npm run docs:sync",
+    "npm run docs:check"
+  ],
+  "safety_rules": [
+    "v44 — принятый автономный прототип интерфейса и авторинга, а не источник истины игровой симуляции.",
+    "Не изменять принятый пакет v44 на месте; следующую принятую итерацию сохранять как новую версию.",
+    "Не считать «Серию», «Метрики», «Журнал», правую панель и верхнюю панель готовыми только потому, что их элементы присутствуют в оболочке.",
+    "Не ломать и не перепроектировать уже принятые редакторы «Редактор юнита», «Редактор карты» и «Программа» без отдельной задачи.",
+    "Не переносить изменения в main без отдельного явного разрешения пользователя."
+  ]
+}
