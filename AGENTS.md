@@ -79,6 +79,14 @@ docs/performance/PERFORMANCE_PRINCIPLES.md
 docs/architecture/ENGINE_MIGRATION_READINESS.md
 ```
 
+For any work that designs, changes or reviews AI architecture, Graph v2, Utility AI, GOAP, HTN, perception, memory, tactical queries, group or commander AI, or AI training, always read before implementation:
+
+```text
+docs/ai/AI_DEVELOPMENT_APPROACH.md
+```
+
+Treat it as the target architectural source. Current code and the active `STATUS.md` describe only the implemented subset; never claim that every method described there is already implemented.
+
 For deployment always read:
 
 ```text
