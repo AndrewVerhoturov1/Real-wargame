@@ -16,16 +16,30 @@ SHA-256:
 
 `1f4aa27611fbdf5433e0b0ae630d8953d1c19091ce1e0592536d1737ffca91f8`
 
-В репозитории exact HTML хранится как детерминированный gzip (`mtime=0`):
-
-`docs/subprojects/polygon-prototype/prototypes/polygon-metrics-constructor-v18-report-streamlined.html.gz`
-
-- размер gzip: `392 902 байта`;
-- SHA-256 gzip: `856ed16636f152a523ac6c490f9c4fea6af5fe3fae511dbf28aa38ae1ce18b35`.
-
-После распаковки получается исходный HTML с указанным выше SHA-256 без изменений.
-
 Файл является развитием принятого Полигона v44 и сохраняет уже согласованные «Редактор юнита», «Редактор карты», «Программа» и интегрированное отображение пехоты.
+
+## Точное хранение в репозитории
+
+Из-за ограничения remote GitHub connector на передачу одного крупного бинарного blob полный HTML v18 не записан в repository как один `.html` или `.gz`. Вместо этого repository хранит **точный проверяемый delta-пакет от уже принятого v44 к v18**:
+
+`docs/subprojects/polygon-prototype/prototypes/metrics-v18/`
+
+База:
+
+- `polygon-map-editor-unified-v44-infantry-integrated-v2(1).html`;
+- SHA-256: `0db5984d9d1f76149c31135b4a16f7e657f957c5512039853b9607353979b1d6`.
+
+Delta:
+
+- git patch, сжатый XZ, затем Base64;
+- разбит на 12 небольших текстовых частей `parts/v44-to-metrics-v18.patch.xz.b64.part-*`;
+- SHA-256 сжатого patch: `56f71c833a6feedbe82f40710d147b7838f1ca64d198274c913728f69be8baca`.
+
+Скрипт:
+
+`docs/subprojects/polygon-prototype/prototypes/metrics-v18/rebuild_metrics_v18.py`
+
+проверяет SHA базового v44, собирает и проверяет delta, применяет его и затем проверяет SHA восстановленного v18. Локальная контрольная реконструкция дала побайтное совпадение с принятым HTML v18.
 
 ## Что принято в «Метриках»
 

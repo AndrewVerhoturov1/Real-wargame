@@ -14,6 +14,7 @@
     "Левая панель Метрик показывает конфигурацию и состояние сбора, но не превращает метрику в одно рассчитанное число.",
     "Верхний Отчёт содержит только «Обзор», «Измерения», «Хронология»; карта отложена, raw data доступны через экспорт и табличный блок.",
     "Отчёт собирается из 8 типов аналитических блоков; report layout хранится отдельно от measurement definition и raw telemetry.",
+    "Exact v18 хранится как проверяемый delta-пакет от принятого v44 из-за ограничения remote connector на крупный бинарный blob.",
     "Не готовы: «Серия», «Журнал», законченная правая панель, законченная верхняя панель и production-подключение telemetry к принятому UX Метрик."
   ],
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
@@ -31,7 +32,8 @@
   "main_files": [
     "docs/subprojects/polygon-prototype/ACCEPTED_V44.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_METRICS_V18.md",
-    "docs/subprojects/polygon-prototype/prototypes/polygon-metrics-constructor-v18-report-streamlined.html.gz"
+    "docs/subprojects/polygon-prototype/prototypes/metrics-v18/README.md",
+    "docs/subprojects/polygon-prototype/prototypes/metrics-v18/rebuild_metrics_v18.py"
   ],
   "test_files": [],
   "manual_docs": [
@@ -39,7 +41,7 @@
     "docs/subprojects/polygon-prototype/JOURNAL.md"
   ],
   "do_not_read_by_default": [
-    "docs/subprojects/polygon-prototype/prototypes/polygon-metrics-constructor-v18-report-streamlined.html.gz"
+    "docs/subprojects/polygon-prototype/prototypes/metrics-v18/parts/"
   ],
   "commands": [
     "npm run docs:sync"
@@ -47,7 +49,7 @@
   "important_sessions": [],
   "context_sources": [
     "polygon-map-editor-unified-v44-infantry-integrated-v2(1).html",
-    "docs/subprojects/polygon-prototype/prototypes/polygon-metrics-constructor-v18-report-streamlined.html.gz"
+    "docs/subprojects/polygon-prototype/prototypes/metrics-v18/README.md"
   ],
   "safety_rules": [
     "v44 и Metrics v18 являются принятыми UX-прототипами и контрактами авторинга/анализа, но не источниками истины игровой симуляции.",

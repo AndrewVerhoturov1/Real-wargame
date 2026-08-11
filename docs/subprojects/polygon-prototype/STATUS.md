@@ -36,7 +36,8 @@
 
 - `docs/subprojects/polygon-prototype/ACCEPTED_V44.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_METRICS_V18.md`
-- `docs/subprojects/polygon-prototype/prototypes/polygon-metrics-constructor-v18-report-streamlined.html.gz`
+- `docs/subprojects/polygon-prototype/prototypes/metrics-v18/README.md`
+- `docs/subprojects/polygon-prototype/prototypes/metrics-v18/rebuild_metrics_v18.py`
 
 ## Suggested verification
 
