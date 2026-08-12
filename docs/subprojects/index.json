@@ -49,7 +49,7 @@
       "current_focus": "Приняты рабочие UX-прототипы «Редактор юнита», «Редактор карты», «Программа» и «Метрики». Метрики v18 утверждены пользователем и перенесены в real-wargame-preview; принятый Отчёт имеет верхние режимы только «Обзор / Измерения / Хронология». Следующие незавершённые продуктовые разделы — «Серия» и «Журнал».",
       "next_step": "Отдельно выбрать и текстом спроектировать следующий незавершённый раздел Полигона — «Серия» или «Журнал» — сохраняя принятую v18 Метрик без перепроектирования; позже закончить общую правую и верхнюю панели и связать UX Метрик с реальным runtime-сбором telemetry без переноса игровой истины в UI.",
       "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-      "last_verified_commit": "3a1d3ffb4efa2228dce4009460c726984df85216",
+      "last_verified_commit": null,
       "superseded_by": null,
       "status_path": "docs/subprojects/polygon-prototype/STATUS.md",
       "metadata_path": "docs/subprojects/polygon-prototype/subproject.json"

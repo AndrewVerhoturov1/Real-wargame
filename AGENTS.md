@@ -21,6 +21,7 @@ Canonical sources:
 docs/ai/repo-context.json
 docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md
 docs/workflow/MANUAL_VERCEL_DEPLOYMENT.md
+docs/orchestration/ORCHESTRATION_PROTOCOL.md
 ```
 
 ## Mandatory screenshot and visual-QA routing
@@ -93,6 +94,13 @@ For deployment always read:
 .agents/skills/real-wargame-manual-vercel-deploy/SKILL.md
 ```
 
+For orchestration work (Codex prepares, hands off, reviews or tests a Web Chat task) always read:
+
+```text
+docs/orchestration/ORCHESTRATION_PROTOCOL.md
+.agents/skills/real-wargame-orchestration/SKILL.md
+```
+
 ## 4. Canonical feature route
 
 ```text
@@ -115,6 +123,23 @@ user task
 ```
 
 A push never deploys. Transfer permission and deployment permission are separate.
+
+## Codex orchestration mode
+
+Codex is the orchestrator and an independent reviewer/tester/operator. The Web Chat remains the normal owner of product-code implementation.
+
+- GitHub is the persistent shared state; the exact commit SHA is mandatory for handoff and review.
+- A task runs in simple mode (user works directly with one Web Chat) or orchestrated mode (Codex prepares a handoff, receives the exact pushed SHA, reviews/tests independently and returns actionable fixes).
+- Feature work uses separate worktrees; a worktree is not shared memory.
+- Do not impose an Issue for every small task; use it only for a long-lived unit, a public decision record or cross-branch tracking.
+- Three explicit user gates: no changes to `main`, no transfer into `real-wargame-preview`, no external deployment, each without an explicit user request.
+
+Canonical protocol:
+
+```text
+docs/orchestration/ORCHESTRATION_PROTOCOL.md
+.agents/skills/real-wargame-orchestration/SKILL.md
+```
 
 ## 5. Required pages
 

@@ -1,22 +1,24 @@
 # Chat Collaboration Workflow
 
-This route is for optional collaboration between several ordinary ChatGPT chats. It does not replace the canonical feature-delivery workflow.
+This route covers collaboration between the user, one designated Web Chat and Codex as orchestrator. It does not replace the canonical feature-delivery workflow.
 
-Canonical workflow:
+Canonical workflows:
 
 ```text
 docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md
+docs/orchestration/ORCHESTRATION_PROTOCOL.md
 ```
 
 ## Core model
 
 ```text
 user
-→ one designated Web Chat owns one feature branch
+→ one designated Web Chat owns one feature branch and the product code
 → optional research or proposal chats return findings, files or patches
 → the designated Web Chat integrates selected results into the same feature branch
+→ Codex may orchestrate: prepare a handoff, verify the exact pushed SHA, review/test independently and return actionable fixes
 → the designated Web Chat runs focused non-browser checks and pushes
-→ user gives the branch to Codex once for branch-linked Vercel Preview
+→ manual Vercel Preview only after explicit user request, via the deployment skill
 → user performs live testing
 → the designated Web Chat fixes issues on the same feature branch
 → optional visual GitHub Actions verification after explicit approval
@@ -45,7 +47,7 @@ The branch owner:
 11. runs visual GitHub Actions verification only after explicit user approval;
 12. transfers the accepted result into `real-wargame-preview` only after explicit user GO.
 
-The branch owner is the only chat that writes the canonical feature branch.
+The branch owner is the only chat that writes the canonical feature branch. It does not delegate product implementation or regression fixing to Codex.
 
 ### Research or proposal worker
 
@@ -62,7 +64,7 @@ A worker must not:
 
 - push directly to `real-wargame-preview`;
 - create a competing delivery branch unless the branch owner explicitly requests an isolated experiment;
-- deploy through Codex;
+- deploy any branch;
 - merge or transfer any branch;
 - claim checks it did not run.
 
@@ -70,28 +72,31 @@ A worker result is advisory until the designated branch owner integrates it.
 
 ### Codex
 
-Codex is not an implementation or integration role.
+Codex is the orchestrator and an independent reviewer/tester/operator, not a product-code implementer.
 
-Codex only receives the already-pushed canonical feature branch, exposes it as a branch-linked Vercel Preview and returns the URL plus deployment status. Codex does not return for later revisions.
+- GitHub is the persistent shared state; the exact commit SHA is mandatory for handoff and review.
+- In orchestrated mode Codex prepares a Web Chat handoff, receives the exact pushed SHA, fetches and checks it, reviews or tests independently and returns concrete fixes or hands the result to the user.
+- Codex does not write product code, merge or retarget branches. Codex may transfer the exact accepted commit only after explicit user GO; deployment stays separate.
+- Manual Vercel Preview is executed through the deployment skill, not through a separate Codex deployment role.
 
 ### Human user
 
-The user performs the live test, decides whether visual GitHub Actions verification is needed and gives the explicit GO for transfer into preview.
+The user performs the live test, decides whether visual verification is needed and gives the explicit GO for transfer into preview.
 
 ## One working cycle
 
-1. User gives the branch owner a feature task.
+1. User gives the branch owner a feature task, possibly through Codex.
 2. Branch owner creates one feature branch from the exact current preview head.
 3. Branch owner optionally prepares 1–3 bounded research prompts.
 4. Worker chats return analysis, files or patches.
 5. Branch owner compares the results and integrates the selected solution into the same feature branch.
 6. Branch owner runs focused non-browser checks, commits and pushes.
 7. Branch owner reports the exact commit and live-test checklist.
-8. User gives the branch to Codex once.
-9. Codex returns a branch-linked Vercel Preview URL and stops participating.
-10. User tests the live application.
-11. Branch owner fixes all reported defects on the same feature branch and pushes new commits.
-12. The branch-linked Preview updates without new Codex work.
+8. Codex, when orchestrating, verifies the exact pushed SHA, reviews or tests and returns actionable fixes.
+9. Branch owner fixes the reported issues on the same feature branch and pushes.
+10. When the user requests it, the exact HEAD is deployed manually to a Vercel Preview via the deployment skill.
+11. User tests the live application.
+12. Branch owner fixes all reported defects on the same feature branch and pushes new commits.
 13. If requested, branch owner runs visual GitHub Actions verification against the exact feature commit and inspects artifacts.
 14. After explicit user GO, branch owner transfers the accepted commit into `real-wargame-preview`.
 
@@ -137,10 +142,13 @@ A worker-created PR or branch is not a normal result. It is allowed only when th
 - async results have exact identity and stale-result rejection;
 - the project uses PixiJS 8;
 - checks, performance evidence and visual QA are reported honestly;
-- visual QA runs only after explicit user approval.
+- visual QA runs only after explicit user approval;
+- GitHub is the persistent shared state and the exact commit SHA is required for every handoff and review;
+- Codex does not write product code; the designated Web Chat remains its owner;
+- transfer into preview and deployment remain separate explicit user GO gates.
 
 ## Prohibited old orchestration
 
-Do not use the former route where independent workers or an integrator write directly into `real-wargame-preview`, create PR-first delivery or ask Codex to implement or fix code.
+Do not use the former route where independent workers or an integrator write directly into `real-wargame-preview`, create PR-first delivery or delegate product-code implementation to Codex.
 
 Q/R/X/W, r-init and related historical modes are not part of this workflow unless the user explicitly asks to inspect the legacy process.

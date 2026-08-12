@@ -62,10 +62,10 @@ For new work:
 
 1. Web Chat creates `feature/YYYYMMDD-short-kebab-slug` from the exact current preview head.
 2. Web Chat implements and pushes that feature branch.
-3. Codex only exposes it as a branch-linked Vercel Preview.
+3. In orchestrated mode Codex verifies the exact pushed SHA and reviews/tests independently; a Vercel Preview is created only after explicit user request.
 4. The user tests the live Vercel deployment.
 5. Web Chat fixes issues on the same feature branch.
-6. After explicit user GO, Web Chat transfers the accepted exact commit into `real-wargame-preview`.
+6. After explicit user GO, Web Chat or Codex transfers the accepted exact commit into `real-wargame-preview`.
 7. Only then may the local `Real-wargame-preview` folder be updated to show the accepted state.
 
 ## Main branch

@@ -51,6 +51,23 @@ Use this mode only when no capable local checkout is available.
 
 History rewriting is permitted only for the executor's own unpublished feature branch before shared PR review, live testing or acceptance of an exact commit SHA. Never rewrite after any of those gates.
 
+## Codex orchestration handoff
+
+A task may arrive through Codex orchestration. Codex prepares the handoff, the Web Chat remains the owner of the feature branch and product code, and Codex independently reviews or tests the exact pushed SHA and returns actionable fixes.
+
+```text
+docs/orchestration/ORCHESTRATION_PROTOCOL.md
+.agents/skills/real-wargame-orchestration/SKILL.md
+```
+
+Requirements for an orchestrated handoff:
+
+- record the exact `base_commit` and `feature_branch` from the handoff;
+- return `current_commit` (full SHA) plus `changed_files`, `checks_run`, `not_checked` and the live-test checklist;
+- keep the result reachable through GitHub, not only in a chat;
+- never delegate product implementation or regression fixing to Codex;
+- Codex review comments are handled on the same feature branch like any other feedback.
+
 ## 3. Required application pages
 
 Every production build and deployment must contain:
