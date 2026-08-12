@@ -12,7 +12,7 @@ from pathlib import Path
 BASE_SHA256 = "1f4aa27611fbdf5433e0b0ae630d8953d1c19091ce1e0592536d1737ffca91f8"
 PATCH_XZ_SHA256 = "50c53bd2611315d1f28afc482571f4a63a06001802081c0f6894d8de9b27ae5c"
 OUTPUT_SHA256 = "eda3190c747d61b554c99072828c1f56038a48f81eff5778deceed75d9a71ca4"
-PART_COUNT = 1
+PART_COUNT = 4
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -41,7 +41,7 @@ def main() -> int:
         )
 
     root = Path(__file__).resolve().parent
-    parts = [root / "parts" / "metrics-v18-to-journal-v4.patch.xz.b64"]
+    parts = sorted((root / "parts").glob("metrics-v18-to-journal-v4.patch.xz.b64.part-*"))
     if len(parts) != PART_COUNT:
         raise SystemExit(f"Expected {PART_COUNT} delta parts, found {len(parts)}")
 
