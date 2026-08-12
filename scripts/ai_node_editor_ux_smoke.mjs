@@ -153,7 +153,7 @@ expectNotContains(css, 'calc(100vh - 90px)', 'Компактная раскла�
 console.log('[ГОТОВО] AI Node Editor UX smoke passed.');
 
 function read(relativePath) {
-  return readFileSync(path.join(repoRoot, relativePath), 'utf8');
+  return readFileSync(path.join(repoRoot, relativePath), 'utf8').replace(/\r\n/g, '\n');
 }
 
 function expectContains(content, needle, message) {
