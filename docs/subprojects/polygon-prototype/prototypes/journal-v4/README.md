@@ -18,9 +18,9 @@ Accepted Journal v4:
 
 Delta payload:
 
-- format: git patch → XZ → Base64 text payload
+- format: git patch → XZ → Base64 → 4 text chunks
 - compressed patch SHA-256: `50c53bd2611315d1f28afc482571f4a63a06001802081c0f6894d8de9b27ae5c`
-- payload: `parts/metrics-v18-to-journal-v4.patch.xz.b64`
+- chunks: `parts/metrics-v18-to-journal-v4.patch.xz.b64.part-01` … `part-04`
 
 ## Rebuild
 
