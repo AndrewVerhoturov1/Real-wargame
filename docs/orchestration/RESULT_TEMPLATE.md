@@ -1,6 +1,6 @@
 # Web Chat and Worker Result Template
 
-Use this template for canonical feature work. Put the practical Russian summary first; technical evidence follows only when useful.
+Use this template for canonical feature work. Put the practical Russian summary first; technical evidence follows only when useful. In orchestrated mode the same template carries the Web Chat handoff back to Codex.
 
 ## 1. User-facing summary
 
@@ -60,10 +60,33 @@ Use this template for canonical feature work. Put the practical Russian summary 
 task:
 status: COMPLETED / PARTIAL / BLOCKED / RESEARCH_ONLY
 delivery_state: implementation / code_ready / manual_deployment / ready_for_live_test / live_test_revision / visual_qa / transferred_to_preview
+orchestration_mode: simple / orchestrated
+handoff_from: none / codex
 feature_branch:
 base_branch: real-wargame-preview
 base_commit:
 current_commit:
+```
+
+## Orchestration handoff
+
+In orchestrated mode the handoff back to Codex must be reachable through GitHub, not only in a chat:
+
+```text
+handoff_commit_reachable: yes / no
+handoff_changed_files:
+handoff_checks_run:
+handoff_not_checked:
+handoff_manual_checks_needed:
+handoff_preview_touched: no
+handoff_main_touched: no
+handoff_issue_created: no (unless a long-lived unit or public decision record requires it)
+```
+
+Canonical protocol:
+
+```text
+docs/orchestration/ORCHESTRATION_PROTOCOL.md
 ```
 
 ## 4. Verification selection

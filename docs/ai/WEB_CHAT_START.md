@@ -25,6 +25,7 @@ Canonical workflows:
 ```text
 docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md
 docs/workflow/MANUAL_VERCEL_DEPLOYMENT.md
+docs/orchestration/ORCHESTRATION_PROTOCOL.md
 ```
 
 ## 2. How to speak with the user
@@ -70,6 +71,13 @@ For a deployment request, always read:
 .agents/skills/real-wargame-manual-vercel-deploy/SKILL.md
 ```
 
+For orchestration work (a task arrives from or will be reviewed by Codex) always read:
+
+```text
+docs/orchestration/ORCHESTRATION_PROTOCOL.md
+.agents/skills/real-wargame-orchestration/SKILL.md
+```
+
 ## 4. Mandatory task start
 
 For every implementation task:
@@ -82,6 +90,15 @@ For every implementation task:
 6. do not modify `main`.
 
 A Pull Request is not the default development route.
+
+## Codex orchestration mode
+
+Codex is the orchestrator and independent reviewer/tester/operator. The Web Chat remains the normal owner of product-code implementation.
+
+- In orchestrated mode Codex prepares a handoff (branch, `base_commit`, goal, forbidden changes), the Web Chat implements on that branch, and Codex verifies the exact pushed SHA, reviews or tests it and returns actionable fixes.
+- GitHub is the persistent shared state: the handoff and result must be reachable through the branch and exact commit, not only in a chat.
+- Web Chat does not delegate product implementation or regression fixing to Codex.
+- Exact `base_commit` and `current_commit` remain mandatory in every report.
 
 ## 5. Focused verification
 

@@ -25,19 +25,19 @@ feature/YYYYMMDD-short-kebab-slug
 3. Implement, commit, push and perform later fixes only on that feature branch.
 4. Run focused non-browser checks before reporting readiness.
 5. Report the exact base commit, current commit and manual live-test checklist.
-6. The user gives the already-pushed branch to Codex once.
-7. Codex only exposes a branch-linked Vercel Preview and returns the URL.
+6. If the task is orchestrated, Codex receives the pushed branch and exact SHA, then reviews/tests it independently.
+7. A branch-linked Vercel Preview is created only after explicit user request and through the deployment skill.
 8. The user performs live testing.
 9. Fix all reported defects on the same feature branch.
 10. Run visual GitHub Actions verification only after explicit user approval.
-11. Transfer into `real-wargame-preview` only after explicit user GO for the exact tested commit.
+11. Transfer the exact tested commit into `real-wargame-preview` only after explicit user GO; Codex may operate the transfer.
 12. Do not change `main` without separate explicit user GO.
 
 ## Prohibited for external skills
 
 - direct implementation push to `real-wargame-preview`;
 - PR-first feature development;
-- Codex implementation, fixes, merge or branch transfer;
+- Codex product-code implementation, replacement fixes or merge; transfer before explicit user GO;
 - automatic browser checks on push;
 - a new feature branch for every NO-GO issue;
 - transfer into preview before explicit user approval.

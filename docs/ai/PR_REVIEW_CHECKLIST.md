@@ -27,7 +27,7 @@ A Pull Request is not the default development route. Use the PR-specific section
 - [ ] `main` was not changed without `MAIN_GO_APPROVED_BY_USER: yes`.
 - [ ] Auto-merge is not enabled.
 - [ ] The author did not claim checks that did not run.
-- [ ] Codex did not implement, commit, fix, merge or transfer the feature.
+- [ ] Codex did not write product code, create replacement commits or fix product bugs; any transfer waited for explicit user GO.
 
 ## Project compatibility
 
@@ -54,14 +54,14 @@ A Pull Request is not the default development route. Use the PR-specific section
 - [ ] Expected result is stated for each important manual step.
 - [ ] `preview_touched: no` and `main_touched: no` are explicit.
 
-## Codex deployment-only handoff
+## Codex orchestration and review handoff
 
 - [ ] Codex received the already-pushed feature branch and exact commit.
-- [ ] Codex returned a branch-linked Vercel Preview URL.
-- [ ] Codex returned deployment status and deployed commit.
-- [ ] The deployment follows later pushes to the same feature branch.
-- [ ] Codex did not modify code or create replacement commits.
-- [ ] Codex did not merge or transfer branches.
+- [ ] Codex verified the exact pushed feature SHA and reviewed/tested the exact diff.
+- [ ] Codex returned actionable fixes or a code-readiness report.
+- [ ] A Vercel Preview was used only after explicit user request and through the deployment skill.
+- [ ] Codex did not write product code or create replacement commits.
+- [ ] Transfer into preview, if performed by Codex, followed explicit user GO for that exact commit.
 
 ## Human live test
 

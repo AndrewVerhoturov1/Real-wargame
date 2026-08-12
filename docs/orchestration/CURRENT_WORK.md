@@ -2,7 +2,7 @@
 
 ## Active workflow
 
-The canonical Web Chat feature-delivery workflow is active.
+The canonical Web Chat feature-delivery workflow is active, with Codex as orchestrator and independent reviewer/tester/operator.
 
 ```text
 user task
@@ -11,13 +11,13 @@ user task
 → designated Web Chat integrates and implements in the same feature branch
 → focused non-browser checks
 → push and readiness report
-→ user gives the branch to Codex once
-→ Codex only exposes a branch-linked Vercel Preview and returns the URL
+→ Codex may prepare a handoff, verify the exact pushed SHA and review/test independently
+→ manual Vercel Preview only after explicit user request, via the deployment skill
 → human live test
 → same-branch revisions by the designated Web Chat
 → optional visual GitHub Actions verification after explicit approval
 → explicit user GO
-→ designated Web Chat transfers the exact accepted commit into real-wargame-preview
+→ Codex or designated Web Chat transfers the exact accepted commit into real-wargame-preview
 ```
 
 Canonical documents:
@@ -26,19 +26,23 @@ Canonical documents:
 AGENTS.md
 docs/ai/WEB_CHAT_START.md
 docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md
+docs/orchestration/ORCHESTRATION_PROTOCOL.md
 docs/orchestration/CHAT_WORKFLOW.md
+.agents/skills/real-wargame-orchestration/SKILL.md
 ```
 
 ## Role status
 
 ```text
-canonical_feature_branch_owner: designated Web Chat
+canonical_feature_branch_owner: designated Web Chat (product code)
+codex_role: orchestrator + independent reviewer/tester/operator; verifies exact SHA, reviews/tests, sends actionable fixes
 worker_chats: research/proposals only
-codex_role: branch-linked Vercel Preview only
 human_role: live test, optional visual-QA request, explicit preview-transfer GO
 preview_role: acceptance target after GO
 main_role: stable branch requiring separate explicit GO
 ```
+
+GitHub is the persistent shared state; exact `base_commit` and `current_commit` are mandatory for every handoff and review.
 
 Do not use the former active route:
 
@@ -93,7 +97,8 @@ Its old branches, PRs and transfer sequence do not define current workflow polic
 
 - direct implementation on `real-wargame-preview` is forbidden;
 - all live-test fixes stay on the same canonical feature branch;
-- Codex does not implement, fix, merge or transfer;
+- Codex does not write product code or merge/retarget branches; after explicit user GO Codex may transfer the exact accepted commit into preview;
+- exact SHA is mandatory for handoff and review; required context is never kept only locally;
 - visual browser workflows remain manual-only;
 - preview transfer requires explicit user GO for the exact accepted commit;
 - `main` requires separate explicit user GO;

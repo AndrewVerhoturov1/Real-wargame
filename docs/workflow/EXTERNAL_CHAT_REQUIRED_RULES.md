@@ -28,7 +28,7 @@ feature/YYYYMMDD-short-kebab-slug
 ## Web Chat ownership
 
 13. Web Chat owns the code, tests, commits, pushes, focused checks, manual checklist, later fixes, optional visual verification and final transfer after explicit user GO.
-14. Do not delegate implementation or regression fixing to Codex.
+14. Do not delegate product implementation or regression fixing to Codex.
 15. Do not ask the user to manage Git or terminal commands when the Web Chat can do it.
 
 ## Focused non-browser checks
@@ -64,13 +64,13 @@ preview_touched: no
 main_touched: no
 ```
 
-## Codex deployment-only handoff
+## Codex orchestration and review handoff
 
-20. The user may give the already-pushed feature branch to Codex once.
-21. Codex only exposes that branch as a branch-linked Vercel Preview and returns the branch URL, commit URL when available, tested commit and deployment status.
-22. Codex must not modify code, create replacement commits, fix bugs, merge, transfer branches or touch `real-wargame-preview` or `main`.
-23. The Vercel Preview must remain associated with the feature branch so later pushes become testable without calling Codex again.
-24. A detached one-off deployment that does not follow later branch pushes is not the canonical result.
+20. Codex may act as orchestrator and independent reviewer/tester/operator. It may prepare the Web Chat handoff, verify the exact pushed SHA and return actionable fixes.
+21. The Web Chat must return the exact `base_commit` and `current_commit`, changed files, checks run, not checked and the live-test checklist. GitHub is the persistent shared state; the result must be reachable through the branch and commit, not only in a chat.
+22. Codex must not write product code, create replacement commits or fix product bugs itself. Codex must not merge, retarget or touch `real-wargame-preview`/`main` before explicit user GO; after GO it may transfer the exact accepted commit as an operator.
+23. Codex review comments are handled by the Web Chat on the same feature branch. Do not create a new delivery branch for them.
+24. A Vercel Preview is created only after explicit user request and only through the manual deployment skill. A detached one-off deployment is not the canonical result.
 
 ## Human live testing and revision loop
 
@@ -98,7 +98,7 @@ docs/workflow/VISUAL_QA_APPROVAL_POLICY.md
 33. `real-wargame-preview` is the acceptance target, not the development branch.
 34. Transfer only after the user gives explicit GO for the exact tested feature commit.
 35. Before transfer, update the feature branch from current preview when necessary, resolve conflicts there and rerun focused checks required by the final diff.
-36. Web Chat performs the transfer and reports the resulting preview commit.
+36. Web Chat or Codex performs the transfer after explicit GO and reports the resulting preview commit.
 37. A Pull Request may be used only when the user explicitly asks for PR review/transfer or repository protection requires it.
 38. After successful transfer, close or delete the feature branch unless the user explicitly asks to keep it.
 
@@ -134,9 +134,10 @@ Every task report includes:
 
 - No direct implementation push to `real-wargame-preview`.
 - No PR-first feature development.
-- No Codex implementation, commits, bug fixing, merge or branch transfer.
+- No Codex product-code implementation, replacement commits, bug fixing, merge or transfer before explicit user GO.
 - No automatic visual workflow on every push.
 - No new branch for every live-test defect.
 - No transfer to preview before explicit user GO.
 - No secrets, `.env`, tokens or private data in files, commits, PR descriptions or comments.
 - No scope creep unrelated to the task.
+- No Issue imposed for every small task; GitHub branches and exact commits remain the normal shared state.

@@ -25,6 +25,7 @@ The user does not need to name a skill. Route by intent and current environment 
 | Vercel deployment Playwright E2E | `.agents/skills/vercel-deployment-playwright-e2e/SKILL.md` | Deployed-Vercel fallback selected by `real-wargame-screenshots`: **mandatory automatically** when visual/browser verification is requested and the current Web Chat cannot directly control a real browser against that URL. |
 | Real-Wargame PixiJS 8 guide | `.agents/skills/real-wargame-pixijs/SKILL.md` | Any PixiJS, canvas, renderer, camera, pointer event, visual layer or rendering-performance task. Read before general PixiJS skills. |
 | Real-Wargame AI Runtime | `.agents/skills/real-wargame-ai-runtime/SKILL.md` | Soldier AI graph, Utility scoring, Blackboard, Runtime, lifecycle, cancellation, Bridge, AI Dictionary, node authoring or live trace. |
+| Real-Wargame orchestration | `.agents/skills/real-wargame-orchestration/SKILL.md` | Codex orchestration: choose simple or orchestrated mode, resolve exact branch/SHA, prepare a Web Chat handoff, verify the exact pushed SHA, review/test independently and send actionable fixes. Canonical protocol: `docs/orchestration/ORCHESTRATION_PROTOCOL.md`. |
 
 ## Mandatory screenshot routing
 
@@ -124,6 +125,7 @@ Visual verification permission is not deployment permission, and deployment perm
 | Add a multi-tick action | `real-wargame-performance`, `real-wargame-ai-runtime` |
 | Change AI Node Editor controls | `real-wargame-performance` when recurring/runtime work changes, then `real-wargame-ai-runtime` |
 | Change documentation/navigation | no domain skill; use canonical JSON and `npm run docs:sync` |
+| Orchestrate a task across the user and a Web Chat, hand off or review an exact commit | `real-wargame-orchestration`; protocol in `docs/orchestration/ORCHESTRATION_PROTOCOL.md` |
 
 ## Vercel deployment invariants
 
