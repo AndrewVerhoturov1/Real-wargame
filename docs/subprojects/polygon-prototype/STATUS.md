@@ -14,11 +14,11 @@
 
 ## Current focus
 
-Приняты рабочие UX-прототипы «Редактор юнита», «Редактор карты», «Программа» и «Метрики». Метрики v18 утверждены пользователем и перенесены в real-wargame-preview; принятый Отчёт имеет верхние режимы только «Обзор / Измерения / Хронология». Следующие незавершённые продуктовые разделы — «Серия» и «Журнал».
+Приняты рабочие UX-прототипы «Редактор юнита», «Редактор карты», «Программа», «Метрики v18» и «Журнал v4». Журнал v4 утверждён пользователем как read-only слой разбора эксперимента с глобальной хронологией, фильтрацией, связью с выбранными Метриками и историческим просмотром. Следующая незавершённая крупная продуктовая вкладка — «Серия»; production-подключение telemetry и replay/history остаётся отдельной runtime-задачей.
 
 ## Next step
 
-Отдельно выбрать и текстом спроектировать следующий незавершённый раздел Полигона — «Серия» или «Журнал» — сохраняя принятую v18 Метрик без перепроектирования; позже закончить общую правую и верхнюю панели и связать UX Метрик с реальным runtime-сбором telemetry без переноса игровой истины в UI.
+Проектировать следующую незавершённую вкладку «Серия» по обязательному text-first процессу; отдельно позже подключить принятые UX Метрик и Журнала к реальному telemetry/replay runtime, сохраняя simulation единственным источником игровой истины.
 
 ## Read first
 
@@ -28,6 +28,7 @@
 - `docs/subprojects/polygon-prototype/JOURNAL.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_V44.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_METRICS_V18.md`
+- `docs/subprojects/polygon-prototype/ACCEPTED_JOURNAL_V4.md`
 - `docs/subprojects/infantry-combat-prototype-v1/POLYGON_MAP_EDITOR_RESEARCH.md`
 - `docs/subprojects/infantry-combat-prototype-v1/prototypes/polygon-program-logic-editor/README.md`
 - `docs/prototypes/polygon-interface-v1/README.md`
@@ -36,8 +37,11 @@
 
 - `docs/subprojects/polygon-prototype/ACCEPTED_V44.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_METRICS_V18.md`
+- `docs/subprojects/polygon-prototype/ACCEPTED_JOURNAL_V4.md`
 - `docs/subprojects/polygon-prototype/prototypes/metrics-v18/README.md`
 - `docs/subprojects/polygon-prototype/prototypes/metrics-v18/rebuild_metrics_v18.py`
+- `docs/subprojects/polygon-prototype/prototypes/journal-v4/README.md`
+- `docs/subprojects/polygon-prototype/prototypes/journal-v4/rebuild_journal_v4.py`
 
 ## Suggested verification
 
@@ -45,11 +49,11 @@
 
 ## Safety rules
 
-- v44 и Metrics v18 являются принятыми UX-прототипами и контрактами авторинга/анализа, но не источниками истины игровой симуляции.
-- Не считать «Серия» и «Журнал» готовыми функциями только потому, что их места видны в оболочке.
-- Не считать demo-data Отчёта доказательством production-сбора telemetry; подключение к runtime выполняется отдельно.
-- Не ломать и не перепроектировать принятые редакторы «Редактор юнита», «Редактор карты», «Программа» и принятый UX «Метрик» без отдельной задачи.
-- Перед любым следующим изменением UI Полигона сначала представить пользователю текстовую концепцию и получить явное одобрение; до этого HTML не создавать и не изменять.
+- v44, Metrics v18 и Journal v4 являются принятыми UX-прототипами/контрактами и не являются источниками истины игровой симуляции.
+- Не считать «Серию» готовой функцией только потому, что её место видно в оболочке.
+- Не считать demo-data Метрик или demo-history Журнала доказательством production telemetry/replay; runtime-подключение выполняется отдельно.
+- Не ломать и не перепроектировать принятые «Редактор юнита», «Редактор карты», «Программа», Metrics v18 и Journal v4 без отдельной задачи.
+- Перед любым следующим крупным изменением UI Полигона сначала представить пользователю текстовую концепцию и получить явное одобрение; до этого HTML не создавать и не изменять.
 - Передаваемый пользователю большой HTML Полигона упаковывать только в ZIP-архив; не выводить его прямо в чат и не отдавать отдельным сырым .html-файлом.
 - Не заменять интегрированное отображение пехоты реалистичными фигурами без отдельного решения пользователя.
 - Не переносить изменения в main без отдельного явного разрешения пользователя.
