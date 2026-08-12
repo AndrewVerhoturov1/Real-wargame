@@ -3,10 +3,10 @@
 
 - **ID:** `polygon-prototype`
 - **Status:** `active`
-- **Updated:** 2026-08-12
+- **Updated:** 2026-08-13
 - **Working branch:** `real-wargame-preview`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
-- **Last verified commit:** `610fcfdf4f19753a52a08b79b48113704a81637d`
+- **Last verified commit:** `2ff387e668864243aad3c4af380b5869e530b482`
 
 ## Goal
 
@@ -14,11 +14,11 @@
 
 ## Current focus
 
-Приняты рабочие UX-прототипы «Редактор юнита», «Редактор карты», «Программа», «Метрики v18» и «Журнал v4». Journal v4 утверждён пользователем, перенесён в `real-wargame-preview` и является **единственной текущей канонической базой для следующих UI-итераций Полигона**. Следующая незавершённая крупная продуктовая вкладка — `Серия`; production-подключение telemetry и replay/history остаётся отдельной runtime-задачей.
+Приняты рабочие UX-прототипы `Редактор юнита`, `Редактор карты`, `Программа`, `Метрики v18`, `Журнал v4` и `Общие редакторы v1`. Global Editors v1 на базе Journal v4 является единственной текущей канонической базой следующих UI-итераций. Общий popup содержит 11 редакторов; все gameplay tuning-настройки standalone Polygon authoring mode разблокированы, включая built-in профили и published записи вооружения. Следующая незавершённая крупная вкладка — `Серия`; production telemetry/replay/registry wiring остаётся отдельной runtime-задачей.
 
 ## Next step
 
-Проектировать вкладку `Серия` по обязательному text-first процессу, начиная только от принятого Journal v4; отдельно позже подключить принятые UX Метрик и Журнала к реальному telemetry/replay runtime, сохраняя simulation единственным источником игровой истины.
+Проектировать `Серию` по обязательному text-first процессу, начиная только от принятой Global Editors v1. Production wiring Метрик, Журнала и общих редакторов выполнять отдельно, сохраняя simulation единственным источником игровой истины.
 
 ## Read first
 
@@ -26,6 +26,7 @@
 - `docs/subprojects/polygon-prototype/STATUS.md`
 - `docs/subprojects/polygon-prototype/SUBPROJECT.md`
 - `docs/subprojects/polygon-prototype/JOURNAL.md`
+- `docs/subprojects/polygon-prototype/ACCEPTED_GLOBAL_EDITORS_V1.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_JOURNAL_V4.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_METRICS_V18.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_V44.md`
@@ -35,9 +36,10 @@
 
 ## Main files
 
+- `docs/subprojects/polygon-prototype/ACCEPTED_GLOBAL_EDITORS_V1.md`
+- `docs/subprojects/polygon-prototype/prototypes/global-editors-v1/README.md`
+- `docs/subprojects/polygon-prototype/prototypes/global-editors-v1/rebuild_global_editors_v1.py`
 - `docs/subprojects/polygon-prototype/ACCEPTED_JOURNAL_V4.md`
-- `docs/subprojects/polygon-prototype/prototypes/journal-v4/README.md`
-- `docs/subprojects/polygon-prototype/prototypes/journal-v4/rebuild_journal_v4.py`
 - `docs/subprojects/polygon-prototype/ACCEPTED_METRICS_V18.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_V44.md`
 
@@ -47,12 +49,12 @@
 
 ## Safety rules
 
-- Journal v4 является единственной текущей канонической базой для следующей UI-итерации Полигона; не начинать новый UI от v44 или Metrics v18.
-- v44, Metrics v18 и Journal v4 являются принятыми UX-прототипами/контрактами и не являются источниками истины игровой симуляции.
-- Не считать `Серию` готовой функцией только потому, что её место видно в оболочке.
-- Не считать demo-data Метрик или demo-history Журнала доказательством production telemetry/replay; runtime-подключение выполняется отдельно.
-- Не ломать и не перепроектировать принятые `Редактор юнита`, `Редактор карты`, `Программа`, Metrics v18 и Journal v4 без отдельной задачи.
-- Перед любым следующим крупным изменением UI Полигона сначала представить пользователю текстовую концепцию и получить явное одобрение; до этого HTML не создавать и не изменять.
-- Передаваемый пользователю большой HTML Полигона упаковывать только в ZIP-архив; не выводить его прямо в чат и не отдавать отдельным сырым `.html`-файлом.
-- Не заменять интегрированное отображение пехоты реалистичными фигурами без отдельного решения пользователя.
+- Global Editors v1 является единственной текущей канонической базой следующей UI-итерации; не начинать новый UI от Journal v4, Metrics v18 или v44.
+- v44, Metrics v18, Journal v4 и Global Editors v1 являются UX/reference-контрактами и не являются simulation SSOT.
+- Не считать `Серию` готовой только потому, что её место видно в оболочке.
+- Не считать demo-data, demo-history или standalone tuning доказательством production telemetry/replay/registry wiring.
+- Не ломать принятые `Редактор юнита`, `Редактор карты`, `Программа`, Metrics v18, Journal v4 и Global Editors v1 без отдельной задачи.
+- Перед следующим крупным UI-изменением сначала согласовать текстовую концепцию; до явного одобрения HTML не изменять.
+- Передаваемый пользователю большой HTML упаковывать только в ZIP с `answer.md` в корне.
+- Не заменять интегрированные тактические знаки пехоты реалистичными фигурами без отдельного решения пользователя.
 - Не переносить изменения в `main` без отдельного явного разрешения пользователя.

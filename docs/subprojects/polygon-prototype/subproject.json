@@ -2,40 +2,45 @@
   "id": "polygon-prototype",
   "title": "Полигон — редактор эксперимента",
   "status": "active",
-  "updated_at": "2026-08-12",
+  "updated_at": "2026-08-13",
   "goal": "Собрать единый прототип подготовки тактического эксперимента Real Wargame: карта, участники, программа, запуск, серия прогонов, метрики и журнал.",
-  "current_focus": "Приняты рабочие UX-прототипы «Редактор юнита», «Редактор карты», «Программа», «Метрики v18» и «Журнал v4». Journal v4 утверждён пользователем, перенесён в real-wargame-preview и является единственной текущей канонической базой для следующих UI-итераций Полигона. Следующая незавершённая крупная продуктовая вкладка — «Серия»; production-подключение telemetry и replay/history остаётся отдельной runtime-задачей.",
-  "next_step": "Проектировать вкладку «Серия» по обязательному text-first процессу, начиная только от принятого Journal v4; отдельно позже подключить принятые UX Метрик и Журнала к реальному telemetry/replay runtime, сохраняя simulation единственным источником игровой истины.",
+  "current_focus": "Приняты рабочие UX-прототипы «Редактор юнита», «Редактор карты», «Программа», «Метрики v18», «Журнал v4» и «Общие редакторы v1». Global Editors v1 на базе Journal v4 является единственной текущей канонической базой для следующих UI-итераций Полигона. Общий popup содержит 11 редакторов; все gameplay tuning-настройки в standalone Polygon authoring mode разблокированы, включая встроенные профили и опубликованные записи вооружения. Следующая незавершённая крупная продуктовая вкладка — «Серия»; production-подключение telemetry/replay и standalone authoring UX остаётся отдельной runtime-задачей.",
+  "next_step": "Проектировать вкладку «Серия» по обязательному text-first процессу, начиная только от принятой Global Editors v1; отдельно позже подключить принятые UX Метрик, Журнала и общих редакторов к production telemetry/replay/registries, сохраняя simulation единственным источником игровой истины.",
   "key_decisions": [
-    "Исторические принятые точки v44 infantry-integrated и Metrics v18 сохраняются как контракты предыдущих этапов, но не являются базой следующей UI-итерации.",
-    "Единственная текущая каноническая база для дальнейшего развития автономного Полигона — Journal v4: polygon-journal-v4.html, 1 728 802 байта, SHA-256 eda3190c747d61b554c99072828c1f56038a48f81eff5778deceed75d9a71ca4.",
-    "Готовы как UX-прототипы: «Редактор юнита», «Редактор карты», «Программа», «Метрики v18», «Журнал v4».",
-    "Метрики v18 приняты пользователем и перенесены в real-wargame-preview; commit переноса и хранения exact delta: 3a1d3ffb4efa2228dce4009460c726984df85216.",
+    "Единственная текущая каноническая база для дальнейшего развития автономного Полигона — Global Editors v1: polygon-journal-v4.html, 1 987 792 байта, SHA-256 78c89b784c441a87c8680134bf4aef31e0a96c6e0b2344cd1ad875f09d372e9b.",
+    "Global Editors v1 принят пользователем 13 августа 2026 и построен непосредственно на принятом Journal v4.",
+    "Общий popup Полигона содержит 11 редакторов: Профили маршрута, Тактические позиции; Архетипы бойцов, Профили внимания, Профили восприятия, Профили движения; Вооружение, Ранения и подавление; Типы поверхностей, Профили местности, Направленный рельеф.",
+    "Граф поведения и Данные бойца по явному продуктовому решению пользователя не входят в меню общих редакторов Полигона.",
+    "В standalone Polygon authoring mode все gameplay tuning-настройки разблокированы, включая встроенные профили и опубликованные записи каталога вооружения. Stable ID, revision/status, запрет удаления built-in и неактивная кнопка сохранения при чистом состоянии не считаются gameplay-lock.",
+    "Параметры с пометками «Ещё не подключено» и «Будущая механика» остаются редактируемыми в UX-прототипе, но пометки сохраняются и не означают production runtime wiring.",
+    "Exact Global Editors v1 хранится как проверяемый delta-пакет Journal v4 → Global Editors v1 в prototypes/global-editors-v1/.",
+    "Исторические принятые точки v44 infantry-integrated, Metrics v18 и Journal v4 сохраняются как контракты предыдущих этапов и звенья exact-восстановления, но не являются базой следующей UI-итерации.",
+    "Journal v4: polygon-journal-v4.html, 1 728 802 байта, SHA-256 eda3190c747d61b554c99072828c1f56038a48f81eff5778deceed75d9a71ca4; принят 12 августа 2026 и перенесён в real-wargame-preview.",
+    "Готовы как UX-прототипы: «Редактор юнита», «Редактор карты», «Программа», «Метрики v18», «Журнал v4», «Общие редакторы v1».",
+    "Метрики v18 приняты пользователем и перенесены в real-wargame-preview; commit хранения exact delta: 3a1d3ffb4efa2228dce4009460c726984df85216.",
     "Метрики v18 разделяют сбор и анализ: конструктор определяет поток исходных данных, а Отчёт выполняет статистику, сравнение и визуализацию постфактум.",
     "Program Anchors используются как стабильные временные границы измерений и привязаны к портам узлов программы.",
     "Левая панель Метрик показывает конфигурацию и состояние сбора, но не превращает метрику в одно рассчитанное число.",
     "Верхний Отчёт содержит только «Обзор», «Измерения», «Хронология»; отдельные верхние вкладки «Карта» и «Данные» удалены.",
     "Отчёт собирается из 8 типов аналитических блоков; report layout хранится отдельно от measurement definition и raw telemetry.",
-    "Exact Metrics v18 хранится как проверяемый delta-пакет от принятого v44 из-за ограничения remote connector на крупный бинарный blob.",
-    "Журнал v4 принят пользователем 12 августа 2026 и перенесён в real-wargame-preview на commit 610fcfdf4f19753a52a08b79b48113704a81637d.",
     "Журнал v4 имеет одну левую ленту без внутренних подвкладок; карточка раскрывается inline и локальные действия не сбрасывают scroll position.",
     "Быстрые фильтры Журнала: источник, уровень, участник; источник поддерживает «Основные», «Метрики», «Основные + метрики» с последним режимом по умолчанию.",
     "Журнал использует фактически включённые measurement definitions Метрик как дополнительный слой фильтрации/детализации, но обязательные основные события от Метрик не зависят.",
     "Глобальная хронология находится под шапкой во всех рабочих вкладках, по умолчанию свернута и имеет собственный независимый фильтр точек.",
     "Правая панель всегда остаётся unit inspector; в HISTORY она должна показывать состояние и знания выбранного юнита на выбранный исторический момент без подмешивания будущего.",
     "Журнал является read-only observer/navigation UX и не становится simulation SSOT; production replay/history provider и runtime Journal adapter остаются отдельной задачей.",
-    "Exact Journal v4 хранится как проверяемый delta-пакет от принятой Metrics v18 в prototypes/journal-v4/.",
     "Для любых следующих UI-этапов Полигона сначала согласуется текстовая сущность и структура интерфейса; HTML нельзя начинать до явного одобрения пользователя.",
     "Любой большой автономный HTML Полигона, передаваемый пользователю, выдаётся только внутри ZIP-архива, а не как сырой HTML в чат или отдельный .html-артефакт.",
-    "Не готова как крупная продуктовая вкладка: «Серия». Также не готовы production telemetry/replay wiring для принятых UX Метрик и Журнала."
+    "Не готова как крупная продуктовая вкладка: «Серия». Также не готовы production telemetry/replay wiring для принятых UX Метрик/Журнала и production wiring общих standalone редакторов."
   ],
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-  "last_verified_commit": "610fcfdf4f19753a52a08b79b48113704a81637d",
+  "last_verified_commit": "2ff387e668864243aad3c4af380b5869e530b482",
   "must_read_first": [
     "AGENTS.md",
     "docs/subprojects/polygon-prototype/STATUS.md",
     "docs/subprojects/polygon-prototype/SUBPROJECT.md",
     "docs/subprojects/polygon-prototype/JOURNAL.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_GLOBAL_EDITORS_V1.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_JOURNAL_V4.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_METRICS_V18.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_V44.md",
@@ -44,6 +49,9 @@
     "docs/prototypes/polygon-interface-v1/README.md"
   ],
   "main_files": [
+    "docs/subprojects/polygon-prototype/ACCEPTED_GLOBAL_EDITORS_V1.md",
+    "docs/subprojects/polygon-prototype/prototypes/global-editors-v1/README.md",
+    "docs/subprojects/polygon-prototype/prototypes/global-editors-v1/rebuild_global_editors_v1.py",
     "docs/subprojects/polygon-prototype/ACCEPTED_JOURNAL_V4.md",
     "docs/subprojects/polygon-prototype/prototypes/journal-v4/README.md",
     "docs/subprojects/polygon-prototype/prototypes/journal-v4/rebuild_journal_v4.py",
@@ -54,25 +62,28 @@
   "manual_docs": [
     "docs/subprojects/polygon-prototype/SUBPROJECT.md",
     "docs/subprojects/polygon-prototype/JOURNAL.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_GLOBAL_EDITORS_V1.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_JOURNAL_V4.md"
   ],
   "do_not_read_by_default": [
     "docs/subprojects/polygon-prototype/prototypes/metrics-v18/parts/",
-    "docs/subprojects/polygon-prototype/prototypes/journal-v4/parts/"
+    "docs/subprojects/polygon-prototype/prototypes/journal-v4/parts/",
+    "docs/subprojects/polygon-prototype/prototypes/global-editors-v1/parts/"
   ],
   "commands": [
     "npm run docs:sync"
   ],
   "important_sessions": [],
   "context_sources": [
-    "polygon-journal-v4.html"
+    "polygon-journal-v4.html",
+    "docs/subprojects/polygon-prototype/ACCEPTED_GLOBAL_EDITORS_V1.md"
   ],
   "safety_rules": [
-    "Journal v4 является единственной текущей канонической базой для следующей UI-итерации Полигона; не начинать новый UI от v44 или Metrics v18.",
-    "v44, Metrics v18 и Journal v4 являются принятыми UX-прототипами/контрактами и не являются источниками истины игровой симуляции.",
+    "Global Editors v1 является единственной текущей канонической базой для следующей UI-итерации Полигона; не начинать новый UI от Journal v4, Metrics v18 или v44.",
+    "v44, Metrics v18, Journal v4 и Global Editors v1 являются принятыми UX-прототипами/контрактами и не являются источниками истины игровой симуляции.",
     "Не считать «Серию» готовой функцией только потому, что её место видно в оболочке.",
-    "Не считать demo-data Метрик или demo-history Журнала доказательством production telemetry/replay; runtime-подключение выполняется отдельно.",
-    "Не ломать и не перепроектировать принятые «Редактор юнита», «Редактор карты», «Программа», Metrics v18 и Journal v4 без отдельной задачи.",
+    "Не считать demo-data Метрик, demo-history Журнала или standalone-настройки общих редакторов доказательством production telemetry/replay/registry wiring; runtime-подключение выполняется отдельно.",
+    "Не ломать и не перепроектировать принятые «Редактор юнита», «Редактор карты», «Программа», Metrics v18, Journal v4 и Global Editors v1 без отдельной задачи.",
     "Перед любым следующим крупным изменением UI Полигона сначала представить пользователю текстовую концепцию и получить явное одобрение; до этого HTML не создавать и не изменять.",
     "Передаваемый пользователю большой HTML Полигона упаковывать только в ZIP-архив; не выводить его прямо в чат и не отдавать отдельным сырым .html-файлом.",
     "Не заменять интегрированное отображение пехоты реалистичными фигурами без отдельного решения пользователя.",
@@ -84,7 +95,7 @@
   "zworker": {
     "boundaries": [
       "Text UX approval is mandatory before HTML implementation.",
-      "Use Journal v4 as the only current UI prototype base.",
+      "Use Global Editors v1 as the only current UI prototype base.",
       "Deliver Polygon HTML to the user only inside a ZIP archive."
     ],
     "expected_answer_format": "Before UX approval: text-only design/research. After approved HTML work: ZIP with HTML and answer.md at root."
