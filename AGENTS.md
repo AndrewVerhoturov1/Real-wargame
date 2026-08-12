@@ -133,6 +133,7 @@ Codex is the orchestrator and an independent reviewer/tester/operator. The Web C
 - Feature work uses separate worktrees; a worktree is not shared memory.
 - Do not impose an Issue for every small task; use it only for a long-lived unit, a public decision record or cross-branch tracking.
 - Three explicit user gates: no changes to `main`, no transfer into `real-wargame-preview`, no external deployment, each without an explicit user request.
+- GitHub Code Search primarily reflects the default branch `main`; never treat a missing search result as proof that code is absent from `real-wargame-preview`. For preview work, verify the exact `ref=real-wargame-preview` file or use the checked-out branch with `rg`/`git grep`/Codex for exhaustive search.
 
 Canonical protocol:
 
