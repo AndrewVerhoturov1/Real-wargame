@@ -12,9 +12,15 @@ Base Journal v4:
 
 Accepted Global Editors v1:
 
-- file: `polygon-journal-v4.html`
+- historical source filename: `polygon-journal-v4.html`
+- logical version name: `Global Editors v1`
+- recommended reconstructed output name: `polygon-global-editors-v1.html`
 - size: `1 987 792` bytes
 - SHA-256: `78c89b784c441a87c8680134bf4aef31e0a96c6e0b2344cd1ad875f09d372e9b`
+- exact artifact commit: `2ff387e668864243aad3c4af380b5869e530b482`
+- Preview documentation/integration HEAD after acceptance: `09b0679921ff9b4793a1ca2f4e29b0a2c758f22f`
+
+The historical filename was retained because Global Editors v1 was produced by directly evolving the accepted Journal v4 file. The filename is therefore not a version discriminator. The accepted artifact identity is the byte size and SHA-256 above. `2ff387e...` identifies the exact artifact commit; `09b0679...` identifies the Preview state after the initial documentation synchronization. Later documentation-only commits do not change the accepted HTML identity.
 
 Delta payload:
 
