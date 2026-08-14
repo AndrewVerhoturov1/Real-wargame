@@ -32,10 +32,10 @@ Generated from canonical repository and subproject metadata.
 ## Active subproject: Полигон — редактор эксперимента
 
 - **ID:** `polygon-prototype`
-- **Updated:** 2026-08-13
-- **Current focus:** Приняты рабочие UX-прототипы «Редактор юнита», «Редактор карты», «Программа», «Метрики v18», «Журнал v4» и «Общие редакторы v1». Global Editors v1 на базе Journal v4 является единственной текущей канонической базой для следующих UI-итераций Полигона. Общий popup содержит 11 редакторов; все gameplay tuning-настройки в standalone Polygon authoring mode разблокированы, включая встроенные профили и опубликованные записи вооружения. Следующая незавершённая крупная продуктовая вкладка — «Серия»; production-подключение telemetry/replay и standalone authoring UX остаётся отдельной runtime-задачей.
-- **Next step:** Проектировать вкладку «Серия» по обязательному text-first процессу, начиная только от принятой Global Editors v1; отдельно позже подключить принятые UX Метрик, Журнала и общих редакторов к production telemetry/replay/registries, сохраняя simulation единственным источником игровой истины.
-- **Last verified commit:** `2ff387e668864243aad3c4af380b5869e530b482`
+- **Updated:** 2026-08-14
+- **Current focus:** Пользователем принята Laboratory v1 — новая вкладка временных экспериментальных overrides, построенная непосредственно на Global Editors v1. Laboratory v1 является единственной текущей канонической базой следующих UI-итераций автономного Полигона. Приняты также Редактор юнита, Редактор карты, Программа, Metrics v18, Journal v4 и Global Editors v1. Следующая незавершённая крупная продуктовая вкладка — Серия; production telemetry/replay/registry/Laboratory wiring остаётся отдельной runtime-задачей.
+- **Next step:** Следующую крупную UI-итерацию начинать только от Laboratory v1. Ближайшая продуктовая вкладка — Серия. Production descriptor/adapter layer и resolution chain Laboratory overrides проектировать отдельно, сохраняя simulation и существующие registry/config sources единственными authoritative источниками игровых данных.
+- **Last verified commit:** `2549055956adff3e29c0b1f5ef9adb71d3146b66`
 - **Status:** [generated status](../subprojects/polygon-prototype/STATUS.md)
 
 ## Active subproject: Отображение солдат видом сверху

@@ -34,7 +34,7 @@
     "Следующая ещё не разработанная крупная продуктовая вкладка — Серия."
   ],
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-  "last_verified_commit": "50ba868324bebf8bf9fe8fa32fa1a6578f3ca29e",
+  "last_verified_commit": "2549055956adff3e29c0b1f5ef9adb71d3146b66",
   "must_read_first": [
     "AGENTS.md",
     "docs/subprojects/polygon-prototype/STATUS.md",
