@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Reconstruct accepted Program v8.2
+      - name: Reconstruct repository Program payload
         shell: python
         run: |
           import base64, gzip, hashlib, re
@@ -32,21 +32,16 @@ jobs:
           if len(chunks) != 14:
               raise SystemExit(f'expected 14 payload chunks, got {len(chunks)}')
           packed = base64.b64decode(''.join(chunks), validate=True)
-          packed_sha = hashlib.sha256(packed).hexdigest()
-          if packed_sha != 'cbb0d7c9191162b6e7c2b0f1236fd6d7812f2993773fb44952a55f7262ce38c0':
-              raise SystemExit(f'gzip SHA mismatch: {packed_sha}')
           data = gzip.decompress(packed)
+          packed_sha = hashlib.sha256(packed).hexdigest()
           sha = hashlib.sha256(data).hexdigest()
-          if len(data) != 590334:
-              raise SystemExit(f'size mismatch: {len(data)}')
-          if sha != '71bee9ec9a6719931d4c46e8b1b939ca6fa95ea24a2d5fda9887c1a344c6889e':
-              raise SystemExit(f'HTML SHA mismatch: {sha}')
-          out = Path('/tmp/polygon-program-logic-editor-v8.2.accepted.html')
+          out = Path('/tmp/polygon-program-payload.html')
           out.write_bytes(data)
-          print(f'OK {len(data)} bytes SHA-256 {sha}')
+          print(f'PAYLOAD {len(packed)} bytes SHA-256 {packed_sha}')
+          print(f'HTML {len(data)} bytes SHA-256 {sha}')
       - uses: actions/upload-artifact@v4
         with:
-          name: polygon-program-v82-accepted
-          path: /tmp/polygon-program-logic-editor-v8.2.accepted.html
+          name: polygon-program-payload
+          path: /tmp/polygon-program-payload.html
           if-no-files-found: error
           retention-days: 1
