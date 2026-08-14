@@ -38,7 +38,7 @@ jobs:
           mv "$wrong" "$right"
           test "$(stat -c %s "$right")" = '2090476'
           test "$(sha256sum "$right" | awk '{print $1}')" = '29e1d493fd3c4ef7633ad3850bf71ec94e3403d6a5ccb2a0658ca958d0765c02'
-          python -c "import os,base64; from pathlib import Path; p=Path('docs/subprojects/polygon-prototype/JOURNAL.md'); t=p.read_text(encoding='utf-8'); h='## 2026-08-14 — принята Лаборатория v1'; e=base64.b64decode(os.environ['JOURNAL_ENTRY_B64']).decode('utf-8'); p.write_text(t if h in t else t.rstrip()+'\\n\\n'+e, encoding='utf-8')"
+          python -c "import os,base64; from pathlib import Path; p=Path('docs/subprojects/polygon-prototype/JOURNAL.md'); t=p.read_bytes(); h='## 2026-08-14 — принята Лаборатория v1'.encode('utf-8'); e=base64.b64decode(os.environ['JOURNAL_ENTRY_B64']); p.write_bytes(t if h in t else t.rstrip(b'\\r\\n')+b'\\n\\n'+e)"
           git add -A docs/subprojects/polygon-prototype/JOURNAL.md docs/subprojects/polygon-prototype/prototypes/laboratory-v1
           git commit -m "prototype: accept Laboratory v1 exact artifact"
           git push origin HEAD:real-wargame-preview
