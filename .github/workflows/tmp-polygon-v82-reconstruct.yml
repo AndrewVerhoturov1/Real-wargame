@@ -1,4 +1,4 @@
-name: Temporary Polygon v8.2 reconstruction
+name: Temporary Polygon Laboratory v1 finalization
 
 on:
   push:
@@ -8,40 +8,111 @@ on:
       - .github/workflows/tmp-polygon-v82-reconstruct.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  reconstruct:
+  finalize:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Recover repository Program payload
-        shell: python
-        run: |
-          import base64, hashlib, re, zlib
-          from pathlib import Path
-
-          root = Path('docs/subprojects/infantry-combat-prototype-v1/prototypes/polygon-program-logic-editor/payload')
-          chunks = []
-          for path in sorted(root.glob('part-*.js')):
-              text = path.read_text(encoding='utf-8')
-              match = re.search(r'push\("([A-Za-z0-9+/=]+)"\)', text)
-              if not match:
-                  raise SystemExit(f'payload chunk not found in {path}')
-              chunks.append(match.group(1))
-          packed = base64.b64decode(''.join(chunks), validate=True)
-          if packed[:2] != b'\x1f\x8b':
-              raise SystemExit('not gzip')
-          data = zlib.decompress(packed[10:-8], -15)
-          packed_sha = hashlib.sha256(packed).hexdigest()
-          sha = hashlib.sha256(data).hexdigest()
-          out = Path('/tmp/polygon-program-payload.html')
-          out.write_bytes(data)
-          print(f'PAYLOAD {len(packed)} bytes SHA-256 {packed_sha}')
-          print(f'HTML {len(data)} bytes SHA-256 {sha}')
-      - uses: actions/upload-artifact@v4
         with:
-          name: polygon-program-payload
-          path: /tmp/polygon-program-payload.html
-          if-no-files-found: error
-          retention-days: 1
+          fetch-depth: 2
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Verify and accept exact Laboratory v1 artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrong='docs/subprojects/polygon-prototype/prototypes/laboratory-v1/polygon-laboratory-v1.html.html'
+          right='docs/subprojects/polygon-prototype/prototypes/laboratory-v1/polygon-laboratory-v1.html'
+          test -f "$wrong"
+          test ! -e "$right"
+          test "$(stat -c %s "$wrong")" = '2090476'
+          test "$(sha256sum "$wrong" | awk '{print $1}')" = '29e1d493fd3c4ef7633ad3850bf71ec94e3403d6a5ccb2a0658ca958d0765c02'
+          mv "$wrong" "$right"
+          test "$(stat -c %s "$right")" = '2090476'
+          test "$(sha256sum "$right" | awk '{print $1}')" = '29e1d493fd3c4ef7633ad3850bf71ec94e3403d6a5ccb2a0658ca958d0765c02'
+
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('docs/subprojects/polygon-prototype/JOURNAL.md')
+          text = path.read_text(encoding='utf-8')
+          heading = '## 2026-08-14 — принята Лаборатория v1'
+          if heading not in text:
+              entry = r'''
+
+## 2026-08-14 — принята Лаборатория v1
+
+На базе принятого Global Editors v1 разработана и пользователем утверждена новая основная вкладка `Лаборатория`. Канонический standalone HTML `polygon-laboratory-v1.html` имеет размер `2 090 476` байт и SHA-256 `29e1d493fd3c4ef7633ad3850bf71ec94e3403d6a5ccb2a0658ca958d0765c02`.
+
+Лаборатория зафиксирована как диагностический инструмент временных экспериментальных overrides: `параметр + экспериментальное значение + цель/область действия`. Она не заменяет обычные игровые настройки и не становится отдельным production source of truth.
+
+Приняты основные UX-решения:
+
+- в левой панели используются подвкладки `Изменения` и `Области`;
+- один инструмент выбора работает как для одного, так и для нескольких юнитов, а рамка предназначена только для массового выбора;
+- полигональная область создаётся отдельным инструментом, является переиспользуемым объектом и хранится в координатах карты;
+- клик по override открывает подробности в левой панели и подсвечивает точную цель на карте;
+- контекстное меню поддерживает юнитов, группы, пустую карту, области и сценарий `Действующие изменения` выбранного юнита;
+- конструктор использует компактную трёхколоночную схему Метрик: категории → каталог параметров → редактор выбранного параметра;
+- отдельного wizard `Параметр / Цель / Значение` нет;
+- числовые параметры редактируются синхронизированными slider + numeric input, а каталог и редактор имеют независимую прокрутку;
+- Laboratory не создаёт второй вручную поддерживаемый каталог параметров: production-реализация должна опираться на descriptor/adapter layer над authoritative владельцами данных;
+- `Применить глобально` допускается только для параметра с однозначным постоянным authoritative owner; чистый runtime state глобальной настройкой не становится.
+
+Laboratory v1 остаётся standalone UX/reference-прототипом. Production resolution chain overrides, descriptor/adapter layer, сохранение Laboratory state в experiment definition, production IDs и правила конфликтов перекрывающихся overrides остаются отдельными runtime-задачами.
+
+После принятия Laboratory v1 именно она является единственной текущей канонической базой следующей UI-итерации Полигона. Следующая крупная незавершённая вкладка — `Серия`. Деплой в рамках этой приёмки не выполняется.
+'''
+              path.write_text(text.rstrip() + entry + '\n', encoding='utf-8')
+          PY
+
+          git add docs/subprojects/polygon-prototype/prototypes/laboratory-v1/polygon-laboratory-v1.html \
+                  docs/subprojects/polygon-prototype/prototypes/laboratory-v1/polygon-laboratory-v1.html.html \
+                  docs/subprojects/polygon-prototype/JOURNAL.md
+          git commit -m "prototype: accept Laboratory v1 exact artifact"
+          git push origin HEAD:real-wargame-preview
+          echo "VERIFIED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Sync and verify agent documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path('docs/subprojects/polygon-prototype/subproject.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          data['last_verified_commit'] = os.environ['VERIFIED_SHA']
+          path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+          npm run docs:sync
+          npm run docs:check
+          git status --short
+          git add docs
+          if git diff --cached --quiet; then
+            echo 'No documentation changes to commit.'
+          else
+            git commit -m "docs: sync Polygon state for Laboratory v1"
+            git push origin HEAD:real-wargame-preview
+          fi
+
+      - name: Final verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          file='docs/subprojects/polygon-prototype/prototypes/laboratory-v1/polygon-laboratory-v1.html'
+          test -f "$file"
+          test ! -e "${file}.html"
+          test "$(stat -c %s "$file")" = '2090476'
+          test "$(sha256sum "$file" | awk '{print $1}')" = '29e1d493fd3c4ef7633ad3850bf71ec94e3403d6a5ccb2a0658ca958d0765c02'
+          grep -Fq '## 2026-08-14 — принята Лаборатория v1' docs/subprojects/polygon-prototype/JOURNAL.md
+          grep -Fq 'Laboratory v1' docs/subprojects/polygon-prototype/STATUS.md
+          grep -Fq "$VERIFIED_SHA" docs/subprojects/polygon-prototype/subproject.json
+          npm run docs:check
+          echo "VERIFIED_SHA=$VERIFIED_SHA"
+          echo "WORKFLOW_HEAD=$(git rev-parse HEAD)"
