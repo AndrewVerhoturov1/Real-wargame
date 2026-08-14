@@ -4,11 +4,23 @@
   "status": "active",
   "updated_at": "2026-08-14",
   "goal": "Собрать единый прототип подготовки тактического эксперимента Real Wargame: карта, участники, программа, лабораторные изменения, запуск, серия прогонов, метрики и журнал.",
-  "current_focus": "Пользователем принята Laboratory v1 — новая вкладка временных экспериментальных overrides, построенная непосредственно на Global Editors v1. Laboratory v1 является единственной текущей канонической базой следующих UI-итераций автономного Полигона. Приняты также Редактор юнита, Редактор карты, Программа, Metrics v18, Journal v4 и Global Editors v1. Следующая незавершённая крупная продуктовая вкладка — Серия; production telemetry/replay/registry/Laboratory wiring остаётся отдельной runtime-задачей.",
-  "next_step": "Следующую крупную UI-итерацию начинать только от Laboratory v1. Ближайшая продуктовая вкладка — Серия. Production descriptor/adapter layer и resolution chain Laboratory overrides проектировать отдельно, сохраняя simulation и существующие registry/config sources единственными authoritative источниками игровых данных.",
+  "current_focus": "Пользователем принята Series v1 — вкладка фонового многократного прогона одного замороженного эксперимента с отдельным seed для каждого запуска, агрегированным анализом выбранных Метрик, поиском необычных прогонов и переходом к воспроизведению конкретного запуска. Канонический принятый артефакт — polygon-series-v1.1.html; он построен непосредственно на Laboratory v1 и является текущей базой следующих UI-итераций автономного Полигона. Production background runner, хранилище результатов, telemetry aggregation и deterministic replay остаются отдельными runtime-задачами.",
+  "next_step": "Следующую крупную UI-итерацию начинать только от принятого Series v1 и только после отдельного текстового согласования. Для production Серии отдельно проектировать background runner, сохранение замороженного experiment definition, seed/runtime fingerprint, агрегирование выбранных Метрик и deterministic replay, сохраняя simulation и существующие registry/config sources authoritative источниками игровых данных.",
   "key_decisions": [
-    "Единственная текущая каноническая база дальнейшего автономного UI Полигона — Laboratory v1: polygon-laboratory-v1.html, 2 090 476 байт, SHA-256 29e1d493fd3c4ef7633ad3850bf71ec94e3403d6a5ccb2a0658ca958d0765c02.",
-    "Laboratory v1 принята пользователем 14 августа 2026 и построена непосредственно на принятом Global Editors v1.",
+    "Единственная текущая каноническая база дальнейшего автономного UI Полигона — Series v1: polygon-series-v1.1.html, 2 162 265 байт, SHA-256 fe9b17d0706df0f60dcc156d4d5d9f8fb08138b4537c36c378312286029f9ca3.",
+    "Series v1 принята пользователем 14 августа 2026 и построена непосредственно на принятом Laboratory v1.",
+    "По явному решению пользователя сам большой HTML Series v1 этой приёмкой в репозиторий не добавляется; ACCEPTED_SERIES_V1.md фиксирует продуктовый и UX-контракт.",
+    "Главный цикл Серии: один настроенный эксперимент → много независимых прогонов → накопление результатов → статистический анализ → выбор интересного прогона → воспроизведение его в обычном Полигоне.",
+    "При старте Серии фиксируется замороженный снимок эксперимента; каждый прогон получает отдельный seed. Для production-воспроизводимости вместе с seed необходимо сохранять версию/идентичность simulation runtime и всё исходное состояние, влияющее на результат.",
+    "Серия использует выбранные Метрики и анализирует их значения по множеству прогонов; отдельный параллельный каталог измерений не создаётся.",
+    "Для числовых Метрик в отчёте используются агрегаты и распределения; элементы распределения должны позволять провалиться до конкретных прогонов, из которых они получены.",
+    "Каждый прогон является отдельной сущностью с ID, seed, результатом и значениями выбранных Метрик и может быть открыт из списка/фильтра/распределения.",
+    "Необычные прогоны являются основным сценарием анализа: короткий блок есть в обзоре, полный раздел Необычные — в большом отчёте; причина отклонения, сравнение со всей Серией, seed и переход к воспроизведению сохраняются вместе.",
+    "Принятый исправленный сценарий v1.1: обзор/большой отчёт → необычный прогон → контекст отклонения → карточка → seed → воспроизведение → возврат к тому же прогону в отчёте.",
+    "Воспроизведение конкретного прогона происходит в обычном живом Полигоне, а не внутри интерфейса Серии; Серия отвечает за массовый анализ, Полигон — за наблюдение отдельного боя.",
+    "История завершённых Серий сохраняется как результат исследования и позволяет повторно открыть агрегаты и отдельные прогоны.",
+    "В Series v1 сознательно не включены как обязательные функции сравнение Серий, сложные статистические тесты, ручное управление worker-потоками и seed-распределением, научный экспорт и автоматические ИИ-выводы.",
+    "Laboratory v1 остаётся принятой исторической точкой и непосредственной базой Series v1: polygon-laboratory-v1.html, 2 090 476 байт, SHA-256 29e1d493fd3c4ef7633ad3850bf71ec94e3403d6a5ccb2a0658ca958d0765c02.",
     "Лабораторное изменение определяется как параметр + экспериментальное значение + цель/область действия и является временным override конкретного эксперимента.",
     "Лаборатория не изменяет верхнюю шапку и правую панель; её UI живёт в левой рабочей вкладке, popup-конструкторе, контекстном меню и интерактивном слое карты.",
     "В левой вкладке Лаборатории используются подвкладки Изменения и Области; кнопки инструментов меняются по контексту по принципу редактора карты.",
@@ -26,12 +38,11 @@
     "Общий popup Global Editors v1 содержит 11 редакторов: Профили маршрута, Тактические позиции; Архетипы бойцов, Профили внимания, Профили восприятия, Профили движения; Вооружение, Ранения и подавление; Типы поверхностей, Профили местности, Направленный рельеф.",
     "Граф поведения и Данные бойца по продуктовому решению пользователя не входят в меню общих редакторов Полигона.",
     "В standalone Polygon authoring mode gameplay tuning-настройки общих редакторов доступны для изменения, но это не означает production runtime wiring.",
-    "Исторические принятые точки v44 infantry-integrated, Metrics v18, Journal v4 и Global Editors v1 сохраняются как контракты предыдущих этапов, но не являются базой следующей UI-итерации.",
+    "Исторические принятые точки v44 infantry-integrated, Metrics v18, Journal v4, Global Editors v1 и Laboratory v1 сохраняются как контракты предыдущих этапов, но не являются базой следующей UI-итерации.",
     "Metrics v18 разделяет сбор и анализ: measurement definition определяет поток исходных данных, а Отчёт выполняет анализ постфактум.",
     "Journal v4 является read-only observer/navigation UX и не становится simulation SSOT.",
     "Для любого следующего крупного UI-этапа Полигона сначала согласуется текстовая сущность и структура интерфейса; HTML нельзя начинать до явного одобрения пользователя.",
-    "Большой автономный HTML Полигона, передаваемый пользователю, выдаётся только внутри ZIP-архива.",
-    "Следующая ещё не разработанная крупная продуктовая вкладка — Серия."
+    "Большой автономный HTML Полигона, передаваемый пользователю, обычно выдаётся внутри ZIP-архива; отдельное явное решение пользователя может изменить способ передачи конкретного артефакта."
   ],
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
   "last_verified_commit": "2549055956adff3e29c0b1f5ef9adb71d3146b66",
@@ -39,6 +50,7 @@
     "AGENTS.md",
     "docs/subprojects/polygon-prototype/STATUS.md",
     "docs/subprojects/polygon-prototype/SUBPROJECT.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_SERIES_V1.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_LABORATORY_V1.md",
     "docs/subprojects/polygon-prototype/JOURNAL.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_GLOBAL_EDITORS_V1.md",
@@ -50,6 +62,7 @@
     "docs/prototypes/polygon-interface-v1/README.md"
   ],
   "main_files": [
+    "docs/subprojects/polygon-prototype/ACCEPTED_SERIES_V1.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_LABORATORY_V1.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_GLOBAL_EDITORS_V1.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_JOURNAL_V4.md",
@@ -60,6 +73,7 @@
   "manual_docs": [
     "docs/subprojects/polygon-prototype/SUBPROJECT.md",
     "docs/subprojects/polygon-prototype/JOURNAL.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_SERIES_V1.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_LABORATORY_V1.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_GLOBAL_EDITORS_V1.md"
   ],
@@ -73,20 +87,18 @@
   ],
   "important_sessions": [],
   "context_sources": [
-    "polygon-laboratory-v1.html",
-    "docs/subprojects/polygon-prototype/ACCEPTED_LABORATORY_V1.md"
+    "polygon-series-v1.1.html",
+    "docs/subprojects/polygon-prototype/ACCEPTED_SERIES_V1.md"
   ],
   "safety_rules": [
-    "Laboratory v1 является единственной текущей канонической базой следующей UI-итерации Полигона; не начинать новый UI от Global Editors v1, Journal v4, Metrics v18 или v44.",
-    "Laboratory v1 и предыдущие принятые HTML являются UX/reference-контрактами и не являются simulation SSOT.",
-    "Не изменять верхнюю шапку или правую панель ради Laboratory без отдельного решения пользователя.",
-    "Рамка Laboratory является инструментом выбора юнитов, а не создания области.",
+    "Series v1 является единственной текущей канонической базой следующей UI-итерации Полигона; не начинать новый UI от Laboratory v1, Global Editors v1, Journal v4, Metrics v18 или v44.",
+    "Series v1 и предыдущие принятые HTML являются UX/reference-контрактами и не являются simulation SSOT.",
+    "Не считать standalone Series v1 доказательством наличия production background runner, telemetry aggregation, result storage или deterministic replay.",
+    "Для production-воспроизведения конкретного прогона сохранять не только seed, но и замороженный experiment definition и версию/идентичность simulation runtime.",
+    "Не создавать параллельный каталог Метрик внутри Серии; агрегировать выбранные measurement definitions и их production telemetry.",
+    "Не ломать принятые Редактор юнита, Редактор карты, Программа, Metrics v18, Journal v4, Global Editors v1, Laboratory v1 и Series v1 без отдельной задачи.",
     "Не создавать параллельный вручную скопированный production-каталог параметров Laboratory; использовать adapter/descriptor слой над authoritative владельцами.",
-    "Не считать standalone Laboratory overrides доказательством production resolution/wiring.",
-    "Не считать Серию готовой функцией только потому, что её место видно в оболочке.",
-    "Не ломать принятые Редактор юнита, Редактор карты, Программа, Metrics v18, Journal v4, Global Editors v1 и Laboratory v1 без отдельной задачи.",
     "Перед следующим крупным UI-изменением сначала согласовать текстовую концепцию; до явного одобрения HTML не изменять.",
-    "Передаваемый пользователю большой HTML Полигона упаковывать только в ZIP-архив.",
     "Не заменять интегрированное отображение пехоты реалистичными фигурами без отдельного решения пользователя.",
     "Не переносить изменения в main без отдельного явного разрешения пользователя."
   ],
@@ -96,10 +108,10 @@
   "zworker": {
     "boundaries": [
       "Text UX approval is mandatory before HTML implementation.",
-      "Use Laboratory v1 as the only current UI prototype base.",
-      "Keep the Polygon header and right inspector unchanged for Laboratory unless explicitly requested.",
-      "Deliver Polygon HTML to the user only inside a ZIP archive."
+      "Use Series v1 as the only current UI prototype base.",
+      "Treat Series background execution, aggregation and deterministic replay as separate production runtime work.",
+      "Do not move Polygon changes to main without explicit user approval."
     ],
-    "expected_answer_format": "Before UX approval: text-only design/research. After approved HTML work: ZIP with HTML and answer.md at root."
+    "expected_answer_format": "Before UX approval: text-only design/research. After approved HTML work: provide the accepted artifact in the delivery form explicitly requested by the user."
   }
 }
