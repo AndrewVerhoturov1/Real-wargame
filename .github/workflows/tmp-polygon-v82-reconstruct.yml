@@ -1,0 +1,52 @@
+name: Temporary Polygon v8.2 reconstruction
+
+on:
+  push:
+    branches:
+      - real-wargame-preview
+    paths:
+      - .github/workflows/tmp-polygon-v82-reconstruct.yml
+
+permissions:
+  contents: read
+
+jobs:
+  reconstruct:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct accepted Program v8.2
+        shell: python
+        run: |
+          import base64, gzip, hashlib, re
+          from pathlib import Path
+
+          root = Path('docs/subprojects/infantry-combat-prototype-v1/prototypes/polygon-program-logic-editor/payload')
+          chunks = []
+          for path in sorted(root.glob('part-*.js')):
+              text = path.read_text(encoding='utf-8')
+              match = re.search(r'push\("([A-Za-z0-9+/=]+)"\)', text)
+              if not match:
+                  raise SystemExit(f'payload chunk not found in {path}')
+              chunks.append(match.group(1))
+          if len(chunks) != 14:
+              raise SystemExit(f'expected 14 payload chunks, got {len(chunks)}')
+          packed = base64.b64decode(''.join(chunks), validate=True)
+          packed_sha = hashlib.sha256(packed).hexdigest()
+          if packed_sha != 'cbb0d7c9191162b6e7c2b0f1236fd6d7812f2993773fb44952a55f7262ce38c0':
+              raise SystemExit(f'gzip SHA mismatch: {packed_sha}')
+          data = gzip.decompress(packed)
+          sha = hashlib.sha256(data).hexdigest()
+          if len(data) != 590334:
+              raise SystemExit(f'size mismatch: {len(data)}')
+          if sha != '71bee9ec9a6719931d4c46e8b1b939ca6fa95ea24a2d5fda9887c1a344c6889e':
+              raise SystemExit(f'HTML SHA mismatch: {sha}')
+          out = Path('/tmp/polygon-program-logic-editor-v8.2.accepted.html')
+          out.write_bytes(data)
+          print(f'OK {len(data)} bytes SHA-256 {sha}')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: polygon-program-v82-accepted
+          path: /tmp/polygon-program-logic-editor-v8.2.accepted.html
+          if-no-files-found: error
+          retention-days: 1
