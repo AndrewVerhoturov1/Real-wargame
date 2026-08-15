@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [hosts, tabs, main, shellCss, compatCss, exactCss] = await Promise.all([
+const [hosts, tabs, main, shellCss, compatCss, exactCss, settingsSummary] = await Promise.all([
   readFile('src/combat-lab/ui/CombatLabWorkspaceHosts.ts', 'utf8'),
   readFile('src/combat-lab/ui/CombatLabWorkspaceTabs.ts', 'utf8'),
   readFile('src/combat-lab/main.ts', 'utf8'),
   readFile('src/combat-lab/polygon-shell.css', 'utf8'),
   readFile('src/combat-lab/polygon-shell-compat.css', 'utf8'),
   readFile('src/combat-lab/polygon-shell-exact.css', 'utf8'),
+  readFile('src/combat-lab/ui/CombatLabExperimentSettingsSummary.ts', 'utf8'),
 ]);
 const visualCss = `${shellCss}\n${compatCss}\n${exactCss}`;
 
@@ -105,9 +106,23 @@ assert.match(exactCss, /#app\s+canvas[\s\S]*visibility:\s*hidden\s*!important/,
 assert.match(exactCss, /--polygon-board-gap:\s*65px/);
 assert.match(exactCss, /@media\s*\(max-width:\s*1120px\)[\s\S]*--polygon-board-gap:\s*45px/);
 assert.match(exactCss, /\.polygon-shell-left-tabs,[\s\S]*\.polygon-shell-right-tabs\s*\{[\s\S]*gap:\s*5px;[\s\S]*padding:\s*9px\s+10px;/,
-  'Panel tab rows must retain the prototype spacing so Journal stays on the second row.');
+  'Panel tab containers must retain the prototype spacing.');
 assert.match(exactCss, /\.polygon-shell-tab\s*\{[\s\S]*padding:\s*5px\s+9px;[\s\S]*letter-spacing:\s*\.045em;/,
-  'Panel tabs must match the prototype density and typography.');
+  'Panel tabs retain the prototype 10px typography.');
+assert.match(exactCss, /\.polygon-shell-left-tabs\s+\.polygon-shell-tab\s*\{[\s\S]*padding-left:\s*7px;[\s\S]*padding-right:\s*7px;/,
+  'Left tabs must compensate for Linux font width without shrinking text, preserving the intended two-row grouping.');
+assert.match(exactCss, /button:nth-of-type\(2\)\s*\{[\s\S]*order:\s*1;/,
+  'The real Start control must lead the run-control group like the prototype.');
+assert.match(exactCss, /button:nth-of-type\(1\)\s*\{[\s\S]*order:\s*2;/,
+  'The real Reset control must follow Start like the prototype.');
+assert.match(exactCss, /combat-lab-experiment-speed-field\s*\{[\s\S]*order:\s*3;/,
+  'The real speed selector must follow Reset.');
+assert.match(exactCss, /combat-lab-experiment-settings-summary\s*\{[\s\S]*display:\s*flex\s*!important/,
+  'Real duration and seed fields must be visible in the prototype-style topbar.');
+assert.match(settingsSummary, /this\.seed\.textContent\s*=\s*`# \$\{experiment\.defaults\.seed\}`/,
+  'Topbar seed must come from the real experiment draft, not demo data.');
+assert.match(settingsSummary, /this\.duration\.textContent\s*=\s*`⏱ \$\{formatSeconds\(experiment\.stopCondition\.maximumSimulationSeconds\)\}`/,
+  'Topbar duration must come from the real experiment draft, not demo data.');
 assert.match(visualCss, /left:\s*var\(--polygon-panel-gap\)/);
 assert.match(visualCss, /right:\s*var\(--polygon-panel-gap\)/);
 assert.match(visualCss, /width:\s*var\(--polygon-left-w\)/);
