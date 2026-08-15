@@ -2,99 +2,95 @@
 
 ## Goal
 
-Replace the reconstructed dark Combat Lab shell with a visually faithful shell derived from the accepted HTML prototype `polygon-series-v1.1-memory-v3-interface-linkage(1).html` (SHA-256 `4f33f19578698947cd629a88c6963c325895995fdd78a5380966ae1ef2fa1cfd`).
+Replace the current reconstructed ARKA visual shell with a shell that matches the attached canonical HTML prototype `polygon-series-v1.1-memory-v3-interface-linkage(1).html` as closely as practical, while keeping product/runtime ownership intact.
 
-This task is intentionally UI-shell only. It must show the new Polygon visual language, top menu/control strip, left workspace panel tabs, right inspector tabs and the real product map underneath. It must not expose old Combat Lab panels or add new gameplay/runtime behavior.
+## Approved visual direction
 
-## Exact visual source
+- The attached HTML prototype is the visual source of truth.
+- Do not preserve the current dark/live-map visual treatment merely for compatibility.
+- Keep only the new Polygon shell: top controls, 30 px history/status strip, left panel with tabs, right panel with tabs, and central workspace.
+- Hide the live game map visually for this pass and replace it with a neutral static placeholder matching the prototype's light grey-beige map surface and fine grid.
+- Do not copy prototype demo units, demo event counts, replay data, demo inspectors, or its standalone JS state model.
+- Do not create runtime state, selected units, history data, or fake gameplay data in UI code.
 
-Reference viewport: `1600×900`.
+## Geometry
 
-Reference geometry and tokens taken directly from the accepted HTML:
+- Top bar: `58px`.
+- History/status strip: `30px` immediately below the top bar.
+- Total top chrome: `88px`.
+- Left floating panel: `372px` wide.
+- Right floating panel: `336px` wide.
+- Side panel gap from viewport edge: `14px`.
+- Side panels begin below the 88 px top chrome.
 
-- top bar height: `58px`;
-- left panel width: `372px`;
-- right panel width: `336px`;
-- panel gap: `14px`;
-- page/map background: `#d9d7cd` / `#d2d0c5` family;
-- primary dark olive: `#344321` with darker gradient endpoint `#273318`;
-- accent yellow: `#d8b941`;
-- light panel: `rgba(246,245,238,.96)` / `#f6f5ee`;
-- panel radius: `7px`;
-- panel shadow: `0 16px 44px rgba(22,26,17,.18), 0 2px 8px rgba(22,26,17,.16)`.
+## Visual language
 
-## Visible composition
+- Top bar: olive `#344321` with darker olive `#273318`.
+- Accent: muted yellow `#d8b941`.
+- Panel/workspace surfaces: warm off-white / grey-beige family used by the prototype, including `#f6f5ee`-like panel surfaces and `#ebe9df`-like status strip surfaces.
+- Borders are thin grey/olive lines; shadows are restrained and compact.
+- Typography is small, dense and tool-like.
+- Tabs live inside the left and right panels; there is no global workspace tab strip.
+- Active tabs use the olive active state. Hover/focus must not turn active tabs yellow.
 
-### Top bar
+## Top chrome
 
-Use the accepted prototype layout language:
+- Preserve the product's real run controls if already available, but style/position them to match the prototype's compact control rhythm.
+- Include prototype top-level menu labels such as `ФАЙЛ`, `РЕДАКТОРЫ`, and `ВИД ▾` only as shell controls; do not invent unavailable behavior.
+- The 30 px history/status strip is visually present globally. It may show real runtime status, but must not show prototype demo event counts or fake replay/history state.
 
-- brand mark `П` + `ПОЛИГОН` on the left;
-- existing real run controls live in the top bar and are restyled to the prototype language rather than shown in the old Combat Lab panel;
-- centered shell buttons `ФАЙЛ` and `РЕДАКТОРЫ`;
-- right shell buttons `ВИД ▾`, `EN` and the existing application menu trigger styled as `МЕНЮ`.
+## Left panel
 
-Buttons which do not yet have an accepted product action may be present as shell controls but must not fabricate state or domain behavior.
+Visible workspace tabs:
 
-### Left panel
+- `Программа`
+- `Лаборатория`
+- `Редактор карты`
+- `Редактор юнита`
+- `Серия`
+- `Метрики`
+- `Журнал`
 
-Floating light panel over the real map, matching prototype geometry. Visible content is limited to:
+The body stays visually faithful but non-domain for this pass. Existing product hosts may remain hidden compatibility mounts so current initialization is not broken.
 
-- header `РАБОЧИЙ РЕЖИМ` + current workspace title;
-- collapse button;
-- workspace tab buttons in prototype order:
-  - `Программа`
-  - `Лаборатория`
-  - `Редактор карты`
-  - `Редактор юнита`
-  - `Серия`
-  - `Метрики`
-  - `Журнал`
-- blank panel body.
+## Right panel
 
-Existing product workspace hosts remain mounted invisibly so current Combat Lab initialization does not break, but no legacy product panels are visible in this shell iteration.
+Visible tabs:
 
-### Right panel
+- `Юнит`
+- `Инфо`
+- `Внимание`
+- `Память`
 
-Floating light panel over the real map, matching prototype geometry. Visible content is limited to:
+The body remains an honest empty/workspace surface until product owners are integrated. No fake selected unit or inspector values.
 
-- header `ВЫБРАННЫЙ ОБЪЕКТ` and an honest neutral title until PULSE/LINZA supply live content;
-- collapse button;
-- accepted inspector tabs only:
-  - `Юнит`
-  - `Инфо`
-  - `Внимание`
-  - `Память`
-- blank panel body.
+## Central workspace placeholder
 
-Do not add `Опасность / Скрытность / Позиции / Оружие` in this ARKA task because they are outside the accepted current right-panel scope.
+- The existing live map/canvas remains in product architecture but is visually hidden in Polygon mode for this pass.
+- The shell provides a non-interactive placeholder surface above/masking it.
+- Placeholder appearance follows the prototype: light grey-beige field, fine 20 px grid plus subtle 80 px grid rhythm, no units, no terrain demo, no live canvas blur.
+- Placeholder resizes with the viewport and panel collapse states.
 
-### Map
+## Responsive behavior
 
-The existing product map remains the only map. The shell does not create a replacement map, overlay label, fake units or demo scene.
+- Wide desktop: the 372/336 px floating panels remain visible above the central placeholder.
+- Around 1080 px: the shell stays composed and dense; existing responsive overlay/collapse rules may be used, but old Combat Lab chrome must not appear.
+- Collapse controls remain functional and the top run controls stay visible.
 
-## Explicit removals from the previous ARKA shell
+## Non-goals
 
-The following must no longer be visible:
+- No runtime/history implementation.
+- No Unit/Info/Attention/Memory data implementation.
+- No Program/Lab/Metrics/Journal/Series functionality migration in this pass.
+- No Save/Open experiment work.
+- No context-menu migration.
+- No production deployment.
 
-- the dark full-width primary tab strip;
-- `Рабочая панель` / `Контекст` explanatory headings from the reconstructed shell;
-- `Параметры` and `Общие редакторы` as visible bottom auxiliary tabs;
-- dark card framing around the center map;
-- empty-state explanation cards inside right tabs;
-- the fake-looking bottom timeline container;
-- old Combat Lab diagnostic/manual panels.
+## Acceptance
 
-## State boundaries
-
-Allowed UI-owned state:
-
-- active left workspace tab;
-- active right inspector tab;
-- left/right collapsed state.
-
-No new selected-unit store, gameplay state, history state, fake metrics, fake journal or global runtime API.
-
-## Visual QA
-
-Acceptance requires fresh screenshots from the real product deployment at `1600×900` and at least one narrower desktop viewport. Compare geometry, color hierarchy, panel placement, tab treatment and top bar against the exact prototype screenshot. Fix visible mismatches before final handoff.
+1. Full Preview verification passes with no skipped checks.
+2. Fresh Chromium screenshots are captured from the exact deployed SHA at `1600×900` and `1080×800`.
+3. Those screenshots are compared visually with the canonical HTML rendered at the same sizes.
+4. The live game map is not visible; the center is the light prototype-style placeholder.
+5. No old global Combat Lab tab bar, sidebars or HUD competes visually with the Polygon shell.
+6. No demo counts, fake unit state, fake history or synthetic gameplay data appears.
