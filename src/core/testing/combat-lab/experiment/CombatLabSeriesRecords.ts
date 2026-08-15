@@ -1,5 +1,8 @@
 import { digestStableValue, stableStringify } from '../CombatLabDigest';
 
+const MINIMUM_SIMULATION_SECONDS = 0.1;
+const MAXIMUM_SIMULATION_SECONDS = 600;
+
 export interface CombatLabExperimentIdentityRefV1 {
   readonly experimentId: string;
   readonly experimentRevision: number;
@@ -41,6 +44,7 @@ export interface CombatLabSeriesRecordV1 {
   readonly measurementSetSnapshot: readonly CombatLabMeasurementSnapshotRefV1[];
   readonly requestedRunCount: number;
   readonly seedPolicy: 'random_per_run' | 'explicit';
+  readonly maximumSimulationSeconds: number;
   readonly status: CombatLabSeriesRecordStatusV1;
   readonly runIds: readonly string[];
   readonly createdAtIso: string;
@@ -56,6 +60,7 @@ export interface CombatLabRunRecordV1 {
   readonly frozenInputRef: CombatLabFrozenArtifactRefV1;
   readonly runtimeVersionId: string;
   readonly seed: number;
+  readonly maximumSimulationSeconds: number;
   readonly status: CombatLabRunRecordStatusV1;
   readonly success: boolean | null;
   readonly stopReason: string;
@@ -109,7 +114,7 @@ export function parseCombatLabSeriesArchive(text: string): CombatLabSeriesArchiv
   }
   if (!isRecord(value) || value.schemaVersion !== 1) throw new Error('Unsupported Combat Lab Series archive schemaVersion.');
   const series = parseSeriesRecord(value.series);
-  const runs = readArray(value.runs).map(parseRunRecord);
+  const runs = readRequiredArray(value.runs, 'Series archive runs').map(parseRunRecord);
   const archive = createCombatLabSeriesArchive(series, runs);
   const suppliedDigest = nonEmpty(value.archiveDigest, 'Series archiveDigest');
   if (suppliedDigest !== archive.archiveDigest) {
@@ -132,6 +137,11 @@ function normalizeSeriesRecord(value: CombatLabSeriesRecordV1): CombatLabSeriesR
   const requestedRunCount = positiveInteger(value.requestedRunCount, 'requestedRunCount');
   const runIds = value.runIds.map((runId) => nonEmpty(runId, 'RunId'));
   assertUnique(runIds, `Series ${seriesId} runId`);
+  const measurementSetSnapshot = value.measurementSetSnapshot.map(normalizeMeasurementSnapshotRef);
+  assertUnique(
+    measurementSetSnapshot.map((item) => item.measurementDefinitionId),
+    `Series ${seriesId} measurementDefinitionId`,
+  );
   if (runIds.length > requestedRunCount) throw new Error(`Series ${seriesId} contains more runs than requested.`);
   if (value.status === 'completed' && runIds.length !== requestedRunCount) {
     throw new Error(`Completed Series ${seriesId} must contain exactly ${requestedRunCount} RunIds.`);
@@ -145,9 +155,10 @@ function normalizeSeriesRecord(value: CombatLabSeriesRecordV1): CombatLabSeriesR
     experimentRef: normalizeExperimentRef(value.experimentRef),
     frozenInputRef: normalizeArtifactRef(value.frozenInputRef, 'Series frozenInputRef'),
     runtimeVersionId: nonEmpty(value.runtimeVersionId, 'Series runtimeVersionId'),
-    measurementSetSnapshot: Object.freeze(value.measurementSetSnapshot.map(normalizeMeasurementSnapshotRef)),
+    measurementSetSnapshot: Object.freeze(measurementSetSnapshot),
     requestedRunCount,
     seedPolicy: normalizeSeedPolicy(value.seedPolicy),
+    maximumSimulationSeconds: simulationSecondsLimit(value.maximumSimulationSeconds, 'Series maximumSimulationSeconds'),
     status: normalizeSeriesStatus(value.status),
     runIds: Object.freeze(runIds),
     createdAtIso: isoString(value.createdAtIso, 'Series createdAtIso'),
@@ -169,9 +180,10 @@ function normalizeRunRecord(value: CombatLabRunRecordV1): CombatLabRunRecordV1 {
     frozenInputRef: normalizeArtifactRef(value.frozenInputRef, 'Run frozenInputRef'),
     runtimeVersionId: nonEmpty(value.runtimeVersionId, 'Run runtimeVersionId'),
     seed: positiveUint32(value.seed, 'Run seed'),
+    maximumSimulationSeconds: simulationSecondsLimit(value.maximumSimulationSeconds, 'Run maximumSimulationSeconds'),
     status: normalizeRunStatus(value.status),
-    success: value.success === null ? null : Boolean(value.success),
-    stopReason: String(value.stopReason ?? ''),
+    success: nullableBoolean(value.success, 'Run success'),
+    stopReason: requireString(value.stopReason, 'Run stopReason'),
     simulatedSeconds: finiteNonNegative(value.simulatedSeconds, 'Run simulatedSeconds'),
     measurementValues: Object.freeze(measurementValues),
     telemetryRef: value.telemetryRef === null ? null : normalizeArtifactRef(value.telemetryRef, 'Run telemetryRef'),
@@ -189,11 +201,15 @@ function parseSeriesRecord(value: unknown): CombatLabSeriesRecordV1 {
     experimentRef: parseExperimentRef(value.experimentRef),
     frozenInputRef: parseArtifactRef(value.frozenInputRef),
     runtimeVersionId: value.runtimeVersionId as string,
-    measurementSetSnapshot: readArray(value.measurementSetSnapshot).map(parseMeasurementSnapshotRef),
+    measurementSetSnapshot: readRequiredArray(value.measurementSetSnapshot, 'Series measurementSetSnapshot').map(parseMeasurementSnapshotRef),
     requestedRunCount: value.requestedRunCount as number,
     seedPolicy: value.seedPolicy as CombatLabSeriesRecordV1['seedPolicy'],
+    maximumSimulationSeconds: value.maximumSimulationSeconds as number,
     status: value.status as CombatLabSeriesRecordStatusV1,
-    runIds: readArray(value.runIds).map((item) => String(item)),
+    runIds: readRequiredArray(value.runIds, 'Series runIds').map((item) => {
+      if (typeof item !== 'string') throw new Error('Series runId must be a string.');
+      return item;
+    }),
     createdAtIso: value.createdAtIso as string,
     completedAtIso: value.completedAtIso === null ? null : value.completedAtIso as string,
   });
@@ -210,11 +226,12 @@ function parseRunRecord(value: unknown): CombatLabRunRecordV1 {
     frozenInputRef: parseArtifactRef(value.frozenInputRef),
     runtimeVersionId: value.runtimeVersionId as string,
     seed: value.seed as number,
+    maximumSimulationSeconds: value.maximumSimulationSeconds as number,
     status: value.status as CombatLabRunRecordStatusV1,
-    success: value.success === null ? null : value.success as boolean,
+    success: value.success as boolean | null,
     stopReason: value.stopReason as string,
     simulatedSeconds: value.simulatedSeconds as number,
-    measurementValues: readArray(value.measurementValues).map(parseMeasurementValue),
+    measurementValues: readRequiredArray(value.measurementValues, 'Run measurementValues').map(parseMeasurementValue),
     telemetryRef: value.telemetryRef === null ? null : parseArtifactRef(value.telemetryRef),
     journalRef: value.journalRef === null ? null : parseArtifactRef(value.journalRef),
     eventDigest: value.eventDigest as string,
@@ -238,6 +255,9 @@ function validateSeriesRunLinkage(series: CombatLabSeriesRecordV1, runs: readonl
     if (!sameExperimentRef(run.experimentRef, series.experimentRef)) throw new Error(`Run ${run.runId} experimentRef differs from Series.`);
     if (!sameArtifactRef(run.frozenInputRef, series.frozenInputRef)) throw new Error(`Run ${run.runId} frozenInputRef differs from Series.`);
     if (run.runtimeVersionId !== series.runtimeVersionId) throw new Error(`Run ${run.runId} runtimeVersionId differs from Series.`);
+    if (run.maximumSimulationSeconds !== series.maximumSimulationSeconds) {
+      throw new Error(`Run ${run.runId} maximumSimulationSeconds differs from Series.`);
+    }
     validateRunMeasurementSet(run, series.measurementSetSnapshot);
   }
 }
@@ -370,6 +390,16 @@ function isoString(value: unknown, label: string): string {
   return new Date(milliseconds).toISOString();
 }
 
+function simulationSecondsLimit(value: unknown, label: string): number {
+  if (typeof value !== 'number'
+    || !Number.isFinite(value)
+    || value < MINIMUM_SIMULATION_SECONDS
+    || value > MAXIMUM_SIMULATION_SECONDS) {
+    throw new Error(`${label} must be in ${MINIMUM_SIMULATION_SECONDS}..${MAXIMUM_SIMULATION_SECONDS}.`);
+  }
+  return value;
+}
+
 function positiveUint32(value: unknown, label: string): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 0xffff_ffff) {
     throw new Error(`${label} must be an integer in 1..4294967295.`);
@@ -397,6 +427,17 @@ function finite(value: unknown, label: string): number {
   return value;
 }
 
+function nullableBoolean(value: unknown, label: string): boolean | null {
+  if (value === null) return null;
+  if (typeof value !== 'boolean') throw new Error(`${label} must be boolean or null.`);
+  return value;
+}
+
+function requireString(value: unknown, label: string): string {
+  if (typeof value !== 'string') throw new Error(`${label} must be a string.`);
+  return value;
+}
+
 function nonEmpty(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) throw new Error(`${label} must be a non-empty string.`);
   return value.trim();
@@ -410,8 +451,9 @@ function assertUnique(values: readonly string[], label: string): void {
   }
 }
 
-function readArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
+function readRequiredArray(value: unknown, label: string): unknown[] {
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array.`);
+  return value;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
