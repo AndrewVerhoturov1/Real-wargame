@@ -1,0 +1,200 @@
+.polygon-live-unit-host {
+  min-width: 0;
+}
+
+.polygon-live-unit {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 2px 8px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.polygon-live-unit__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.polygon-live-unit__identity {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.polygon-live-unit__name {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.polygon-live-unit__meta,
+.polygon-live-unit__id,
+.polygon-live-unit__secondary-text,
+.polygon-live-unit__empty-copy {
+  opacity: 0.72;
+  overflow-wrap: anywhere;
+}
+
+.polygon-live-unit__id {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+}
+
+.polygon-live-unit__capability {
+  flex: 0 0 auto;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 10px;
+}
+
+.polygon-live-unit__capability.is-ready {
+  opacity: 0.9;
+}
+
+.polygon-live-unit__capability.is-alert {
+  font-weight: 700;
+}
+
+.polygon-live-unit__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.polygon-live-unit__stat,
+.polygon-live-unit__key-value {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.polygon-live-unit__stat {
+  border: 1px solid var(--polygon-shell-line, currentColor);
+  border-radius: 6px;
+  padding: 5px 6px;
+}
+
+.polygon-live-unit__section {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border-top: 1px solid var(--polygon-shell-line, currentColor);
+  padding-top: 8px;
+}
+
+.polygon-live-unit__section-title {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.76;
+}
+
+.polygon-live-unit__primary-text {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.polygon-live-unit__postures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.polygon-live-unit__posture,
+.polygon-live-unit__entity-link {
+  min-width: 0;
+  border: 1px solid var(--polygon-shell-line, currentColor);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.polygon-live-unit__posture {
+  border-radius: 5px;
+  padding: 5px 4px;
+}
+
+.polygon-live-unit__posture.is-active {
+  font-weight: 700;
+  outline: 1px solid currentColor;
+}
+
+.polygon-live-unit__posture:disabled,
+.polygon-live-unit__entity-link:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.polygon-live-unit__inline-status {
+  font-size: 11px;
+  opacity: 0.76;
+}
+
+.polygon-live-unit__command-result {
+  border-left: 2px solid currentColor;
+  padding: 4px 6px;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.polygon-live-unit__command-result.is-accepted {
+  opacity: 0.88;
+}
+
+.polygon-live-unit__command-result.is-rejected {
+  font-weight: 650;
+}
+
+.polygon-live-unit__wounds,
+.polygon-live-unit__profile-list {
+  display: grid;
+  gap: 4px;
+}
+
+.polygon-live-unit__wound {
+  border-left: 2px solid currentColor;
+  padding-left: 6px;
+  overflow-wrap: anywhere;
+}
+
+.polygon-live-unit__secondary {
+  border-top: 1px solid var(--polygon-shell-line, currentColor);
+  padding-top: 8px;
+}
+
+.polygon-live-unit__secondary > summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.polygon-live-unit__secondary[open] {
+  display: grid;
+  gap: 5px;
+}
+
+.polygon-live-unit__entity-link {
+  border-width: 0 0 1px;
+  border-style: dashed;
+  border-radius: 0;
+  padding: 2px 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.polygon-live-unit__entity-link:hover:not(:disabled) {
+  border-style: solid;
+}
+
+.polygon-live-unit__empty-title {
+  font-weight: 700;
+}
+
+.polygon-live-unit__empty-copy {
+  margin: 0;
+}
