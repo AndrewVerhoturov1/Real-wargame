@@ -84,13 +84,14 @@ export class CombatLabWorkspaceTabs {
     topbarLeft.append(brand, toolbarHost);
 
     const topbarCenter = node('div', 'polygon-shell-topbar-center');
-    topbarCenter.setAttribute('aria-hidden', 'true');
+    topbarCenter.append(
+      shellButton('ФАЙЛ', 'Файл'),
+      shellButton('РЕДАКТОРЫ', 'Редакторы'),
+    );
 
     const topbarRight = node('div', 'polygon-shell-topbar-right');
     topbarRight.append(
-      shellButton('▤', 'Файл'),
-      shellButton('≛', 'Редакторы'),
-      shellButton('◉', 'Вид'),
+      shellButton('ВИД ▾', 'Вид'),
       shellButton('EN', 'Язык'),
     );
     topbar.append(topbarLeft, topbarCenter, topbarRight);
@@ -367,6 +368,7 @@ function writeStoredRightTab(storage: Storage | null, tabId: PolygonRightPanelTa
 }
 
 function normalizeVisibleWorkspaceTab(value: unknown): CombatLabWorkspaceTab {
+  if (value === null || value === undefined || value === '') return 'program';
   const normalized = normalizeCombatLabWorkspaceTab(value);
   return POLYGON_LEFT_WORKSPACE_DEFINITIONS.some((definition) => definition.tabId === normalized)
     ? normalized
