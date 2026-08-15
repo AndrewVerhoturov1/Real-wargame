@@ -1,0 +1,18 @@
+name: ARKA Exact Shell Focused Verify
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  focused-smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Run focused Polygon shell contract
+        run: node scripts/combat_lab_polygon_shell_contract_smoke.mjs
