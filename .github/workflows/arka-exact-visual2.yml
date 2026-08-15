@@ -1,0 +1,40 @@
+name: ARKA Exact Shell Visual QA 2
+
+on:
+  pull_request:
+    branches:
+      - ci/arka-exact-visual2-base-20260816-44a1cc7
+
+permissions:
+  contents: read
+
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TARGET_URL: https://repo-fbn1e53fy-111s-projects-807221af.vercel.app/combat-lab.html
+      EXPECTED_PRODUCT_SHA: 44a1cc7e126321942928c733835c6afb6ffb3e2f
+      CANONICAL_FEATURE_BRANCH: feature/20260816-polygon-arka-exact-shell
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Playwright
+        run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run deployed exact Polygon shell visual scenario
+        run: npx playwright test --config=ci/playwright.arka-exact-shell2.config.ts
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arka-exact-shell-visual2-evidence-${{ github.run_id }}
+          path: |
+            artifacts/vercel-e2e/**
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
