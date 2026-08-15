@@ -2,40 +2,19 @@ import {
   COMBAT_LAB_AUXILIARY_WORKSPACE_TAB_DEFINITIONS,
   COMBAT_LAB_PRIMARY_WORKSPACE_TAB_DEFINITIONS,
   COMBAT_LAB_WORKSPACE_TAB_DEFINITIONS,
+  POLYGON_RIGHT_PANEL_DEFINITIONS,
   normalizeCombatLabWorkspaceTab,
+  normalizePolygonRightPanelTab,
+  type CombatLabRightPanelHosts,
   type CombatLabWorkspaceHosts,
   type CombatLabWorkspaceTab,
+  type PolygonRightPanelTab,
 } from './CombatLabWorkspaceHosts';
 
 const ACTIVE_TAB_STORAGE_KEY = 'real-wargame.combat-lab.workspace-tab.v2';
 const RIGHT_PANEL_STORAGE_KEY = 'real-wargame.combat-lab.right-panel-tab.v1';
 const workspaceHostsByRoot = new WeakMap<HTMLElement, CombatLabWorkspaceHosts>();
 const registeredWorkspaceRoots = new Set<HTMLElement>();
-
-const POLYGON_RIGHT_PANEL_DEFINITIONS = Object.freeze([
-  {
-    tabId: 'unit',
-    labelRu: 'Юнит',
-    emptyRu: 'Живые данные выбранного юнита будут подключены через существующий UnitModel. Каркас не хранит копию состояния.',
-  },
-  {
-    tabId: 'info',
-    labelRu: 'Инфо',
-    emptyRu: 'Инспектор точки карты ждёт подтверждённый продуктовый запрос. Каркас не вычисляет свойства мира самостоятельно.',
-  },
-  {
-    tabId: 'attention',
-    labelRu: 'Внимание',
-    emptyRu: 'Вкладка ждёт данные внимания и восприятия, уже подготовленные симуляцией. Повторного расчёта видимости в интерфейсе нет.',
-  },
-  {
-    tabId: 'memory',
-    labelRu: 'Память',
-    emptyRu: 'Вкладка ждёт подтверждённые субъективные данные памяти. Отсутствующие типы знаний не подменяются демонстрационными значениями.',
-  },
-] as const);
-
-type PolygonRightPanelTab = typeof POLYGON_RIGHT_PANEL_DEFINITIONS[number]['tabId'];
 
 export interface CombatLabWorkspaceTabsOptions {
   readonly host: HTMLElement;
@@ -48,6 +27,7 @@ export class CombatLabWorkspaceTabs {
   readonly toggle: HTMLButtonElement;
   readonly toolbarHost: HTMLElement;
   readonly hosts: CombatLabWorkspaceHosts;
+  readonly rightHosts: CombatLabRightPanelHosts;
 
   private readonly buttons = new Map<CombatLabWorkspaceTab, HTMLButtonElement>();
   private readonly panels = new Map<CombatLabWorkspaceTab, HTMLElement>();
@@ -165,6 +145,7 @@ export class CombatLabWorkspaceTabs {
     rightTabs.setAttribute('role', 'tablist');
     rightTabs.setAttribute('aria-label', 'Разделы правой панели');
     const rightPanelHost = node('div', 'polygon-shell-right-panels');
+    const rightHosts = {} as Record<PolygonRightPanelTab, HTMLElement>;
 
     for (const definition of POLYGON_RIGHT_PANEL_DEFINITIONS) {
       const control = button(definition.labelRu);
@@ -180,14 +161,16 @@ export class CombatLabWorkspaceTabs {
       panel.setAttribute('role', 'tabpanel');
       panel.setAttribute('aria-labelledby', control.id);
       control.setAttribute('aria-controls', panel.id);
-      panel.append(
-        node('h2', 'polygon-shell-right-heading', definition.labelRu),
-        node('div', 'polygon-shell-empty-state', definition.emptyRu),
-      );
+      const content = node('div', `polygon-shell-right-content polygon-shell-right-content-${definition.tabId}`);
+      content.dataset.polygonRightContent = definition.tabId;
+      if (definition.emptyRu) content.append(node('div', 'polygon-shell-empty-state', definition.emptyRu));
+      panel.append(node('h2', 'polygon-shell-right-heading', definition.labelRu), content);
       this.rightPanels.set(definition.tabId, panel);
+      rightHosts[definition.tabId] = content;
       rightPanelHost.append(panel);
       this.listen(control, 'click', () => this.activateRightPanel(definition.tabId));
     }
+    this.rightHosts = Object.freeze(rightHosts) as CombatLabRightPanelHosts;
     right.append(rightHeader, rightTabs, rightPanelHost);
 
     main.append(left, center, right);
@@ -214,7 +197,7 @@ export class CombatLabWorkspaceTabs {
     this.activeTab = normalizeCombatLabWorkspaceTab(storedTab);
     this.activate(this.activeTab, false);
 
-    this.activeRightTab = normalizeRightPanelTab(readStoredRightTab(this.storage));
+    this.activeRightTab = normalizePolygonRightPanelTab(readStoredRightTab(this.storage));
     this.activateRightPanel(this.activeRightTab, false);
   }
 
@@ -353,13 +336,6 @@ function writeStoredRightTab(storage: Storage | null, tabId: PolygonRightPanelTa
   } catch {
     // Хранилище необязательно: выбор вкладки остаётся в памяти текущей страницы.
   }
-}
-
-function normalizeRightPanelTab(value: unknown): PolygonRightPanelTab {
-  return typeof value === 'string'
-    && POLYGON_RIGHT_PANEL_DEFINITIONS.some((definition) => definition.tabId === value)
-    ? value as PolygonRightPanelTab
-    : 'unit';
 }
 
 function requestWorkspaceResize(): void {
