@@ -1,6 +1,4 @@
 import {
-  COMBAT_LAB_AUXILIARY_WORKSPACE_TAB_DEFINITIONS,
-  COMBAT_LAB_PRIMARY_WORKSPACE_TAB_DEFINITIONS,
   COMBAT_LAB_WORKSPACE_TAB_DEFINITIONS,
   normalizeCombatLabWorkspaceTab,
   type CombatLabWorkspaceHosts,
@@ -12,27 +10,25 @@ const RIGHT_PANEL_STORAGE_KEY = 'real-wargame.combat-lab.right-panel-tab.v1';
 const workspaceHostsByRoot = new WeakMap<HTMLElement, CombatLabWorkspaceHosts>();
 const registeredWorkspaceRoots = new Set<HTMLElement>();
 
+const POLYGON_LEFT_WORKSPACE_DEFINITIONS: ReadonlyArray<{
+  readonly tabId: CombatLabWorkspaceTab;
+  readonly labelRu: string;
+  readonly titleRu: string;
+}> = Object.freeze([
+  { tabId: 'program', labelRu: 'Программа', titleRu: 'Программа' },
+  { tabId: 'laboratory', labelRu: 'Лаборатория', titleRu: 'Лаборатория' },
+  { tabId: 'scene', labelRu: 'Редактор карты', titleRu: 'Редактор карты' },
+  { tabId: 'parameters', labelRu: 'Редактор юнита', titleRu: 'Редактор юнита' },
+  { tabId: 'batch', labelRu: 'Серия', titleRu: 'Серия' },
+  { tabId: 'metrics', labelRu: 'Метрики', titleRu: 'Метрики' },
+  { tabId: 'journal', labelRu: 'Журнал', titleRu: 'Журнал' },
+]);
+
 const POLYGON_RIGHT_PANEL_DEFINITIONS = Object.freeze([
-  {
-    tabId: 'unit',
-    labelRu: 'Юнит',
-    emptyRu: 'Живые данные выбранного юнита будут подключены через существующий UnitModel. Каркас не хранит копию состояния.',
-  },
-  {
-    tabId: 'info',
-    labelRu: 'Инфо',
-    emptyRu: 'Инспектор точки карты ждёт подтверждённый продуктовый запрос. Каркас не вычисляет свойства мира самостоятельно.',
-  },
-  {
-    tabId: 'attention',
-    labelRu: 'Внимание',
-    emptyRu: 'Вкладка ждёт данные внимания и восприятия, уже подготовленные симуляцией. Повторного расчёта видимости в интерфейсе нет.',
-  },
-  {
-    tabId: 'memory',
-    labelRu: 'Память',
-    emptyRu: 'Вкладка ждёт подтверждённые субъективные данные памяти. Отсутствующие типы знаний не подменяются демонстрационными значениями.',
-  },
+  { tabId: 'unit', labelRu: 'Юнит' },
+  { tabId: 'info', labelRu: 'Инфо' },
+  { tabId: 'attention', labelRu: 'Внимание' },
+  { tabId: 'memory', labelRu: 'Память' },
 ] as const);
 
 type PolygonRightPanelTab = typeof POLYGON_RIGHT_PANEL_DEFINITIONS[number]['tabId'];
@@ -54,6 +50,7 @@ export class CombatLabWorkspaceTabs {
   private readonly rightButtons = new Map<PolygonRightPanelTab, HTMLButtonElement>();
   private readonly rightPanels = new Map<PolygonRightPanelTab, HTMLElement>();
   private readonly rightToggle: HTMLButtonElement;
+  private readonly leftTitle: HTMLElement;
   private readonly listeners: Array<readonly [EventTarget, string, EventListener]> = [];
   private readonly storage: Storage | null;
   private activeTab: CombatLabWorkspaceTab;
@@ -70,104 +67,86 @@ export class CombatLabWorkspaceTabs {
     shell.setAttribute('aria-label', 'Испытательный полигон');
     this.root = shell;
 
-    const header = node('header', 'polygon-shell-header');
-    const brand = node('div', 'combat-lab-dock-brand polygon-shell-brand');
+    const topbar = node('header', 'polygon-shell-topbar');
+    topbar.setAttribute('aria-label', 'Глобальная панель Полигона');
+
+    const topbarLeft = node('div', 'polygon-shell-topbar-left');
+    const brand = node('div', 'polygon-shell-brand');
+    brand.setAttribute('aria-label', 'Полигон');
     brand.append(
-      node('strong', '', 'ПОЛИГОН'),
-      node('span', '', 'Real Wargame · единое пространство эксперимента'),
-    );
-    const shellControls = node('div', 'polygon-shell-header-controls');
-    this.toggle = button('Свернуть слева', 'combat-lab-dock-toggle combat-lab-drawer-toggle polygon-shell-collapse-button');
-    this.toggle.setAttribute('aria-expanded', 'true');
-    this.toggle.setAttribute('aria-controls', 'polygon-shell-left-panel');
-    this.rightToggle = button('Свернуть справа', 'polygon-shell-collapse-button polygon-shell-right-toggle');
-    this.rightToggle.setAttribute('aria-expanded', 'true');
-    this.rightToggle.setAttribute('aria-controls', 'polygon-shell-right-panel');
-    shellControls.append(this.toggle, this.rightToggle);
-    header.append(brand, shellControls);
-
-    const primaryTabList = node('nav', 'combat-lab-tab-list combat-lab-workspace-tab-list polygon-shell-primary-tabs');
-    primaryTabList.setAttribute('role', 'tablist');
-    primaryTabList.setAttribute('aria-label', 'Разделы Полигона');
-
-    const main = node('div', 'polygon-shell-main');
-    const left = node('aside', 'polygon-shell-left');
-    left.id = 'polygon-shell-left-panel';
-    left.setAttribute('aria-label', 'Рабочая панель Полигона');
-
-    const leftHeader = node('div', 'polygon-shell-panel-header');
-    leftHeader.append(
-      node('strong', '', 'Рабочая панель'),
-      node('span', '', 'Раздел и текущие инструменты'),
+      node('span', 'polygon-shell-brand-mark', 'П'),
+      node('strong', 'polygon-shell-brand-text', 'ПОЛИГОН'),
     );
 
     const toolbarHost = node('div', 'combat-lab-workspace-toolbar combat-lab-stage10-toolbar-host polygon-shell-run-toolbar');
     toolbarHost.dataset.combatLabRunToolbarHost = 'true';
     this.toolbarHost = toolbarHost;
+    this.status = node('span', 'combat-lab-dock-status polygon-shell-runtime-status', 'LIVE');
+    topbarLeft.append(brand, toolbarHost, this.status);
 
-    const panelHost = node('div', 'combat-lab-tab-panels combat-lab-workspace-panels polygon-shell-workspace-panels');
-    const auxiliaryTabList = node('nav', 'polygon-shell-auxiliary-tabs');
-    auxiliaryTabList.setAttribute('role', 'tablist');
-    auxiliaryTabList.setAttribute('aria-label', 'Текущие продуктовые инструменты');
-    auxiliaryTabList.append(node('span', 'polygon-shell-auxiliary-label', 'Текущие инструменты'));
+    const topbarCenter = node('nav', 'polygon-shell-topbar-center');
+    topbarCenter.setAttribute('aria-label', 'Работа с экспериментом');
+    topbarCenter.append(shellButton('ФАЙЛ'), shellButton('РЕДАКТОРЫ'));
 
-    const hosts = {} as Record<CombatLabWorkspaceTab, HTMLElement>;
-    const primaryIds = new Set<CombatLabWorkspaceTab>(
-      COMBAT_LAB_PRIMARY_WORKSPACE_TAB_DEFINITIONS.map((definition) => definition.tabId),
-    );
+    const topbarRight = node('div', 'polygon-shell-topbar-right');
+    topbarRight.append(shellButton('ВИД ▾'), shellButton('EN'));
+    topbar.append(topbarLeft, topbarCenter, topbarRight);
 
-    for (const definition of COMBAT_LAB_WORKSPACE_TAB_DEFINITIONS) {
-      const control = button(definition.labelRu);
+    const viewport = node('div', 'polygon-shell-viewport');
+
+    const left = node('aside', 'polygon-shell-side-panel polygon-shell-left');
+    left.id = 'polygon-shell-left-panel';
+    left.setAttribute('aria-label', 'Палитра инструментов');
+    const leftHead = node('div', 'polygon-shell-panel-head');
+    const leftHeadText = node('div', 'polygon-shell-panel-head-text');
+    leftHeadText.append(node('div', 'polygon-shell-panel-kicker', 'РАБОЧИЙ РЕЖИМ'));
+    this.leftTitle = node('div', 'polygon-shell-panel-title', 'Редактор карты');
+    leftHeadText.append(this.leftTitle);
+    this.toggle = button('‹', 'combat-lab-dock-toggle combat-lab-drawer-toggle polygon-shell-panel-collapse');
+    this.toggle.setAttribute('aria-label', 'Скрыть левую панель');
+    this.toggle.setAttribute('aria-expanded', 'true');
+    this.toggle.setAttribute('aria-controls', left.id);
+    leftHead.append(leftHeadText, this.toggle);
+
+    const leftTabs = node('nav', 'polygon-shell-left-tabs');
+    leftTabs.setAttribute('role', 'tablist');
+    leftTabs.setAttribute('aria-label', 'Разделы Полигона');
+    for (const definition of POLYGON_LEFT_WORKSPACE_DEFINITIONS) {
+      const control = button(definition.labelRu, 'polygon-shell-tab');
       control.setAttribute('role', 'tab');
       control.dataset.combatLabTab = definition.tabId;
       control.id = `combat-lab-workspace-tab-${definition.tabId}`;
       this.buttons.set(definition.tabId, control);
-      (primaryIds.has(definition.tabId) ? primaryTabList : auxiliaryTabList).append(control);
-
-      const panel = node(
-        'section',
-        `combat-lab-tab-panel combat-lab-workspace-panel polygon-shell-workspace-panel combat-lab-${definition.tabId}-panel`,
-      );
-      panel.dataset.combatLabTabPanel = definition.tabId;
-      panel.id = `combat-lab-workspace-panel-${definition.tabId}`;
-      control.setAttribute('aria-controls', panel.id);
-      panel.setAttribute('role', 'tabpanel');
-      panel.setAttribute('aria-labelledby', control.id);
-      const title = node('h2', 'combat-lab-tab-heading', definition.titleRu);
-      const content = node('div', `combat-lab-workspace-host combat-lab-workspace-${definition.tabId}-host`);
-      content.dataset.combatLabWorkspaceHost = definition.tabId;
-      panel.append(title, content);
-      this.panels.set(definition.tabId, panel);
-      hosts[definition.tabId] = content;
-      panelHost.append(panel);
-
+      leftTabs.append(control);
       this.listen(control, 'click', () => this.activate(definition.tabId));
     }
 
-    this.hosts = Object.freeze(hosts) as CombatLabWorkspaceHosts;
-    workspaceHostsByRoot.set(this.root, this.hosts);
-    registeredWorkspaceRoots.add(this.root);
-    left.append(leftHeader, toolbarHost, panelHost, auxiliaryTabList);
+    const leftBody = node('div', 'polygon-shell-panel-body');
+    leftBody.setAttribute('aria-hidden', 'true');
+    const leftCollapsedLabel = node('div', 'polygon-shell-collapsed-label', 'Палитра инструментов');
+    left.append(leftHead, leftTabs, leftBody, leftCollapsedLabel);
 
-    const center = node('div', 'polygon-shell-center');
-    center.setAttribute('aria-hidden', 'true');
-    center.append(node('span', 'polygon-shell-center-label', 'КАРТА'));
-
-    const right = node('aside', 'polygon-shell-right');
+    const right = node('aside', 'polygon-shell-side-panel polygon-shell-right');
     right.id = 'polygon-shell-right-panel';
-    right.setAttribute('aria-label', 'Контекстный инспектор');
-    const rightHeader = node('div', 'polygon-shell-panel-header');
-    rightHeader.append(
-      node('strong', '', 'Контекст'),
-      node('span', '', 'Данные подключаются только от владельцев продукта'),
+    right.setAttribute('aria-label', 'Информация о выбранном объекте');
+    const rightHead = node('div', 'polygon-shell-panel-head');
+    this.rightToggle = button('›', 'polygon-shell-panel-collapse');
+    this.rightToggle.setAttribute('aria-label', 'Скрыть правую панель');
+    this.rightToggle.setAttribute('aria-expanded', 'true');
+    this.rightToggle.setAttribute('aria-controls', right.id);
+    const rightHeadText = node('div', 'polygon-shell-panel-head-text');
+    rightHeadText.append(
+      node('div', 'polygon-shell-panel-kicker', 'ВЫБРАННЫЙ ОБЪЕКТ'),
+      node('div', 'polygon-shell-panel-title', 'Юнит не выбран'),
     );
+    rightHead.append(this.rightToggle, rightHeadText);
+
     const rightTabs = node('nav', 'polygon-shell-right-tabs');
     rightTabs.setAttribute('role', 'tablist');
-    rightTabs.setAttribute('aria-label', 'Разделы правой панели');
-    const rightPanelHost = node('div', 'polygon-shell-right-panels');
-
+    rightTabs.setAttribute('aria-label', 'Информация об объекте');
+    const rightPanelHost = node('div', 'polygon-shell-panel-body polygon-shell-right-panels');
     for (const definition of POLYGON_RIGHT_PANEL_DEFINITIONS) {
-      const control = button(definition.labelRu);
+      const control = button(definition.labelRu, 'polygon-shell-tab');
       control.setAttribute('role', 'tab');
       control.dataset.polygonRightTab = definition.tabId;
       control.id = `polygon-right-tab-${definition.tabId}`;
@@ -180,31 +159,35 @@ export class CombatLabWorkspaceTabs {
       panel.setAttribute('role', 'tabpanel');
       panel.setAttribute('aria-labelledby', control.id);
       control.setAttribute('aria-controls', panel.id);
-      panel.append(
-        node('h2', 'polygon-shell-right-heading', definition.labelRu),
-        node('div', 'polygon-shell-empty-state', definition.emptyRu),
-      );
       this.rightPanels.set(definition.tabId, panel);
       rightPanelHost.append(panel);
       this.listen(control, 'click', () => this.activateRightPanel(definition.tabId));
     }
-    right.append(rightHeader, rightTabs, rightPanelHost);
+    const rightCollapsedLabel = node('div', 'polygon-shell-collapsed-label', 'Информация о юните');
+    right.append(rightHead, rightTabs, rightPanelHost, rightCollapsedLabel);
 
-    main.append(left, center, right);
+    viewport.append(left, right);
 
-    const timeline = node('footer', 'polygon-shell-timeline');
-    const timelineLabel = node('div', 'polygon-shell-timeline-label');
-    timelineLabel.append(
-      node('strong', '', 'Временная шкала'),
-      node('span', '', 'История будет подключена отдельным поставщиком данных'),
-    );
-    const timelineTrack = node('div', 'polygon-shell-timeline-track');
-    timelineTrack.setAttribute('aria-hidden', 'true');
-    timelineTrack.append(node('div', 'polygon-shell-timeline-live-marker'));
-    this.status = node('span', 'combat-lab-dock-status polygon-shell-live-status', 'LIVE');
-    timeline.append(timelineLabel, timelineTrack, this.status);
+    const hiddenHosts = node('div', 'polygon-shell-hidden-hosts');
+    hiddenHosts.setAttribute('aria-hidden', 'true');
+    const hosts = {} as Record<CombatLabWorkspaceTab, HTMLElement>;
+    for (const definition of COMBAT_LAB_WORKSPACE_TAB_DEFINITIONS) {
+      const panel = node('section', 'combat-lab-tab-panel combat-lab-workspace-panel polygon-shell-hidden-panel');
+      panel.dataset.combatLabTabPanel = definition.tabId;
+      panel.id = `combat-lab-workspace-panel-${definition.tabId}`;
+      const content = node('div', `combat-lab-workspace-host combat-lab-workspace-${definition.tabId}-host`);
+      content.dataset.combatLabWorkspaceHost = definition.tabId;
+      panel.append(content);
+      this.panels.set(definition.tabId, panel);
+      hosts[definition.tabId] = content;
+      hiddenHosts.append(panel);
+    }
 
-    shell.append(header, primaryTabList, main, timeline);
+    this.hosts = Object.freeze(hosts) as CombatLabWorkspaceHosts;
+    workspaceHostsByRoot.set(this.root, this.hosts);
+    registeredWorkspaceRoots.add(this.root);
+
+    shell.append(topbar, viewport, hiddenHosts);
     options.host.append(shell);
 
     this.listen(this.toggle, 'click', () => this.setCollapsed(!this.collapsed));
@@ -227,6 +210,7 @@ export class CombatLabWorkspaceTabs {
     const normalized = normalizeCombatLabWorkspaceTab(tabId);
     this.activeTab = normalized;
     this.root.dataset.activeWorkspace = normalized;
+    this.leftTitle.textContent = leftWorkspaceTitle(normalized);
     for (const [value, buttonElement] of this.buttons) {
       const active = value === normalized;
       buttonElement.classList.toggle('active', active);
@@ -254,7 +238,8 @@ export class CombatLabWorkspaceTabs {
     this.collapsed = collapsed;
     this.root.classList.toggle('collapsed', collapsed);
     this.root.classList.toggle('polygon-shell-left-collapsed', collapsed);
-    this.toggle.textContent = collapsed ? 'Развернуть слева' : 'Свернуть слева';
+    this.toggle.textContent = collapsed ? '›' : '‹';
+    this.toggle.setAttribute('aria-label', collapsed ? 'Показать левую панель' : 'Скрыть левую панель');
     this.toggle.setAttribute('aria-expanded', String(!collapsed));
     document.body.classList.toggle('combat-lab-dock-collapsed', collapsed);
     document.body.classList.toggle('combat-lab-dock-open', !collapsed);
@@ -265,7 +250,8 @@ export class CombatLabWorkspaceTabs {
     if (this.destroyed || this.rightCollapsed === collapsed) return;
     this.rightCollapsed = collapsed;
     this.root.classList.toggle('polygon-shell-right-collapsed', collapsed);
-    this.rightToggle.textContent = collapsed ? 'Развернуть справа' : 'Свернуть справа';
+    this.rightToggle.textContent = collapsed ? '‹' : '›';
+    this.rightToggle.setAttribute('aria-label', collapsed ? 'Показать правую панель' : 'Скрыть правую панель');
     this.rightToggle.setAttribute('aria-expanded', String(!collapsed));
     document.body.classList.toggle('polygon-shell-right-collapsed', collapsed);
     requestWorkspaceResize();
@@ -362,8 +348,21 @@ function normalizeRightPanelTab(value: unknown): PolygonRightPanelTab {
     : 'unit';
 }
 
+function leftWorkspaceTitle(tabId: CombatLabWorkspaceTab): string {
+  return POLYGON_LEFT_WORKSPACE_DEFINITIONS.find((definition) => definition.tabId === tabId)?.titleRu
+    ?? COMBAT_LAB_WORKSPACE_TAB_DEFINITIONS.find((definition) => definition.tabId === tabId)?.titleRu
+    ?? 'Рабочий режим';
+}
+
 function requestWorkspaceResize(): void {
   window.requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+}
+
+function shellButton(label: string): HTMLButtonElement {
+  const element = button(label, 'polygon-shell-top-button');
+  element.setAttribute('aria-disabled', 'true');
+  element.title = 'Команда будет подключена через штатный product owner в отдельной задаче.';
+  return element;
 }
 
 function button(label: string, className = ''): HTMLButtonElement {
