@@ -3,40 +3,53 @@
 ## 2026-08-15 — подпроект создан
 
 - Создан отдельный подпроект «Перенос Полигона из HTML-прототипа в продукт».
-- Принятая исходная база: Interface Linkage v1, переданная пользователем как `polygon-series-v1.1-memory-v3-interface-linkage.html`.
+- Принятая исходная база: Interface Linkage v1.
 - Идентичность источника: 2 292 772 байта, SHA-256 `4f33f19578698947cd629a88c6963c325895995fdd78a5380966ae1ef2fa1cfd`.
-- Канонический контекст и принятый UX-контракт находятся в `docs/subprojects/polygon-prototype/`.
-- Созданы только документы состояния подпроекта; продуктовая реализация не начиналась.
-- HTML-файл не копировался в репозиторий.
-- Следующий шаг на момент создания: подготовить матрицу UI-контракт → штатный владелец данных → существующий код/документ → пробел/риск.
+- HTML не является production architecture.
 
 ## 2026-08-15 — аналитическая фаза завершена
 
-- Выполнены три независимых исследования: `UX_GAP_AUDIT.md`, `PRODUCT_OWNER_MAP.md`, `RUNTIME_GAP_AUDIT.md`.
-- Результаты сведены в `MIGRATION_SYNTHESIS.md`.
-- Подготовлен полный рабочий план `WORK_PLAN.md`.
-- Зафиксирован первый доказательный вертикальный срез: `карта → selected unit → Юнит LIVE → штатная команда → тот же UnitModel → настоящий профиль`.
-- Подтверждено, что продукт уже содержит значительную часть нужной симуляции и runtime-механизмов; основной риск переноса — неверная сквозная связность и создание параллельных UI-owned моделей.
-- Зафиксировано, что полный Unit Editor нельзя реализовывать до решения о семантике `authoring / LIVE / два режима`.
-- `real-wargame-preview`, `main` и deployment в аналитической фазе не трогались.
+- Выполнены `UX_GAP_AUDIT.md`, `PRODUCT_OWNER_MAP.md`, `RUNTIME_GAP_AUDIT.md`.
+- Результаты сведены в `MIGRATION_SYNTHESIS.md` и `WORK_PLAN.md`.
+- Зафиксирован первый доказательный LIVE Unit slice.
 
-## 2026-08-15 — принята схема четырёх параллельных исполнителей
+## 2026-08-15 — первоначальная схема четырёх исполнителей
 
-- Следующая фаза ограничена четырьмя постоянными именованными направлениями.
-- Создан `EXECUTION_STREAMS.md`.
-- **АРКА** отвечает за UI shell и визуальную оболочку нового Полигона без fake gameplay state.
-- **ПУЛЬС** отвечает за selection, настоящий UnitModel, разрешённые LIVE-команды и первый вертикальный срез.
-- **ЛИНЗА** отвечает за реальные product data/right-panel contracts для `Инфо / Внимание / Память`.
-- **ХРОНИСТ** отвечает за Program↔Journal identity, History, Metrics, Laboratory, Series, replay/persistence и полный experiment envelope.
-- Все четыре направления допускают параллельный старт на независимых feature-ветках от заново проверенного exact HEAD `real-wargame-preview`.
-- Первая интеграция не ждёт всех четырёх: после принятия результатов АРКИ и ПУЛЬСА должен начаться первый LIVE Unit slice.
+- Созданы АРКА, ПУЛЬС, ЛИНЗА, ХРОНИСТ.
+- Подготовлены `EXECUTION_STREAMS.md`, `Q_HANDOFFS.md`, `Q_PROMPTS.md` и карта состояния.
 
-## 2026-08-15 — принят шаблон визуальной карты состояния
+## 2026-08-15 — ХРОНИСТ: архитектурный контракт
 
-- Создан `PROJECT_MAP_TEMPLATE.md` для Codex-оркестратора.
-- Карта состоит из двух слоёв: крупная дорога проекта и четыре именные дорожки исполнителей.
-- На карте всегда должен быть один основной маркер `★ МЫ ЗДЕСЬ`.
-- Используются единые состояния: `НЕ НАЧАТО`, `В РАБОТЕ`, `ПРИНЯТО`, `ЖДЁТ ЗАВИСИМОСТЬ`, `БЛОКЕР`, `НА ДОРАБОТКЕ`.
-- Решения пользователя отображаются отдельными воротами, а точки объединения результатов — отдельными интеграционными узлами.
-- После каждого проверенного handoff Codex обновляет статус узла и exact accepted commit SHA; карта отражает GitHub-состояние, а не названия/память чатов.
-- Цель карты — позволить пользователю за несколько секунд понять, где находится проект, кто сейчас работает, что заблокировано и какая следующая общая точка.
+- Исследованы Program/Journal, History, Metrics, Laboratory, Series, replay и persistence на exact product base `1246e1d612e648e7d7378db1c02be3bbf3d2a16a`.
+- Создан `CHRONIST_EXPERIMENT_CONTRACT.md`.
+- Первый commit контракта: `237413cf5b487a7c1cd5f8b1a505e5c1d7bf2a54`.
+- После обязательной проверки полного planned scope контракт дополнен функциями Journal v4, Metrics v18, Laboratory v1 и Series v1.1.
+- Exact audit commit: `9e2a7d819440ae82572134ff3caa690724f007d1`.
+- Product code не менялся.
+
+## 2026-08-16 — History выделен в отдельную большую дорожку
+
+Решение пользователя:
+
+- ХРОНИСТ делает всё своё направление, кроме `History / глобальной шкалы времени`;
+- History становится отдельной темой самостоятельного исполнителя;
+- рабочий позывной в документации — **ИСТОРИК**.
+
+Созданы/обновлены:
+
+- `CHRONIST_IMPLEMENTATION_PLAN.md` — вертикали C1–C10 и readiness всего non-History scope;
+- `HISTORY_EXECUTOR_HANDOFF.md` — отдельный scope HistoryProvider/viewTime/timeline;
+- `EXECUTION_STREAMS.md` — пять дорожек вместо четырёх;
+- `PROJECT_MAP_TEMPLATE.md` — параллельные дорожки ХРОНИСТ/ИСТОРИК;
+- `SUBPROJECT.md` и status metadata — новая граница ответственности.
+
+Текущая readiness ХРОНИСТА:
+
+- ready core: stable Program IDs, structured Program journal, fixed Combat Lab metrics, batch/headless runner, seed, узкий experiment codec;
+- partial: общий LIVE Journal, Program↔Journal, Series analysis, current rerun, full Save/Open;
+- absent: durable RunId, Metrics v18 telemetry/report, generic Laboratory, durable Series/Run records, verified frozen rerun, full ExperimentEnvelope;
+- History/timeline: отдельная дорожка ИСТОРИК.
+
+Следующая продуктовая вертикаль ХРОНИСТА: **C1 Run identity + Structured LIVE Journal foundation**.
+
+Документационная ветка не является product implementation. Для C1 перед стартом требуется свежий exact HEAD `real-wargame-preview` и отдельная feature-ветка.

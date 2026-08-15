@@ -2,157 +2,173 @@
 
 ## Цель
 
-Перенести принятый пользовательский интерфейс режима «Полигон» из HTML-прототипа в штатную реализацию Real Wargame.
+Перенести принятый пользовательский интерфейс режима «Полигон» из HTML-прототипа в штатную реализацию Real Wargame, сохранив не только внешний вид, но и весь принятый функциональный объём.
 
-При переносе нужно сохранить:
+Перенос сохраняет:
 
 - видимое поведение интерфейса;
 - пользовательские сценарии;
 - связи между разделами;
 - смысл действий пользователя;
-- принятые правила интерфейса.
+- принятые правила интерфейса;
+- planned functionality Journal, Metrics, Laboratory, Series, Save/Open и связанных разделов.
 
-Внутренняя реализация должна использовать существующую архитектуру продукта и настоящих владельцев данных. HTML остаётся UX/reference-контрактом, а не runtime-архитектурой.
+HTML остаётся UX/reference-контрактом. Внутренняя реализация использует настоящих product owners и существующую simulation/runtime архитектуру.
 
 ## Принятая исходная база
 
-Источник принятого пользовательского контракта — Interface Linkage v1 из подпроекта [polygon-prototype](../polygon-prototype/SUBPROJECT.md).
+Канонический UX/reference — Interface Linkage v1 из `docs/subprojects/polygon-prototype/`.
 
-Пользовательский локальный файл:
+Пользовательский исходный файл: `polygon-series-v1.1-memory-v3-interface-linkage.html`.
 
-`C:\Users\andre\Downloads\polygon-series-v1.1-memory-v3-interface-linkage.html`
-
-Каноническое имя артефакта в документации: `polygon-interface-linkage-v1.html`.
+Каноническое имя: `polygon-interface-linkage-v1.html`.
 
 - дата: 2026-08-15;
 - размер: 2 292 772 байта;
-- SHA-256: `4f33f19578698947cd629a88c6963c325895995fdd78a5380966ae1ef2fa1cfd`;
-- prototype-version: `polygon-map-editor-unified-v44-infantry-integrated-20260815-memory-v3-interface-linkage-v1`.
-
-Байты HTML не хранятся в репозитории. HTML задаёт UX и сценарии, но не является источником истины симуляции.
+- SHA-256: `4f33f19578698947cd629a88c6963c325895995fdd78a5380966ae1ef2fa1cfd`.
 
 ## Текущее состояние
 
-Подготовительная аналитическая фаза завершена.
+Аналитическая фаза завершена. Выполнены UX/runtime/owner-аудиты, синтез, рабочий план и первоначальные Q-handoff.
 
-В подпроекте уже есть:
+ХРОНИСТ завершил архитектурный контракт сквозной идентичности и обязательную проверку полного planned scope. Источник принятого аудита ХРОНИСТА: `9e2a7d819440ae82572134ff3caa690724f007d1`.
 
-- `UX_GAP_AUDIT.md` — аудит расхождений UX;
-- `PRODUCT_OWNER_MAP.md` — карта настоящих владельцев данных и точек подключения;
-- `RUNTIME_GAP_AUDIT.md` — аудит фактической runtime-готовности;
-- `MIGRATION_SYNTHESIS.md` — единый синтез трёх исследований;
-- `WORK_PLAN.md` — полный рабочий план переноса;
-- `EXECUTION_STREAMS.md` — четыре параллельных направления исполнения;
-- `PROJECT_MAP_TEMPLATE.md` — шаблон визуальной карты состояния проекта для Codex.
+Решением пользователя от **2026-08-16** изменена граница работ:
 
-Главный вывод анализа: базовая симуляция и значительная часть нужных product owners уже существуют. Основной риск — не отсутствие ядра, а неправильное соединение существующих систем через новый UI. Поэтому перенос выполняется вертикальными срезами без создания параллельных UI-owned игровых моделей.
+- **ХРОНИСТ делает всё своё сложное product-направление, кроме History / глобальной шкалы времени**;
+- `HistoryProvider`, `viewTime`, `LIVE/HISTORY`, глобальная timeline, historical projections и future-leakage выделены отдельному исполнителю **ИСТОРИК**;
+- recorded historical replay относится к ИСТОРИКУ, если replay строится на сохранённой истории;
+- ХРОНИСТ продолжает Journal LIVE, Metrics, Laboratory, Series, deterministic rerun, persistence и full Save/Open.
 
-Следующая фаза — оркестрированный параллельный запуск четырёх направлений: **АРКА, ПУЛЬС, ЛИНЗА, ХРОНИСТ**.
+Подробный новый порядок: `CHRONIST_IMPLEMENTATION_PLAN.md`.
 
-Продуктовый код в рамках текущего документационного обновления не менялся. Перед первой кодовой задачей каждый исполнитель обязан заново получить точный текущий HEAD `real-wargame-preview` и работать на отдельной feature-ветке.
+Отдельный handoff History: `HISTORY_EXECUTOR_HANDOFF.md`.
 
-## Четыре направления исполнения
+## Пять направлений исполнения
 
 ### АРКА
 
-Каркас и визуальная оболочка нового Полигона: шапка, левая и правая панели, центральная область, вкладки и UI-owned состояния. Не создаёт fake gameplay data.
+UI shell, панели, вкладки, visual integration и UI-owned state. Не создаёт fake gameplay data.
 
 ### ПУЛЬС
 
-Первый настоящий LIVE-контур: `карта → selected unitId → UnitModel → правый Юнит → штатная команда → тот же UnitModel`.
+LIVE Unit: selection → настоящий `unitId` → `UnitModel` → штатная команда → readback.
 
 ### ЛИНЗА
 
-Настоящие данные правой панели: `Инфо / Внимание / Память`; устанавливает owners, read/write boundaries и честный LIVE-scope.
+Настоящие LIVE-данные `Инфо / Внимание / Память`, read/write boundaries и субъективность данных.
 
 ### ХРОНИСТ
 
-Сквозная идентичность и сложные поперечные системы: `Program↔Journal`, History, Metrics, Laboratory, Series, replay/persistence и полный experiment envelope.
+- Run identity;
+- Program ↔ Journal LIVE;
+- полный non-History scope Journal;
+- Metrics definitions/telemetry/report/export;
+- Laboratory descriptor/resolution;
+- Series/Run persistence, all-runs, filters/outliers;
+- frozen deterministic rerun;
+- полный ExperimentEnvelope и Save/Open;
+- typed linkage этих систем.
 
-Подробные границы и формат handoff: `EXECUTION_STREAMS.md`.
+### ИСТОРИК
 
-## Основные этапы переноса
+- HistoryProvider;
+- `viewTime`;
+- `LIVE/HISTORY`;
+- глобальная шкала времени;
+- historical map/right-panel projections;
+- future leakage protection;
+- recorded historical replay при history-artifact семантике.
 
-1. **Анализ и планирование — завершено.** Инвентаризирован UX-контракт, определены owners/runtime gaps, создан синтез и рабочий план.
-2. **UI Shell + первый LIVE Unit.** АРКА создаёт оболочку, ПУЛЬС готовит/доказывает настоящий Unit runtime path; первая интеграция — рабочий LIVE Unit.
-3. **Right Panel LIVE.** Подключаются `Инфо`, затем `Внимание`, затем честный поддерживаемый объём `Памяти`.
-4. **Program ↔ Journal LIVE.** Вводится настоящая causal identity и двунаправленная навигация на устойчивых product IDs.
-5. **History / viewTime.** Историческое чтение отделяется от LIVE и исключает future leakage.
-6. **Metrics.** Принятый Metrics UX подключается к настоящим telemetry/measurement contracts.
-7. **Laboratory.** Experimental overrides подключаются через descriptor/resolution chain к настоящим владельцам параметров.
-8. **Series / Replay / Persistence.** Массовые прогоны получают устойчивые Run/Series records, выбранные Metrics, runtime identity и принятую семантику replay.
-9. **Full Save/Open + Unit Editor.** Полный experiment envelope и редактор юнита в отдельно принятой семантике authoring/LIVE.
-10. **Сквозная приёмка.** Проверяются связи, история, субъективные данные, сохранение и отсутствие параллельной HTML-архитектуры.
-11. **Только после явного GO** — перенос принятого exact commit в `real-wargame-preview`.
-12. **Только после отдельного запроса** — deployment.
+Первоначальные четыре Q-handoff остаются историей исходного разделения. Для текущей фазы приоритет имеют `EXECUTION_STREAMS.md`, `CHRONIST_IMPLEMENTATION_PLAN.md` и `HISTORY_EXECUTOR_HANDOFF.md`.
 
-Этапы не считаются выполненными только потому, что соответствующий экран есть в HTML.
+## Текущая readiness сложных систем
 
-## Первая точка интеграции
+| Область | Статус |
+|---|---|
+| Program `trackId/stepId` | готово |
+| Structured Program journal | готово узко |
+| Durable RunId | отсутствует |
+| Общий LIVE Journal | частично |
+| Program ↔ Journal LIVE | частично |
+| History / timeline | отдельная дорожка ИСТОРИК, отсутствует |
+| Current fixed Combat Lab metrics | готово узко |
+| Metrics v18 definitions/telemetry | отсутствует |
+| Metrics Report/export | отсутствует |
+| Узкие experiment overrides | готово узко |
+| Generic Laboratory | отсутствует |
+| Batch/headless Series execution | готово |
+| Durable Series/Run records | отсутствует |
+| All-runs / filters / full outliers | частично/отсутствует |
+| Current rerun-by-seed | частично |
+| Verified frozen rerun | отсутствует |
+| Recorded historical replay | ИСТОРИК / отсутствует |
+| Current experiment file save | готово узко |
+| Full ExperimentEnvelope Save/Open | частично |
 
-Первый обязательный доказательный срез:
+Полная детализация готовности находится в `CHRONIST_IMPLEMENTATION_PLAN.md` и разделе `20. Проверка полного planned scope` файла `CHRONIST_EXPERIMENT_CONTRACT.md`.
 
-`карта → выбор настоящего юнита → правый «Юнит» LIVE → штатное изменение позы → обновление того же UnitModel → переход к настоящему общему профилю`.
+## Порядок сложной реализации ХРОНИСТА
 
-Он должен доказать фундаментальный шаблон будущего Полигона:
+1. **C1 Run identity + Structured LIVE Journal foundation.**
+2. **C2 Full LIVE Journal v4 без History.**
+3. **C3 MeasurementDefinition + telemetry.**
+4. **C4 Metrics Report + export.**
+5. **C5 Laboratory descriptor/resolution.**
+6. **C6 Durable SeriesRecord/RunRecord + persistence.**
+7. **C7 Series analysis/all-runs/outliers/navigation.**
+8. **C8 Frozen deterministic rerun.**
+9. **C9 Versioned ExperimentEnvelope Save/Open.**
+10. **C10 Full non-History linkage + acceptance.**
 
-- один выбранный объект — один product ID;
-- UI не хранит копию доменного состояния;
-- чтение и запись разведены;
-- команда изменяет product owner;
-- UI показывает readback от owner;
-- linked entity открывает настоящий authoritative editor.
+После C1 отдельный ИСТОРИК может независимо строить History на стабильных Run/Event references. History не блокирует C3/C5/C6/C9.
 
-## Визуальная карта состояния
+## Основные этапы всего подпроекта
 
-`PROJECT_MAP_TEMPLATE.md` задаёт постоянный принцип отображения состояния подпроекта:
+1. Анализ и планирование — завершено.
+2. UI Shell + первый LIVE Unit.
+3. Right Panel LIVE.
+4. Program ↔ Journal LIVE.
+5. Две параллельные длинные дорожки:
+   - ИСТОРИК: History/viewTime/timeline;
+   - ХРОНИСТ: Metrics/Laboratory/Series/persistence/Save/Open.
+6. Сквозная интеграция.
+7. Полный planned-scope acceptance.
+8. Только после явного GO — transfer exact accepted SHA в `real-wargame-preview`.
+9. Только после отдельного запроса — deployment.
 
-- сверху — крупные этапы проекта;
-- снизу — четыре дорожки `АРКА / ПУЛЬС / ЛИНЗА / ХРОНИСТ`;
-- один основной маркер `★ МЫ ЗДЕСЬ`;
-- отдельные статусы `НЕ НАЧАТО / В РАБОТЕ / ПРИНЯТО / ЖДЁТ / БЛОКЕР / ДОРАБОТКА`;
-- отдельные ворота решений пользователя;
-- заметные точки интеграции;
-- accepted exact commit SHA у завершённых задач.
+## Правила готовности
 
-Codex должен обновлять карту после каждого проверенного handoff, чтобы она показывала проверенное GitHub-состояние, а не память отдельных чатов.
+Экран или вкладка не считаются готовыми по факту наличия UI. Для статуса `готово` должны быть доказаны:
 
-## Зависимости
+- настоящий owner;
+- настоящий read/write или query contract;
+- отсутствие fake/demo fallback;
+- пользовательский сценарий принятого HTML;
+- focused tests;
+- `npx tsc --noEmit`;
+- релевантный smoke;
+- `npm run build`;
+- exact feature SHA.
 
-- `docs/subprojects/polygon-prototype/` — принятый UX-контракт и его история;
-- владельцы данных карты, юнитов, Программы, Лаборатории и Метрик;
-- product contracts для Серии, Журнала, History, Внимания, Памяти и сквозной связности;
-- архитектурные правила Real Wargame: симуляция владеет состоянием, UI отображает и отправляет действия;
-- правила генерации документации `docs:sync` и рабочий процесс feature-веток;
-- продуктовые решения пользователя по Unit Editor, replay, persistence, Metrics scope, Memory scope и `Apply Globally`.
+После каждого принятого SHA готовность обновляется в `subproject.json`, `STATUS.md`, соответствующем implementation plan и `JOURNAL.md`.
 
-## Риски и открытые вопросы
+## Зависимости и продуктовые решения
 
-- Синтетические прогоны, demo events и mock-данные HTML не доказывают наличие production telemetry, хранения результатов или воспроизводимого runtime.
-- Временные `window`/global API и локальное состояние HTML нельзя переносить как архитектуру.
-- Нельзя смешивать стартовый definition юнита и его живой runtime в одном неявном mutable editor.
-- Исторические состояния требуют отдельного history provider; UI timeline не может подменять его.
-- Seed сам по себе не гарантирует exact replay после изменения runtime.
-- `intel/front` и другие типы памяти нельзя показывать как product capability без подтверждённого владельца.
-- Full Metrics, Laboratory, Series history и Save/Open нельзя считать готовыми по наличию отдельных узких механизмов.
+Остаются отдельные решения пользователя:
 
-## Ближайший следующий шаг
-
-Codex-оркестратор готовит четыре независимых handoff по `EXECUTION_STREAMS.md` и запускает их параллельно:
-
-1. **АРКА** — UI shell;
-2. **ПУЛЬС** — LIVE Unit contract;
-3. **ЛИНЗА** — Info/Attention/Memory runtime audit;
-4. **ХРОНИСТ** — causal identity и foundations сложных систем.
-
-Не требуется ждать всех четырёх для первой реализации. Как только результаты АРКИ и ПУЛЬСА проверены оркестратором, начинается интеграционный первый LIVE Unit slice, пока ЛИНЗА и ХРОНИСТ продолжают следующие исследования.
+- семантика полного Unit Editor;
+- persistence policy Series/Run;
+- объём первой product-версии Metrics, если не все telemetry streams доступны одновременно;
+- классы Laboratory parameters, где разрешено `Apply Globally`;
+- recorded replay vs frozen deterministic rerun как пользовательское обещание кнопки воспроизведения.
 
 ## Правила подпроекта
 
 - Перед каждой кодовой веткой заново фиксировать exact current `real-wargame-preview` HEAD.
 - Не считать HTML источником истины симуляции.
-- Не вводить новые mock-владельцы игровых данных.
-- UI может владеть только чистым UI-state.
+- Не вводить mock-владельцев игровых данных.
+- UI владеет только чистым UI-state.
 - Не менять `main` или `real-wargame-preview` без отдельного разрешения.
 - Не выполнять deployment без отдельного запроса.
-- Исполнители работают через GitHub exact SHA; названия чатов не являются идентичностью работы.
+- GitHub exact SHA является состоянием работы; память чата — нет.

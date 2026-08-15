@@ -1,17 +1,18 @@
-# Четыре направления исполнения переноса Полигона
+# Пять направлений исполнения переноса Полигона
 
-## Назначение
+## Изменение от 2026-08-16
 
-Этот документ фиксирует четыре параллельных направления следующей фазы подпроекта. Имена исполнителей являются постоянными позывными и не зависят от названия чата или сессии.
+Первоначально подпроект был разбит на четыре Q-направления. После полного planned-scope аудита пользователь решил вынести `History / viewTime / глобальную шкалу времени` из ХРОНИСТА в отдельную большую тему.
 
-Каждый исполнитель в начале отчёта и каждого handoff обязан писать своё имя:
+Текущие постоянные дорожки:
 
-- **АРКА** — каркас интерфейса;
-- **ПУЛЬС** — LIVE-юнит и первый настоящий runtime-контур;
+- **АРКА** — каркас и визуальная интеграция;
+- **ПУЛЬС** — LIVE Unit;
 - **ЛИНЗА** — `Инфо / Внимание / Память`;
-- **ХРОНИСТ** — сквозная идентичность эксперимента, события, история, измерения и прогоны.
+- **ХРОНИСТ** — Journal LIVE, Metrics, Laboratory, Series, deterministic rerun, persistence, Save/Open;
+- **ИСТОРИК** — HistoryProvider, `viewTime`, timeline, historical projections и recorded history replay.
 
-Все четыре направления могут стартовать параллельно, но продуктовый код создаётся только на отдельных feature-ветках от заново проверенного точного HEAD `real-wargame-preview` и по правилам `AGENTS.md`/оркестрации.
+Исходные `Q_HANDOFFS.md`/`Q_PROMPTS.md` фиксируют первоначальную фазу и не должны использоваться для возврата History в зону ХРОНИСТА.
 
 ---
 
@@ -19,41 +20,14 @@
 
 **Самоопределение:** `Я — АРКА. Отвечаю за каркас интерфейса нового Полигона.`
 
-### Цель
+Отвечает за shell, панели, вкладки, popup/collapse/scroll/UI state, визуальную интеграцию владельцев данных и принятый дизайн. Не владеет gameplay truth.
 
-Перенести в продукт визуальный и композиционный каркас принятого HTML-интерфейса без переноса его demo/runtime-модели.
+Ключевые интеграции:
 
-### Делает
-
-- верхнюю шапку;
-- левую панель навигации;
-- центральную рабочую область и место штатной карты;
-- правую панель;
-- вкладки `Юнит / Инфо / Внимание / Память`;
-- рабочие вкладки `Карта / Программа / Лаборатория / Метрики / Журнал / Серия`;
-- нижнюю область под глобальную временную шкалу;
-- переключение вкладок и чистые UI-состояния;
-- визуальные токены, типографику, отступы, размеры, active/hover/collapse-состояния;
-- адаптацию компоновки к целевому размеру окна;
-- визуальное соответствие принятому прототипу в пределах shell-задачи.
-
-### Не делает
-
-- fake/demo Unit, Memory, Attention, Journal, Metrics или Series;
-- новую игровую модель;
-- новую модель карты;
-- новый глобальный доменный `appState`;
-- перенос `window.*`, demo arrays, synthetic results, localStorage и внутренних JS-механизмов HTML.
-
-Разрешено хранить только UI-owned состояние: активная вкладка, открытая/свёрнутая панель, локальное состояние popup и геометрию интерфейса.
-
-### Результат
-
-В продукте существует узнаваемая новая оболочка Полигона с честно пустыми контейнерами там, где ещё не подключены product owners.
-
-### Точка слияния
-
-`АРКА + ПУЛЬС → первый LIVE Unit vertical slice`.
+- АРКА + ПУЛЬС → LIVE Unit;
+- АРКА + ЛИНЗА → Right Panel LIVE;
+- АРКА + ХРОНИСТ → Journal/Metrics/Lab/Series UI;
+- АРКА + ИСТОРИК → timeline + HISTORY visual mode.
 
 ---
 
@@ -61,40 +35,9 @@
 
 **Самоопределение:** `Я — ПУЛЬС. Отвечаю за связь нового интерфейса с живым юнитом симуляции.`
 
-### Цель
+Отвечает за настоящий selected `unitId`, чтение `UnitModel`, штатные LIVE-команды, readback и границу authoring/LIVE.
 
-Подготовить и затем доказать первый настоящий сквозной путь:
-
-`карта → selected unitId → UnitModel → правый Юнит LIVE → штатная команда → тот же UnitModel`.
-
-### Делает
-
-- устанавливает настоящего владельца selected unit;
-- проверяет существующий selection bridge Combat Lab;
-- сопоставляет поля вкладки `Юнит` с настоящими runtime-источниками;
-- фиксирует механизм обновления каждого поля;
-- определяет разрешённые write-boundaries;
-- для первого среза подтверждает штатную команду смены позы `стоя / пригнувшись / лёжа`;
-- фиксирует readback: UI показывает результат владельца после команды, а не локальную optimistic-копию;
-- подтверждает переход к связанному профилю через существующий `GameEditorRegistry`/авторитетный редактор;
-- отделяет live runtime от стартового authoring-состояния эксперимента.
-
-### Не делает
-
-- полный Unit Editor до продуктового решения о `authoring / LIVE / два режима`;
-- второй selectedUnit store;
-- прямое мутирование runtime из UI в обход штатной команды;
-- UI-копию UnitModel.
-
-### Результат
-
-Контракт и затем реализация первого вертикального среза, где выбранный настоящий юнит читается и изменяется через существующую продуктовую систему.
-
-### Точка слияния
-
-`АРКА + ПУЛЬС → LIVE Unit`.
-
-После принятия этого среза остальные UI-секции должны повторять тот же принцип owner/read/write/readback.
+Не создаёт второй selection store и не мутирует UnitModel напрямую из UI.
 
 ---
 
@@ -102,56 +45,9 @@
 
 **Самоопределение:** `Я — ЛИНЗА. Отвечаю за реальные данные правой панели: Инфо, Внимание и Память.`
 
-### Цель
+Отвечает за LIVE owners/API `Инфо / Внимание / Память`, write boundaries и субъективность perception/knowledge.
 
-Разделить принятый UX правой панели на реально доступные product data, частично доступные данные и возможности, которые HTML только демонстрирует.
-
-### `Инфо`
-
-Для координат, высоты, склона, поверхности, проходимости, concealment, cover, объектов и юнитов рядом определить:
-
-`поле UI → owner → существующий query/API → готовность → недостающая функция`.
-
-Если готового query нет, описывается недостающая продуктовая возможность; UI не должен вычислять её самостоятельно.
-
-### `Внимание`
-
-Установить:
-
-- настоящий attention profile;
-- режим и runtime attention state;
-- сектор внимания;
-- perception data;
-- какие результаты уже вычислены симуляцией;
-- как визуализировать их без повторного LOS/visibility calculation в UI;
-- разрешённый write-path изменения Attention, если он действительно существует как публичная граница.
-
-### `Память`
-
-Каждый принятый тип классифицировать как `есть / частично / отсутствует`:
-
-- текущий подтверждённый контакт;
-- прошлый контакт;
-- предположение;
-- разведданные;
-- предполагаемый фронт.
-
-Отдельно проверить `intel/front`; demo-поддержка HTML не считается product support.
-
-### Не делает
-
-- fake Memory/Attention;
-- историческое состояние до появления history provider;
-- повторное вычисление perception/LOS в UI;
-- выдуманные типы памяти ради заполнения принятой формы.
-
-### Результат
-
-Единая матрица `UI → owner/API → LIVE readiness → write boundary → gap` и готовая очередь следующих вертикальных срезов.
-
-### Точка слияния
-
-`АРКА + ЛИНЗА → Инфо → Внимание LIVE → Память LIVE` после соответствующих контрактных gates.
+Исторические проекции этих же данных принадлежат ИСТОРИКУ и строятся поверх владельцев, доказанных ЛИНЗОЙ.
 
 ---
 
@@ -159,106 +55,92 @@
 
 **Самоопределение:** `Я — ХРОНИСТ. Отвечаю за сквозную идентичность эксперимента, событий, измерений и прогонов.`
 
-### Цель
+### Делает
 
-Подготовить фундамент для частей Полигона, которые должны сохранять причинность, время и идентичность одного эксперимента между несколькими разделами.
-
-### Приоритет 1 — Program ↔ Journal
-
-Установить настоящую цепочку:
-
-`Program/trackId/stepId → runtime event → Journal event → entity refs`.
-
-Нужно получить typed/stable identity и двунаправленную навигацию без demo ID и строковых костылей.
-
-### Приоритет 2 — History
-
-Не рисовать готовую временную машину, а определить минимальный history-provider contract для:
-
-- прошлого состояния мира;
-- прошлого состояния Unit;
-- Attention;
-- Memory;
-- Journal;
-- защиты от future leakage;
-- раздельности LIVE runtime и выбранного `viewTime`.
-
-### Приоритет 3 — Metrics → Series
-
-Разобрать:
-
-`measurement definition → telemetry stream → run values → Series aggregation`.
-
-Metrics должен оставаться владельцем определений измерений; Series их использует, но не создаёт второй каталог.
-
-### Приоритет 4 — Series / Replay / Persistence
-
-Определить минимальные понятия:
-
-- `SeriesRecord`;
-- `RunRecord`;
-- seed;
-- frozen experiment inputs;
-- runtime identity/version;
-- metric values/results;
-- долговременное хранение;
-- разницу между rerun-from-seed и recorded historical replay.
-
-### Приоритет 5 — Laboratory + Save/Open
-
-Зафиксировать место Laboratory и Metrics в полном experiment envelope так, чтобы будущий `Сохранить эксперимент` сохранял согласованный эксперимент, а не только карту/Program.
+- durable Run identity;
+- structured LIVE Journal;
+- Program ↔ Journal linkage;
+- T1/T2/T3, filters, details и linked entities Журнала на data/query уровне;
+- MeasurementDefinition и telemetry;
+- Metrics Report + JSON/JSONL/CSV export;
+- Laboratory descriptors/targets/areas/resolution/conflicts/provenance;
+- durable SeriesRecord/RunRecord;
+- all-runs, filters, distributions, full outliers;
+- persistence Series/Run;
+- frozen deterministic rerun и digest verification;
+- full versioned ExperimentEnvelope + atomic Save/Open;
+- typed linkage между Program, Journal, Metrics, Laboratory, Series и Run.
 
 ### Не делает
 
-- fake Journal history;
-- fake telemetry;
-- synthetic Series product logic;
-- обещание exact replay, пока не определён соответствующий контракт;
-- универсальный Laboratory engine без owner/descriptor/resolution chain.
+- HistoryProvider;
+- `viewTime`;
+- глобальную timeline;
+- historical map/right-panel projections;
+- future-leakage engine;
+- recorded historical replay на history artifact.
 
-### Результат
-
-Набор проверяемых контрактов, которые заранее снимают блокеры для `Program↔Journal`, History, Metrics, Laboratory, Series и полного Save/Open.
-
-### Точка слияния
-
-`АРКА + ХРОНИСТ → Program↔Journal LIVE → History → Metrics/Laboratory/Series → persistence` в порядке фактической готовности контрактов.
+Подробный порядок C1–C10: `CHRONIST_IMPLEMENTATION_PLAN.md`.
 
 ---
 
-## Параллельный запуск
+## ИСТОРИК
 
-На старте четыре потока независимы:
+**Самоопределение:** `Я — ИСТОРИК. Отвечаю за честное чтение прошлого, viewTime и глобальную временную навигацию Полигона.`
+
+### Делает
+
+- HistoryProvider и coverage;
+- `LIVE/HISTORY` read boundary;
+- pinned `viewTime`;
+- глобальную timeline и навигацию по событиям/времени;
+- historical state карты и выбранного юнита;
+- historical Attention/Memory projections;
+- запрет future leakage;
+- historical event-context overlays;
+- recorded historical replay, если выбран такой product contract.
+
+### Не делает
+
+LIVE Journal schema, Metrics, Laboratory, Series records, deterministic rerun или ExperimentEnvelope.
+
+Полный handoff: `HISTORY_EXECUTOR_HANDOFF.md`.
+
+---
+
+## Параллельный порядок
 
 ```text
-АРКА     ── UI shell ───────────────────────────────┐
-ПУЛЬС    ── selection + LIVE Unit contract ─────────┼→ первый LIVE Unit
-ЛИНЗА    ── Info / Attention / Memory audit ────────┼→ следующие right-panel slices
-ХРОНИСТ  ── identity/history/metrics/series ────────┴→ следующие cross-system slices
+АРКА      ── shell / visual integration ────────────────────────────────
+ПУЛЬС     ── LIVE Unit ────────────────────────────────────────────────
+ЛИНЗА     ── Info / Attention / Memory LIVE ──────────────────────────
+ХРОНИСТ   ── C1 Journal foundation ─┬─ Metrics ─ Lab ─ Series ─ Save ─
+                                    │
+ИСТОРИК                            └─ History / viewTime / timeline ──
 ```
 
-Не требуется ждать завершения всех четырёх.
+После стабилизации C1 `RunId + JournalEventRef`:
 
-Первая точка интеграции наступает, когда готовы и приняты **АРКА + ПУЛЬС**. После неё первый LIVE Unit должен реализовываться и проверяться, пока ЛИНЗА и ХРОНИСТ продолжают готовить следующие возможности.
+- ИСТОРИК может начинать History;
+- ХРОНИСТ параллельно продолжает Metrics/Lab/Series;
+- ни одна из этих дорожек не должна подменять другую временным UI-store.
 
-## Общий handoff каждого исполнителя
-
-Каждый отчёт должен содержать:
+## Общий формат результата
 
 ```text
-executor_name: АРКА | ПУЛЬС | ЛИНЗА | ХРОНИСТ
+executor_name: АРКА | ПУЛЬС | ЛИНЗА | ХРОНИСТ | ИСТОРИК
 base_commit: <40-char SHA>
 feature_branch: <branch>
 current_commit: <40-char SHA>
-result: <что доказано или реализовано>
-changed_files: <точный список>
-checks_run: <проверки>
-not_checked: <что не проверено>
-blockers: <если есть>
-next_merge_point: <куда результат должен войти>
+result:
+changed_files:
+checks_run:
+not_checked:
+blockers:
+next_merge_point:
 preview_touched: no
 main_touched: no
 deployment_touched: no
 ```
 
-Оркестратор принимает результат только по точному commit SHA и обновляет карту проекта после проверки.
+Оркестратор принимает результат только по exact SHA и после независимой проверки.
