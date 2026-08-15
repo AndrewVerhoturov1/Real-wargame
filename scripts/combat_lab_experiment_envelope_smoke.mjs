@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 
-const source = await readFile('src/core/testing/combat-lab/experiment/CombatLabExperimentEnvelope.ts', 'utf8').catch(() => '');
+const source = await readFile('src/combat-lab/scenario-editor/CombatLabExperimentEnvelope.ts', 'utf8').catch(() => '');
 assert.ok(source.length > 0, 'Experiment envelope owner is missing.');
 const result = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
