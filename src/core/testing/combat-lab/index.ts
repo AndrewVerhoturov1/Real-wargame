@@ -8,4 +8,5 @@ export * from './CombatLabRunner';
 export * from './CombatLabScenarioRegistry';
 export * from './metrics/CombatLabMeasurementTelemetry';
 export * from './metrics/CombatLabTelemetryDataset';
+export * from './metrics/CombatLabMetricsReport';
 export * from './experiment';
