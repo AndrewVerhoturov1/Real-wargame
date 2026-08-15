@@ -1,35 +1,39 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [extension, hosts, tabs, editor, main, css, layoutEnhancements, visualSession, sharedRuntime] = await Promise.all([
+const [extension, hosts, tabs, editor, main, css, shellCss, layoutEnhancements, visualSession, sharedRuntime] = await Promise.all([
   readFile('src/combat-lab/CombatLabExtension.ts', 'utf8'),
   readFile('src/combat-lab/ui/CombatLabWorkspaceHosts.ts', 'utf8'),
   readFile('src/combat-lab/ui/CombatLabWorkspaceTabs.ts', 'utf8'),
   readFile('src/combat-lab/scenario-editor/CombatLabScenarioEditorPanel.ts', 'utf8'),
   readFile('src/combat-lab/main.ts', 'utf8'),
   readFile('src/combat-lab/combat-lab-workspace.css', 'utf8'),
+  readFile('src/combat-lab/polygon-shell.css', 'utf8'),
   readFile('src/ui/TacticalWorkspaceLayoutEnhancements.ts', 'utf8'),
   readFile('src/combat-lab/runtime/CombatLabVisualSession.ts', 'utf8'),
   readFile('src/core/testing/AiTestLabRuntime.ts', 'utf8'),
 ]);
 
-const expectedTabs = [
-  ['scene', 'Сцена'],
+const expectedPrimaryTabs = [
+  ['scene', 'Карта'],
   ['program', 'Программа'],
-  ['batch', 'Серия'],
-  ['parameters', 'Параметры'],
-  ['settings', 'Настройка игры'],
+  ['laboratory', 'Лаборатория'],
   ['metrics', 'Метрики'],
   ['journal', 'Журнал'],
+  ['batch', 'Серия'],
 ];
-for (const [tabId, label] of expectedTabs) {
+for (const [tabId, label] of expectedPrimaryTabs) {
   assert.match(hosts, new RegExp(`tabId: '${tabId}'`));
   assert.match(hosts, new RegExp(`labelRu: '${label}'`));
 }
-assert.equal((hosts.match(/tabId:/g) ?? []).length, 7, 'Integrated workspace must contain the six Stage 10 tabs plus game settings.');
+assert.equal((hosts.match(/tabId:/g) ?? []).length, 8, 'Integrated Polygon workspace must contain six primary tabs plus two preserved product utility tabs.');
+assert.match(hosts, /tabId:\s*'parameters'[^\n]*labelRu:\s*'Параметры'/);
+assert.match(hosts, /tabId:\s*'settings'[^\n]*labelRu:\s*'Общие редакторы'/);
 assert.doesNotMatch(hosts, /labelRu:\s*'Стенд'/);
-assert.match(tabs, /dock\.append\(header, toolbarHost, tabList, panelHost\)/,
-  'The run toolbar must remain outside switchable tab panels.');
+assert.match(tabs, /shell\.append\(header, primaryTabList, main, timeline\)/,
+  'The Polygon shell must compose header, primary tabs, central workspace and timeline.');
+assert.match(tabs, /polygon-shell-right-tabs/);
+assert.match(tabs, /setRightCollapsed\(/);
 assert.match(
   tabs,
   /for\s*\(const\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s+of\s+this\.panels\)\s*\2\.hidden\s*=\s*\1\s*!==\s*normalized/,
@@ -55,8 +59,11 @@ assert.match(editor, /onSelectionChanged\?:/);
 assert.match(editor, /ensureMutationAllowed\(\)/);
 assert.match(main, /combat-lab:toggle-pause/);
 assert.match(main, /combat-lab:set-paused/);
+assert.match(main, /installLaboratoryPlaceholder/);
 assert.match(css, /\.combat-lab-workspace-tab-list/);
 assert.match(css, /overflow-x:\s*hidden/);
+assert.match(shellCss, /\.polygon-shell-primary-tabs/);
+assert.match(shellCss, /\.polygon-shell-timeline/);
 assert.match(layoutEnhancements, /runToolbar\?\.classList\.add\('combat-lab-run-toolbar'\)/,
   'Stage 10 toolbar host must publish the stable combat-lab-run-toolbar DOM contract.');
 assert.match(layoutEnhancements, /advancedControls\?\.classList\.add\('combat-lab-advanced'\)/,
