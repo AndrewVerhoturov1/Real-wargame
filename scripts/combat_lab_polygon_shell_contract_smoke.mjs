@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [hosts, tabs, main, shellCss, compatCss] = await Promise.all([
+const [hosts, tabs, main, shellCss, compatCss, exactCss] = await Promise.all([
   readFile('src/combat-lab/ui/CombatLabWorkspaceHosts.ts', 'utf8'),
   readFile('src/combat-lab/ui/CombatLabWorkspaceTabs.ts', 'utf8'),
   readFile('src/combat-lab/main.ts', 'utf8'),
   readFile('src/combat-lab/polygon-shell.css', 'utf8'),
   readFile('src/combat-lab/polygon-shell-compat.css', 'utf8'),
+  readFile('src/combat-lab/polygon-shell-exact.css', 'utf8'),
 ]);
+const visualCss = `${shellCss}\n${compatCss}\n${exactCss}`;
 
 for (const [id, label] of [
   ['scene', 'Карта'],
@@ -50,6 +52,8 @@ assert.match(tabs, /normalizeVisibleWorkspaceTab\(storedTab\)/,
   'Persisted utility tabs from the old shell must normalize to a visible prototype workspace.');
 assert.match(tabs, /POLYGON_LEFT_WORKSPACE_DEFINITIONS\.some\(\(definition\) => definition\.tabId === normalized\)/,
   'Visible-tab normalization must use the accepted seven-tab palette.');
+assert.match(tabs, /:\s*'program';/,
+  'A fresh exact-shell session must open on the prototype Program workspace.');
 assert.ok((tabs.match(/requestWorkspaceResize\(\)/g) ?? []).length >= 3,
   'The shell must request an initial viewport resize in addition to both collapse-state resizes.');
 
@@ -66,6 +70,7 @@ assert.match(main, /workspaceHosts\.laboratory/);
 assert.doesNotMatch(`${tabs}\n${main}`, /demo Unit|synthetic Series/i);
 assert.match(main, /\.\/polygon-shell\.css/);
 assert.match(main, /\.\/polygon-shell-compat\.css/);
+assert.match(main, /\.\/polygon-shell-exact\.css/);
 
 for (const token of [
   '--polygon-topbar-h: 58px',
@@ -81,37 +86,39 @@ for (const token of [
   '--polygon-grid-small: 20px',
   '--polygon-grid-large: 80px',
 ]) {
-  assert.ok(shellCss.includes(token), `Missing exact prototype token: ${token}`);
+  assert.ok(visualCss.includes(token), `Missing exact prototype token: ${token}`);
 }
-assert.match(shellCss, /grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\)\s+auto/);
-assert.match(shellCss, /\.polygon-shell-history-strip[\s\S]*top:\s*var\(--polygon-topbar-h\)/);
-assert.match(shellCss, /\.polygon-shell-history-strip[\s\S]*height:\s*var\(--polygon-history-h\)/);
-assert.match(shellCss, /\.polygon-shell-viewport[\s\S]*inset:\s*var\(--polygon-chrome-h\)\s+0\s+0/);
-assert.match(shellCss, /\.polygon-shell-map-placeholder[\s\S]*pointer-events:\s*none/,
+assert.match(visualCss, /grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\)\s+auto/);
+assert.match(visualCss, /\.polygon-shell-history-strip[\s\S]*top:\s*var\(--polygon-topbar-h\)/);
+assert.match(visualCss, /\.polygon-shell-history-strip[\s\S]*height:\s*var\(--polygon-history-h\)/);
+assert.match(visualCss, /\.polygon-shell-viewport[\s\S]*inset:\s*var\(--polygon-chrome-h\)\s+0\s+0/);
+assert.match(exactCss, /\.polygon-shell-map-placeholder[\s\S]*pointer-events:\s*none/,
   'Map placeholder must remain inert and must not fabricate map interaction.');
-assert.match(shellCss, /\.polygon-shell-map-placeholder[\s\S]*background-image:[\s\S]*linear-gradient/,
+assert.match(exactCss, /\.polygon-shell-map-placeholder[\s\S]*background-image:[\s\S]*linear-gradient/,
   'Map placeholder must reproduce the prototype grid instead of exposing the live map.');
-assert.match(shellCss, /\.polygon-shell-map-board[\s\S]*background:\s*var\(--polygon-map\)/,
+assert.match(exactCss, /\.polygon-shell-map-board[\s\S]*background:\s*var\(--polygon-map\)/,
   'Central board must use the prototype map surface token.');
-assert.match(shellCss, /#app\s+canvas[\s\S]*visibility:\s*hidden\s*!important/,
+assert.match(exactCss, /#app\s+canvas[\s\S]*visibility:\s*hidden\s*!important/,
   'The live product canvas must be visually hidden during the placeholder-only visual pass.');
-assert.match(shellCss, /left:\s*var\(--polygon-panel-gap\)/);
-assert.match(shellCss, /right:\s*var\(--polygon-panel-gap\)/);
-assert.match(shellCss, /width:\s*var\(--polygon-left-w\)/);
-assert.match(shellCss, /width:\s*var\(--polygon-right-w\)/);
-assert.match(shellCss, /background:\s*linear-gradient\(180deg,\s*var\(--polygon-top\),\s*var\(--polygon-top-2\)\)/);
-assert.match(shellCss, /\.polygon-shell-left-tabs[\s\S]*flex-wrap:\s*wrap/);
-assert.match(shellCss, /\.polygon-shell-tab\.active[\s\S]*background:\s*var\(--polygon-top\)/);
-assert.match(shellCss, /\.polygon-shell-tab\.active:focus[\s\S]*background:\s*var\(--polygon-top\)\s*!important/,
+assert.match(exactCss, /--polygon-board-gap:\s*65px/);
+assert.match(exactCss, /@media\s*\(max-width:\s*1120px\)[\s\S]*--polygon-board-gap:\s*45px/);
+assert.match(visualCss, /left:\s*var\(--polygon-panel-gap\)/);
+assert.match(visualCss, /right:\s*var\(--polygon-panel-gap\)/);
+assert.match(visualCss, /width:\s*var\(--polygon-left-w\)/);
+assert.match(visualCss, /width:\s*var\(--polygon-right-w\)/);
+assert.match(visualCss, /background:\s*linear-gradient\(180deg,\s*var\(--polygon-top\),\s*var\(--polygon-top-2\)\)/);
+assert.match(visualCss, /\.polygon-shell-left-tabs[\s\S]*flex-wrap:\s*wrap/);
+assert.match(visualCss, /\.polygon-shell-tab\.active[\s\S]*background:\s*var\(--polygon-top\)/);
+assert.match(visualCss, /\.polygon-shell-tab\.active:focus[\s\S]*background:\s*var\(--polygon-top\)\s*!important/,
   'Focused active tabs must keep the accepted olive active state.');
-assert.match(shellCss, /combat-lab-dock-collapsed[\s\S]*\.polygon-shell-topbar[\s\S]*\.polygon-shell-run-toolbar[\s\S]*display:\s*block\s*!important/,
+assert.match(visualCss, /combat-lab-dock-collapsed[\s\S]*\.polygon-shell-topbar[\s\S]*\.polygon-shell-run-toolbar[\s\S]*display:\s*block\s*!important/,
   'Collapsing the left panel must not hide the global run controls in the new top bar.');
-assert.match(shellCss, /\.polygon-shell-hidden-hosts[\s\S]*display:\s*none/);
-assert.match(shellCss, /combat-lab-dock-collapsed/);
-assert.match(shellCss, /polygon-shell-right-collapsed/);
-assert.match(shellCss, /@media\s*\(max-width:\s*1120px\)/);
-assert.match(shellCss, /\.simulation-sidebar[\s\S]*display:\s*none\s*!important/);
-assert.match(shellCss, /\.simulation-unit-bar[\s\S]*display:\s*none\s*!important/);
-assert.match(compatCss, /app-shell-menu-trigger/);
+assert.match(visualCss, /\.polygon-shell-hidden-hosts[\s\S]*display:\s*none/);
+assert.match(visualCss, /combat-lab-dock-collapsed/);
+assert.match(visualCss, /polygon-shell-right-collapsed/);
+assert.match(visualCss, /@media\s*\(max-width:\s*1120px\)/);
+assert.match(visualCss, /\.simulation-sidebar[\s\S]*display:\s*none\s*!important/);
+assert.match(visualCss, /\.simulation-unit-bar[\s\S]*display:\s*none\s*!important/);
+assert.match(visualCss, /app-shell-menu-trigger/);
 
 console.log('Exact prototype Polygon shell contract smoke passed.');
