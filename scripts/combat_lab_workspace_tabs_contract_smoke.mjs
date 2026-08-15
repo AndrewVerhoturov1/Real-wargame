@@ -27,9 +27,14 @@ assert.match(hosts, /tabId:\s*'settings'[^\n]*labelRu:\s*'Общие редак�
 for (const label of ['Программа', 'Лаборатория', 'Редактор карты', 'Редактор юнита', 'Серия', 'Метрики', 'Журнал']) {
   assert.match(tabs, new RegExp(`labelRu:\\s*'${label}'`));
 }
-assert.match(tabs, /shell\.append\(topbar, viewport, hiddenHosts\)/, 'Workspace must publish the accepted prototype shell only.');
+assert.match(tabs, /shell\.append\(topbar, historyStrip, viewport, hiddenHosts\)/,
+  'Workspace must publish the prototype top bar, honest history strip, floating panels, and hidden compatibility hosts.');
+assert.match(tabs, /polygon-shell-history-strip/);
+assert.match(tabs, /polygon-shell-history-status/);
 assert.match(tabs, /polygon-shell-hidden-hosts/);
 assert.doesNotMatch(tabs, /polygon-shell-primary-tabs|polygon-shell-timeline|polygon-shell-auxiliary-tabs/);
+assert.doesNotMatch(tabs, /44\s*\/\s*54|событий\s*·\s*◆|Демонстрационная replay/i,
+  'History chrome must not copy standalone demo event counts or replay state.');
 assert.match(
   tabs,
   /for\s*\(const\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s+of\s+this\.panels\)\s*\2\.hidden\s*=\s*\1\s*!==\s*normalized/,
