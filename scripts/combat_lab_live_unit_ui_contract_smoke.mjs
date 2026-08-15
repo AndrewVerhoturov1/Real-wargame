@@ -15,7 +15,7 @@ for (const id of ['unit', 'info', 'attention', 'memory']) {
   assert.match(hosts, new RegExp(`readonly\\s+${id}:\\s*HTMLElement`));
 }
 assert.match(tabs, /readonly rightHosts:\s*CombatLabRightPanelHosts/);
-assert.match(tabs, /data\.polygonRightContent/);
+assert.match(tabs, /dataset\.polygonRightContent/);
 
 for (const token of [
   'buildCombatLabLiveUnitSnapshot',
