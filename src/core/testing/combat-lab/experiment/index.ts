@@ -13,3 +13,4 @@ export * from './CombatLabBatchContracts';
 export * from './CombatLabBatchStatistics';
 export * from './CombatLabRepresentativeRuns';
 export * from './CombatLabBatchRunner';
+export * from './CombatLabSeriesRecords';
