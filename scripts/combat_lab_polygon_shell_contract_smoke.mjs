@@ -46,6 +46,8 @@ assert.match(tabs, /normalizeVisibleWorkspaceTab\(storedTab\)/,
   'Persisted utility tabs from the old shell must normalize to a visible prototype workspace.');
 assert.match(tabs, /POLYGON_LEFT_WORKSPACE_DEFINITIONS\.some\(\(definition\) => definition\.tabId === normalized\)/,
   'Visible-tab normalization must use the accepted seven-tab palette.');
+assert.ok((tabs.match(/requestWorkspaceResize\(\)/g) ?? []).length >= 3,
+  'The shell must request an initial viewport resize in addition to both collapse-state resizes.');
 
 assert.doesNotMatch(tabs, /polygon-shell-primary-tabs/, 'Global full-width workspace tabs are not part of the accepted prototype shell.');
 assert.doesNotMatch(tabs, /polygon-shell-auxiliary-tabs/, 'Old auxiliary tabs must not be visible in the new shell.');
@@ -79,6 +81,10 @@ assert.match(shellCss, /width:\s*var\(--polygon-right-w\)/);
 assert.match(shellCss, /background:\s*linear-gradient\(180deg,\s*var\(--polygon-top\),\s*var\(--polygon-top-2\)\)/);
 assert.match(shellCss, /\.polygon-shell-left-tabs[\s\S]*flex-wrap:\s*wrap/);
 assert.match(shellCss, /\.polygon-shell-tab\.active[\s\S]*background:\s*var\(--polygon-top\)/);
+assert.match(shellCss, /\.polygon-shell-tab\.active:focus[\s\S]*background:\s*var\(--polygon-top\)\s*!important/,
+  'Focused active tabs must keep the accepted olive active state.');
+assert.match(shellCss, /combat-lab-dock-collapsed[\s\S]*\.polygon-shell-topbar[\s\S]*\.polygon-shell-run-toolbar[\s\S]*display:\s*block\s*!important/,
+  'Collapsing the left panel must not hide the global run controls in the new top bar.');
 assert.match(shellCss, /\.polygon-shell-hidden-hosts[\s\S]*display:\s*none/);
 assert.match(shellCss, /combat-lab-dock-collapsed/);
 assert.match(shellCss, /polygon-shell-right-collapsed/);
