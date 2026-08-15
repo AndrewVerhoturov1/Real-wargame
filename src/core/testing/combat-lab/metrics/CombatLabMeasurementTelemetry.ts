@@ -112,8 +112,9 @@ export interface CombatLabResolvedMeasurementPeriodV1 {
 }
 
 export interface CombatLabTelemetryCursorV1 {
-  readonly committedShotIndex: number;
-  readonly impactIndex: number;
+  readonly lastCommittedShotId: string | null;
+  readonly lastImpactId: string | null;
+  readonly sourceEventOverflowCount: number;
 }
 
 export interface CombatLabTelemetryCollectionResultV1 {
@@ -163,9 +164,9 @@ export function listCombatLabTelemetryStreamCapabilities(): readonly CombatLabTe
 export function getCombatLabTelemetryStreamCapability(
   streamId: CombatLabTelemetryStreamIdV1,
 ): CombatLabTelemetryStreamCapabilityV1 {
-  const capability = CAPABILITY_BY_ID.get(streamId);
-  if (!capability) throw new Error(`Unknown Combat Lab telemetry stream: ${streamId}.`);
-  return capability;
+  const result = CAPABILITY_BY_ID.get(streamId);
+  if (!result) throw new Error(`Unknown Combat Lab telemetry stream: ${streamId}.`);
+  return result;
 }
 
 export function createCombatLabMeasurementDefinition(
@@ -223,16 +224,30 @@ export function setCombatLabMeasurementDefinitionEnabled(
   current: CombatLabMeasurementDefinitionV1,
   enabled: boolean,
 ): CombatLabMeasurementDefinitionV1 {
-  if (current.enabled === enabled) return current;
-  return reviseCombatLabMeasurementDefinition(current, { enabled });
+  return current.enabled === enabled ? current : reviseCombatLabMeasurementDefinition(current, { enabled });
 }
 
+/** Creates a baseline cursor when collection intentionally starts from the current moment. */
+export function createCombatLabTelemetryCursor(state: SimulationState): CombatLabTelemetryCursorV1 {
+  return Object.freeze({
+    lastCommittedShotId: state.infantryCombatProjectiles.committedShots.at(-1)?.shotId ?? null,
+    lastImpactId: state.infantryCombatProjectiles.impacts.at(-1)?.impactId ?? null,
+    sourceEventOverflowCount: finiteNonNegativeInteger(state.infantryCombatProjectiles.diagnostics.eventOverflowCount),
+  });
+}
+
+/**
+ * Incrementally projects canonical simulation events into selected measurement records.
+ * If a bounded source evicts data before the cursor consumes it, collection fails loudly
+ * instead of pretending raw coverage is complete.
+ */
 export function collectCombatLabTelemetry(
   input: CollectCombatLabTelemetryInputV1,
 ): CombatLabTelemetryCollectionResultV1 {
   const runId = nonEmpty(input.runId, 'Telemetry runId');
   assertUniqueDefinitions(input.definitions);
-  const cursor = normalizeCursor(input.cursor, input.state);
+  const cursor = normalizeCursor(input.cursor);
+  assertSourceCoverageStillIntact(input.state, cursor);
   const resolvedPeriodById = buildResolvedPeriodMap(input.resolvedPeriods ?? []);
   const activeDefinitions = input.definitions.filter((definition) => {
     if (!definition.enabled) return false;
@@ -244,8 +259,7 @@ export function collectCombatLabTelemetry(
   const records: CombatLabTelemetryRecordV1[] = [];
 
   const committedShots = input.state.infantryCombatProjectiles.committedShots;
-  for (let index = cursor.committedShotIndex; index < committedShots.length; index += 1) {
-    const shot = committedShots[index]!;
+  for (const shot of recordsAfterSourceId(committedShots, cursor.lastCommittedShotId, (item) => item.shotId, 'committed shot')) {
     for (const definition of shotDefinitions) {
       if (!participantMatches(definition, shot.shooterId)) continue;
       if (!periodMatches(definition, shot.committedSimulationSeconds, resolvedPeriodById)) continue;
@@ -254,8 +268,7 @@ export function collectCombatLabTelemetry(
   }
 
   const impacts = input.state.infantryCombatProjectiles.impacts;
-  for (let index = cursor.impactIndex; index < impacts.length; index += 1) {
-    const impact = impacts[index]!;
+  for (const impact of recordsAfterSourceId(impacts, cursor.lastImpactId, (item) => item.impactId, 'impact')) {
     for (const definition of impactDefinitions) {
       if (!participantMatches(definition, impact.shooterId, impact.hitUnitId)) continue;
       if (!periodMatches(definition, impact.impactSeconds, resolvedPeriodById)) continue;
@@ -266,8 +279,9 @@ export function collectCombatLabTelemetry(
   return Object.freeze({
     records: Object.freeze(records),
     cursor: Object.freeze({
-      committedShotIndex: committedShots.length,
-      impactIndex: impacts.length,
+      lastCommittedShotId: committedShots.at(-1)?.shotId ?? cursor.lastCommittedShotId,
+      lastImpactId: impacts.at(-1)?.impactId ?? cursor.lastImpactId,
+      sourceEventOverflowCount: finiteNonNegativeInteger(input.state.infantryCombatProjectiles.diagnostics.eventOverflowCount),
     }),
   });
 }
@@ -277,13 +291,6 @@ function buildShotRecord(
   definition: CombatLabMeasurementDefinitionV1,
   shot: SimulationState['infantryCombatProjectiles']['committedShots'][number],
 ): CombatLabTelemetryRecordV1 {
-  const sourceEntityRefs: CombatLabTelemetryEntityRefV1[] = [
-    entityRef('unit', shot.shooterId),
-    entityRef('shot', shot.shotId),
-    entityRef('weapon', shot.weaponInstanceId),
-    entityRef('weapon_definition', definitionRefId(shot.weaponDefinitionRef)),
-    entityRef('ammo_definition', definitionRefId(shot.ammoDefinitionRef)),
-  ];
   return freezeRecord({
     schemaVersion: 1,
     recordId: `${runId}:${definition.measurementDefinitionId}:shot:${shot.shotId}`,
@@ -293,7 +300,13 @@ function buildShotRecord(
     measurementDefinitionFingerprint: definition.fingerprint,
     streamId: definition.streamId,
     simulatedSeconds: canonicalSeconds(shot.committedSimulationSeconds),
-    sourceEntityRefs,
+    sourceEntityRefs: [
+      entityRef('unit', shot.shooterId),
+      entityRef('shot', shot.shotId),
+      entityRef('weapon', shot.weaponInstanceId),
+      entityRef('weapon_definition', definitionRefId(shot.weaponDefinitionRef)),
+      entityRef('ammo_definition', definitionRefId(shot.ammoDefinitionRef)),
+    ],
     payload: {
       shotId: shot.shotId,
       shooterId: shot.shooterId,
@@ -314,13 +327,13 @@ function buildImpactRecord(
   definition: CombatLabMeasurementDefinitionV1,
   impact: SimulationState['infantryCombatProjectiles']['impacts'][number],
 ): CombatLabTelemetryRecordV1 {
-  const sourceEntityRefs: CombatLabTelemetryEntityRefV1[] = [
+  const refs: CombatLabTelemetryEntityRefV1[] = [
     entityRef('unit', impact.shooterId),
     entityRef('shot', impact.shotId),
     entityRef('projectile', impact.projectileId),
     entityRef('impact', impact.impactId),
   ];
-  if (impact.hitUnitId) sourceEntityRefs.push(entityRef('unit', impact.hitUnitId));
+  if (impact.hitUnitId) refs.push(entityRef('unit', impact.hitUnitId));
   return freezeRecord({
     schemaVersion: 1,
     recordId: `${runId}:${definition.measurementDefinitionId}:impact:${impact.impactId}`,
@@ -330,7 +343,7 @@ function buildImpactRecord(
     measurementDefinitionFingerprint: definition.fingerprint,
     streamId: definition.streamId,
     simulatedSeconds: canonicalSeconds(impact.impactSeconds),
-    sourceEntityRefs,
+    sourceEntityRefs: refs,
     payload: {
       impactId: impact.impactId,
       shotId: impact.shotId,
@@ -340,9 +353,9 @@ function buildImpactRecord(
       hitObjectId: impact.hitObjectId,
       hitZone: impact.hitZone,
       materialId: impact.materialId,
-      xMetres: impact.point.x,
-      yMetres: impact.point.y,
-      zMetres: impact.point.z,
+      xMetres: impact.point.xMetres,
+      yMetres: impact.point.yMetres,
+      zMetres: impact.point.zMetres,
     },
   });
 }
@@ -352,9 +365,9 @@ function periodMatches(
   simulatedSeconds: number,
   resolvedPeriodById: ReadonlyMap<string, CombatLabResolvedMeasurementPeriodV1>,
 ): boolean {
-  const resolved = resolvePeriod(definition, resolvedPeriodById);
-  if (simulatedSeconds < resolved.startSeconds) return false;
-  return resolved.endSeconds === null || simulatedSeconds <= resolved.endSeconds;
+  const period = resolvePeriod(definition, resolvedPeriodById);
+  return simulatedSeconds >= period.startSeconds
+    && (period.endSeconds === null || simulatedSeconds <= period.endSeconds);
 }
 
 function resolvePeriod(
@@ -410,8 +423,6 @@ function normalizeDefinitionFields(input: {
   getCombatLabTelemetryStreamCapability(input.streamId);
   const participantUnitIds = input.participantUnitIds.map((id) => nonEmpty(id, 'Measurement participant unitId'));
   assertUnique(participantUnitIds, `Measurement ${measurementDefinitionId} participant unitId`);
-  const stateConstraints = input.stateConstraints.map(normalizeConstraint);
-  const collectionPeriod = normalizeCollectionPeriod(input.collectionPeriod);
   return {
     schemaVersion: 1 as const,
     measurementDefinitionId,
@@ -419,8 +430,8 @@ function normalizeDefinitionFields(input: {
     titleRu,
     streamId: input.streamId,
     participantUnitIds: Object.freeze(participantUnitIds),
-    stateConstraints: Object.freeze(stateConstraints),
-    collectionPeriod,
+    stateConstraints: Object.freeze(input.stateConstraints.map(normalizeConstraint)),
+    collectionPeriod: normalizeCollectionPeriod(input.collectionPeriod),
     enabled: Boolean(input.enabled),
   };
 }
@@ -431,14 +442,14 @@ function assertDefinitionSupported(definition: {
   readonly participantUnitIds: readonly string[];
   readonly stateConstraints: readonly CombatLabMeasurementStateConstraintV1[];
 }): void {
-  const capability = getCombatLabTelemetryStreamCapability(definition.streamId);
-  if (!capability.supported) {
-    throw new Error(`Measurement ${definition.measurementDefinitionId} uses unavailable stream ${definition.streamId}: ${capability.reasonRu ?? 'unsupported'}`);
+  const stream = getCombatLabTelemetryStreamCapability(definition.streamId);
+  if (!stream.supported) {
+    throw new Error(`Measurement ${definition.measurementDefinitionId} uses unavailable stream ${definition.streamId}: ${stream.reasonRu ?? 'unsupported'}`);
   }
-  if (definition.participantUnitIds.length > 0 && !capability.supportsParticipants) {
+  if (definition.participantUnitIds.length > 0 && !stream.supportsParticipants) {
     throw new Error(`Measurement ${definition.measurementDefinitionId} stream ${definition.streamId} does not support participant filters.`);
   }
-  if (definition.stateConstraints.length > 0 && !capability.supportsStateConstraints) {
+  if (definition.stateConstraints.length > 0 && !stream.supportsStateConstraints) {
     throw new Error(`Measurement ${definition.measurementDefinitionId} stream ${definition.streamId} does not support state constraints yet.`);
   }
 }
@@ -452,10 +463,7 @@ function normalizeConstraint(value: CombatLabMeasurementStateConstraintV1): Comb
 }
 
 function normalizeCollectionPeriod(period: CombatLabMeasurementCollectionPeriodV1): CombatLabMeasurementCollectionPeriodV1 {
-  return Object.freeze({
-    start: normalizeBoundary(period.start),
-    end: normalizeBoundary(period.end),
-  });
+  return Object.freeze({ start: normalizeBoundary(period.start), end: normalizeBoundary(period.end) });
 }
 
 function normalizeBoundary(boundary: CombatLabMeasurementBoundaryV1): CombatLabMeasurementBoundaryV1 {
@@ -525,27 +533,41 @@ function buildResolvedPeriodMap(
   return map;
 }
 
-function normalizeCursor(
-  cursor: CombatLabTelemetryCursorV1 | undefined,
-  state: SimulationState,
-): CombatLabTelemetryCursorV1 {
-  const committedShotIndex = cursor?.committedShotIndex ?? 0;
-  const impactIndex = cursor?.impactIndex ?? 0;
-  if (!Number.isInteger(committedShotIndex) || committedShotIndex < 0 || committedShotIndex > state.infantryCombatProjectiles.committedShots.length) {
-    throw new Error('Telemetry committedShotIndex is invalid for current state.');
+function normalizeCursor(cursor: CombatLabTelemetryCursorV1 | undefined): CombatLabTelemetryCursorV1 {
+  if (!cursor) return Object.freeze({ lastCommittedShotId: null, lastImpactId: null, sourceEventOverflowCount: 0 });
+  if (!Number.isInteger(cursor.sourceEventOverflowCount) || cursor.sourceEventOverflowCount < 0) {
+    throw new Error('Telemetry sourceEventOverflowCount must be a non-negative integer.');
   }
-  if (!Number.isInteger(impactIndex) || impactIndex < 0 || impactIndex > state.infantryCombatProjectiles.impacts.length) {
-    throw new Error('Telemetry impactIndex is invalid for current state.');
+  return Object.freeze({
+    lastCommittedShotId: cursor.lastCommittedShotId === null ? null : nonEmpty(cursor.lastCommittedShotId, 'Telemetry lastCommittedShotId'),
+    lastImpactId: cursor.lastImpactId === null ? null : nonEmpty(cursor.lastImpactId, 'Telemetry lastImpactId'),
+    sourceEventOverflowCount: cursor.sourceEventOverflowCount,
+  });
+}
+
+function assertSourceCoverageStillIntact(state: SimulationState, cursor: CombatLabTelemetryCursorV1): void {
+  const overflow = finiteNonNegativeInteger(state.infantryCombatProjectiles.diagnostics.eventOverflowCount);
+  if (overflow > cursor.sourceEventOverflowCount) {
+    throw new Error(`Combat Lab telemetry source overflowed before collection completed (${cursor.sourceEventOverflowCount} -> ${overflow}).`);
   }
-  return Object.freeze({ committedShotIndex, impactIndex });
+}
+
+function recordsAfterSourceId<T>(
+  values: readonly T[],
+  lastId: string | null,
+  getId: (value: T) => string,
+  label: string,
+): readonly T[] {
+  if (lastId === null) return values;
+  const index = values.findIndex((value) => getId(value) === lastId);
+  if (index < 0) throw new Error(`Combat Lab telemetry lost ${label} cursor ${lastId}; source coverage is incomplete.`);
+  return values.slice(index + 1);
 }
 
 function assertUniqueDefinitions(definitions: readonly CombatLabMeasurementDefinitionV1[]): void {
   const ids = new Set<string>();
   for (const definition of definitions) {
-    if (ids.has(definition.measurementDefinitionId)) {
-      throw new Error(`Duplicate MeasurementDefinitionId: ${definition.measurementDefinitionId}.`);
-    }
+    if (ids.has(definition.measurementDefinitionId)) throw new Error(`Duplicate MeasurementDefinitionId: ${definition.measurementDefinitionId}.`);
     ids.add(definition.measurementDefinitionId);
   }
 }
@@ -562,8 +584,8 @@ function entityRef(kind: CombatLabTelemetryEntityKindV1, id: string): CombatLabT
   return Object.freeze({ kind, id: nonEmpty(id, `Telemetry ${kind} id`) });
 }
 
-function definitionRefId(value: { readonly id: string; readonly revision?: number }): string {
-  return value.revision === undefined ? value.id : `${value.id}@${value.revision}`;
+function definitionRefId(value: { readonly definitionId: string; readonly revision: number }): string {
+  return `${nonEmpty(value.definitionId, 'Telemetry definitionId')}@${value.revision}`;
 }
 
 function capability(
@@ -593,6 +615,10 @@ function nonEmpty(value: unknown, label: string): string {
 
 function finiteOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function finiteNonNegativeInteger(value: unknown): number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0;
 }
 
 function canonicalSeconds(value: number): number {
