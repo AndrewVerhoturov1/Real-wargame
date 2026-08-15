@@ -30,12 +30,15 @@ assert.equal((hosts.match(/tabId:/g) ?? []).length, 8, 'Prototype shell keeps th
 assert.match(hosts, /tabId:\s*'parameters'[^\n]*labelRu:\s*'Параметры'/);
 assert.match(hosts, /tabId:\s*'settings'[^\n]*labelRu:\s*'Общие редакторы'/);
 assert.doesNotMatch(hosts, /labelRu:\s*'Стенд'/);
-assert.match(tabs, /shell\.append\(topbar, viewport, hiddenHosts\)/,
-  'The Polygon shell must compose the prototype top bar, floating panels, and hidden compatibility hosts.');
+assert.match(tabs, /shell\.append\(topbar, historyStrip, viewport, hiddenHosts\)/,
+  'The Polygon shell must compose the prototype top bar, honest history chrome, floating panels, and hidden compatibility hosts.');
+assert.match(tabs, /polygon-shell-history-strip/);
 assert.match(tabs, /polygon-shell-left-tabs/);
 assert.match(tabs, /polygon-shell-right-tabs/);
 assert.match(tabs, /polygon-shell-hidden-hosts/);
 assert.doesNotMatch(tabs, /polygon-shell-primary-tabs|polygon-shell-timeline|polygon-shell-auxiliary-tabs/);
+assert.doesNotMatch(tabs, /44\s*\/\s*54|событий\s*·\s*◆|Демонстрационная replay/i,
+  'Stage 10 shell must not synthesize standalone prototype Journal data.');
 assert.match(tabs, /setRightCollapsed\(/);
 assert.match(
   tabs,
@@ -66,6 +69,9 @@ assert.match(main, /installLaboratoryPlaceholder/);
 assert.match(css, /\.combat-lab-workspace-tab-list/);
 assert.match(css, /overflow-x:\s*hidden/);
 assert.match(shellCss, /\.polygon-shell-topbar/);
+assert.match(shellCss, /\.polygon-shell-history-strip/);
+assert.match(shellCss, /--polygon-history-h:\s*30px/);
+assert.match(shellCss, /--polygon-chrome-h:\s*calc\(var\(--polygon-topbar-h\) \+ var\(--polygon-history-h\)\)/);
 assert.match(shellCss, /\.polygon-shell-side-panel/);
 assert.match(shellCss, /\.polygon-shell-hidden-hosts/);
 assert.doesNotMatch(shellCss, /\.polygon-shell-primary-tabs|\.polygon-shell-timeline/);
