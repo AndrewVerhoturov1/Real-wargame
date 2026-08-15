@@ -14,17 +14,22 @@
 
 ## Current focus
 
-Пользователем принята Right Panel v1 поверх Series v1.1: правая панель теперь имеет принятые вкладки Юнит, Инфо, Внимание и Память с мировыми оверлеями внимания/памяти, субъективными контактами, фильтрацией и явными границами prototype/production. Канонический внешний артефакт — `polygon-right-panel-v1.html`, `2 271 249` байт, SHA-256 `ccd2c3b9c5cc8638b8a4f47ef1a35925a8979076066a6f0733ff388c214fa80f`. По явной инструкции пользователя HTML этой приёмкой в репозиторий не добавляется; `ACCEPTED_RIGHT_PANEL_V1.md` фиксирует контракт.
+Пользователем принята **Interface Linkage v1** поверх актуальной Right Panel v1 / `memory-tab-v3`. Итерация сохраняет новую правую панель `Юнит / Инфо / Внимание / Память` и добавляет сквозную связность существующих разделов: Роль отдельно от Архетипа, linked-entity переходы и `Используется`, provenance Laboratory, двустороннюю связь Программа↔Журнал, единые Метрики для Серии, контекст исторического прогона и полный UX-контракт `Сохранить эксперимент`.
+
+Канонический внешний артефакт для ручной загрузки: `polygon-interface-linkage-v1.html`, `2 292 772` байта, SHA-256 `4f33f19578698947cd629a88c6963c325895995fdd78a5380966ae1ef2fa1cfd`.
+
+По явной инструкции пользователя HTML агентом **не добавляется**. Контракт зафиксирован в `ACCEPTED_INTERFACE_LINKAGE_V1.md`.
 
 ## Next step
 
-Следующие вкладки правого инспектора — Опасность, Скрытность, Позиции и расширенное Оружие — проектировать отдельно, начиная только от Right Panel v1 и сначала согласуя текстовую концепцию. Production wiring Внимания и Памяти должен читать authoritative attention/perception/visibility/memory state, не пересчитывать gameplay из UI и соблюдать performance contract и исторические границы знания Journal.
+Пользователь вручную загружает `polygon-interface-linkage-v1.html` в `docs/subprojects/polygon-prototype/prototypes/` и сверяет размер/SHA-256. После этого все следующие UI-итерации Полигона начинать только от Interface Linkage v1. Следующие вкладки правого инспектора и production wiring проектировать отдельно, не откатывая принятую связность интерфейса и Right Panel v1.
 
 ## Read first
 
 - `AGENTS.md`
 - `docs/subprojects/polygon-prototype/STATUS.md`
 - `docs/subprojects/polygon-prototype/SUBPROJECT.md`
+- `docs/subprojects/polygon-prototype/ACCEPTED_INTERFACE_LINKAGE_V1.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_RIGHT_PANEL_V1.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_SERIES_V1.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_LABORATORY_V1.md`
@@ -39,6 +44,7 @@
 
 ## Main files
 
+- `docs/subprojects/polygon-prototype/ACCEPTED_INTERFACE_LINKAGE_V1.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_RIGHT_PANEL_V1.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_SERIES_V1.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_LABORATORY_V1.md`
@@ -53,8 +59,14 @@
 
 ## Safety rules
 
-- Right Panel v1 является единственной текущей канонической базой следующей UI-итерации Полигона; не начинать новый UI от чистого Series v1.1, Laboratory v1, Global Editors v1, Journal v4, Metrics v18 или v44.
-- До ручной загрузки `polygon-right-panel-v1.html` использовать SHA-256 `ccd2c3b9c5cc8638b8a4f47ef1a35925a8979076066a6f0733ff388c214fa80f` как идентичность принятой внешней базы.
+- Interface Linkage v1 является единственной текущей канонической базой следующей UI-итерации Полигона; не начинать новый UI от чистого Right Panel v1, Series v1.1, Laboratory v1, Global Editors v1, Journal v4, Metrics v18 или v44.
+- До ручной загрузки `polygon-interface-linkage-v1.html` использовать SHA-256 `4f33f19578698947cd629a88c6963c325895995fdd78a5380966ae1ef2fa1cfd` как идентичность принятой внешней базы.
+- Не откатывать изменения `memory-tab-v3` и принятую Right Panel v1 при переносе или развитии Interface Linkage v1.
+- Сохранять общий linked-entity UX: акцентный текст со штриховым/пунктирным подчёркиванием и переходом к источнику.
+- Роль и Архетип бойца являются разными сущностями и не должны снова смешиваться терминологически.
+- Laboratory не подставляет выдуманный baseline при доступном authoritative UI-источнике параметра.
+- Программа↔Журнал и Метрики↔Серия являются обязательными сквозными связями интерфейса.
+- `Сохранить эксперимент` концептуально включает карту, юниты, Программу, Лабораторию и Метрики; map-only операции называются отдельно.
 - Внимание и Память являются субъективными представлениями конкретного бойца; UI/renderer не становится владельцем gameplay truth и не должен раскрывать скрытые объективные данные.
 - В Journal на историческом `viewTime` запрещено показывать контакты или знания, полученные позже выбранного времени.
 - Оверлеи Внимания и Памяти должны оставаться world-bound при zoom/pan и не должны строиться как display object на каждую клетку или запускать full-map gameplay computation из UI.
@@ -62,7 +74,6 @@
 - Не считать standalone Series v1 доказательством наличия production background runner, telemetry aggregation, result storage или deterministic replay.
 - Для production-воспроизведения конкретного прогона сохранять не только seed, но и замороженный experiment definition и версию/идентичность simulation runtime.
 - Не создавать параллельный каталог Метрик внутри Серии; агрегировать выбранные measurement definitions и их production telemetry.
-- Не ломать принятые Редактор юнита, Редактор карты, Программа, Metrics v18, Journal v4, Global Editors v1, Laboratory v1, Series v1 и Right Panel v1 без отдельной задачи.
 - Не создавать параллельный вручную скопированный production-каталог параметров Laboratory; использовать adapter/descriptor слой над authoritative владельцами.
 - Перед следующим крупным UI-изменением сначала согласовать текстовую концепцию; до явного одобрения HTML не изменять.
 - Не заменять интегрированное отображение пехоты реалистичными фигурами без отдельного решения пользователя.
