@@ -12,17 +12,19 @@ import './ui/combat-lab-batch-results.css';
 import './game-editors/combat-lab-game-editors.css';
 import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
 import { collectGameApplicationElements, GameApplication } from '../game/GameApplication';
-import type { GameApplicationContext, GamePauseController } from '../game/GameApplicationTypes';
+import type { GameApplicationContext, GameApplicationExtension, GamePauseController } from '../game/GameApplicationTypes';
 import { createDefaultGameEditorRegistry } from '../game-editors/createDefaultGameEditorRegistry';
 import { installAppShellMenu } from '../shared/AppShellMenu';
 import { getAppOverlayCoordinator } from '../shared/app-overlay/AppOverlayCoordinator';
 import { CombatLabExtension } from './CombatLabExtension';
+import { getCombatLabWorkspaceServices } from './CombatLabWorkspaceServices';
 import { CombatLabGameEditors } from './game-editors/CombatLabGameEditors';
 import {
   installCombatLabQuickParameters,
   type CombatLabQuickParametersInstallationV1,
 } from './parameters/installCombatLabQuickParameters';
 import { CombatLabVisualSession } from './runtime/CombatLabVisualSession';
+import { CombatLabLiveUnitInspector } from './ui/CombatLabLiveUnitInspector';
 import {
   getCombatLabWorkspaceHosts,
   getOnlyCombatLabWorkspaceRoot,
@@ -49,10 +51,10 @@ async function startCombatLab(): Promise<void> {
       state: session.state,
       elements: collectGameApplicationElements(),
       pauseController: createSessionPauseController(session, extensionRoot),
-      installExtension: (context) => CombatLabExtension.create(
+      installExtension: (context) => installCombatLabExtension(
         extensionRoot,
         session,
-        createCombatLabRenderContext(context),
+        context,
       ),
     });
     const workspaceRoot = getOnlyCombatLabWorkspaceRoot();
@@ -90,6 +92,48 @@ window.addEventListener('beforeunload', () => {
   application = null;
   shellMenuInstallation.destroy();
 });
+
+function installCombatLabExtension(
+  extensionRoot: HTMLElement,
+  session: CombatLabVisualSession,
+  context: GameApplicationContext,
+): GameApplicationExtension {
+  const extension = CombatLabExtension.create(
+    extensionRoot,
+    session,
+    createCombatLabRenderContext(context),
+  );
+  const workspaceRoot = getOnlyCombatLabWorkspaceRoot();
+  const services = getCombatLabWorkspaceServices(workspaceRoot);
+  const unitHost = workspaceRoot.querySelector<HTMLElement>('[data-polygon-right-content="unit"]');
+  if (!unitHost) {
+    extension.destroy();
+    throw new Error('Не найден host правой вкладки «Юнит».');
+  }
+
+  const liveUnitInspector = CombatLabLiveUnitInspector.create({
+    host: unitHost,
+    state: session.state,
+    session,
+    editorEventRoot: extensionRoot,
+    getRoleLabelRu: (unitId) => (
+      services.draft.get().roles.find((role) => role.unitId === unitId)?.titleRu ?? null
+    ),
+  });
+  const removeTicker = context.addTickerListener(() => liveUnitInspector.refresh());
+  const removeSelectionListener = services.selection.subscribe(() => liveUnitInspector.refresh(true));
+  const removeDraftListener = services.draft.subscribe(() => liveUnitInspector.refresh(true));
+
+  return {
+    destroy: () => {
+      removeDraftListener();
+      removeSelectionListener();
+      removeTicker();
+      liveUnitInspector.destroy();
+      extension.destroy();
+    },
+  };
+}
 
 function installLaboratoryPlaceholder(host: HTMLElement): void {
   const message = document.createElement('div');
