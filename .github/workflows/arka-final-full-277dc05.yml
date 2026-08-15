@@ -1,0 +1,20 @@
+name: ARKA Final Full Verify 277dc05
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run verify:preview -- --report /tmp/arka-preview-verification.json
+      - run: npm run build:app
