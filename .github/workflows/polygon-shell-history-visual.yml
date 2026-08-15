@@ -1,0 +1,45 @@
+name: Polygon Shell History External Preview Visual QA
+
+on:
+  pull_request:
+    branches:
+      - ci/polygon-shell-history-visual-base-20260815t223900z-7b84edc
+
+permissions:
+  contents: read
+
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TARGET_URL: https://repo-5u9lnrodt-111s-projects-807221af.vercel.app/combat-lab.html
+      EXPECTED_PRODUCT_SHA: 7b84edc5fc72532273f62e9ea2bc48bad989aba2
+      CANONICAL_FEATURE_BRANCH: feature/20260815-polygon-arka-shell
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Playwright
+        run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run deployed Polygon shell history scenario
+        run: npx playwright test --config=ci/playwright.polygon-shell-history-visual.config.ts
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: polygon-shell-history-visual-evidence-${{ github.run_id }}
+          path: |
+            artifacts/vercel-e2e/**
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
