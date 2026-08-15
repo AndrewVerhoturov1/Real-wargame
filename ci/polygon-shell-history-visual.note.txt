@@ -1,0 +1,2 @@
+Temporary CI-only visual harness for product SHA 7b84edc5fc72532273f62e9ea2bc48bad989aba2.
+Do not merge into product branches.
