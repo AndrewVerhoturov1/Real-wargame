@@ -194,7 +194,7 @@ export class CombatLabWorkspaceTabs {
     this.listen(this.rightToggle, 'click', () => this.setRightCollapsed(!this.rightCollapsed));
 
     const storedTab = readStoredTab(this.storage);
-    this.activeTab = normalizeCombatLabWorkspaceTab(storedTab);
+    this.activeTab = normalizeVisibleWorkspaceTab(storedTab);
     this.activate(this.activeTab, false);
 
     this.activeRightTab = normalizeRightPanelTab(readStoredRightTab(this.storage));
@@ -339,6 +339,13 @@ function writeStoredRightTab(storage: Storage | null, tabId: PolygonRightPanelTa
   } catch {
     // Хранилище необязательно: выбор вкладки остаётся в памяти текущей страницы.
   }
+}
+
+function normalizeVisibleWorkspaceTab(value: unknown): CombatLabWorkspaceTab {
+  const normalized = normalizeCombatLabWorkspaceTab(value);
+  return POLYGON_LEFT_WORKSPACE_DEFINITIONS.some((definition) => definition.tabId === normalized)
+    ? normalized
+    : 'scene';
 }
 
 function normalizeRightPanelTab(value: unknown): PolygonRightPanelTab {
