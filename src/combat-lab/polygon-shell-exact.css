@@ -93,11 +93,13 @@ body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-top-but
 }
 
 body.app-shell-mode-combat-lab .polygon-shell-run-toolbar {
-  max-width: min(700px, 58vw);
+  max-width: min(760px, 64vw);
+  overflow: visible;
 }
 
 body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar {
   gap: 4px;
+  overflow: visible;
 }
 
 body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button,
@@ -110,6 +112,64 @@ body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment
 
 body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button {
   padding: 0 8px;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button:nth-of-type(2) {
+  order: 1;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button:nth-of-type(1) {
+  order: 2;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-speed-field {
+  order: 3;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button:nth-of-type(3) {
+  order: 4;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-settings-summary {
+  order: 5;
+  flex: 0 0 auto;
+  display: flex !important;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-settings-summary__duration,
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-settings-summary__seed {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 4px;
+  color: #fffef4;
+  background: rgba(255, 255, 255, .08);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-settings-summary__duration {
+  order: 1;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-settings-summary__seed {
+  order: 2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-settings-summary__grid,
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-settings-summary__button {
+  display: none !important;
 }
 
 body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-speed {
@@ -184,6 +244,14 @@ body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-tab {
   line-height: 1;
 }
 
+/* The reference uses the same 10px text but a narrower Inter rendering. Keep
+   the text size and reduce only horizontal chrome so the intended two-row
+   grouping is stable on Linux Chromium as well as Windows. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-left-tabs .polygon-shell-tab {
+  padding-left: 7px;
+  padding-right: 7px;
+}
+
 body.app-shell-mode-combat-lab .polygon-shell-panel-body {
   background: rgba(250, 249, 244, .72);
 }
@@ -252,7 +320,20 @@ body.app-shell-mode-combat-lab .app-shell-menu-trigger::before {
   }
 
   body.app-shell-mode-combat-lab .polygon-shell-run-toolbar {
-    max-width: min(430px, 52vw);
+    max-width: min(660px, 72vw);
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button:nth-of-type(2) {
+    width: 38px;
+    min-width: 38px;
+    overflow: hidden;
+    padding: 0;
+    font-size: 0;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button:nth-of-type(2)::before {
+    content: '▶';
+    font-size: 15px;
   }
 
   body.app-shell-mode-combat-lab .polygon-shell-topbar-right > .polygon-shell-top-button:nth-child(-n+2) {
@@ -268,5 +349,9 @@ body.app-shell-mode-combat-lab .app-shell-menu-trigger::before {
   body.app-shell-mode-combat-lab .polygon-shell-map-board {
     left: 64px;
     right: 64px;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-settings-summary {
+    display: none !important;
   }
 }
