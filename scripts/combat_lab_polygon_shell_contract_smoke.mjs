@@ -22,12 +22,14 @@ for (const [id, label] of primaryTabs) {
 }
 assert.match(hosts, /COMBAT_LAB_PRIMARY_WORKSPACE_TAB_DEFINITIONS/);
 assert.match(hosts, /COMBAT_LAB_AUXILIARY_WORKSPACE_TAB_DEFINITIONS/);
+assert.match(hosts, /POLYGON_RIGHT_PANEL_DEFINITIONS/);
 assert.match(hosts, /tabId:\s*'parameters'[^\n]*labelRu:\s*'Параметры'/);
 assert.match(hosts, /tabId:\s*'settings'[^\n]*labelRu:\s*'Общие редакторы'/);
 
 for (const label of ['Юнит', 'Инфо', 'Внимание', 'Память']) {
-  assert.match(tabs, new RegExp(`labelRu:\\s*'${label}'`));
+  assert.match(hosts, new RegExp(`labelRu:\\s*'${label}'`));
 }
+assert.match(tabs, /readonly rightHosts:\s*CombatLabRightPanelHosts/);
 assert.match(tabs, /polygon-shell-header/);
 assert.match(tabs, /polygon-shell-primary-tabs/);
 assert.match(tabs, /polygon-shell-left/);
