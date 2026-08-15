@@ -5,6 +5,7 @@ import './combat-lab.css';
 import './combat-lab-workspace.css';
 import './combat-lab-ui-polish.css';
 import './combat-lab-header-final.css';
+import './polygon-shell.css';
 import './ui/combat-lab-experiment-run.css';
 import './ui/combat-lab-batch-results.css';
 import './game-editors/combat-lab-game-editors.css';
