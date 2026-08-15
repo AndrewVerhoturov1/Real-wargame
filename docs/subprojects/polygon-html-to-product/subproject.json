@@ -5,8 +5,8 @@
   "updated_at": "2026-08-16",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
   "goal": "Перенести принятый интерфейс и весь planned functional scope Полигона из HTML-прототипа в штатную реализацию Real Wargame поверх настоящих product owners.",
-  "current_focus": "После полного planned-scope аудита History/viewTime/global timeline выделены из ХРОНИСТА в отдельную дорожку ИСТОРИК. ХРОНИСТ ведёт Journal LIVE, Metrics, Laboratory, Series, deterministic rerun, persistence и full Save/Open по вертикалям C1-C10. Product implementation этих вертикалей ещё не начиналась.",
-  "next_step": "ХРОНИСТ: начать C1 Run identity + Structured LIVE Journal foundation на отдельной feature-ветке от свежего exact HEAD real-wargame-preview. ИСТОРИК может начинать History после стабилизации RunId/JournalEventRef из C1 и не блокирует Metrics/Lab/Series.",
+  "current_focus": "History/viewTime/global timeline выделены в отдельную дорожку ИСТОРИК. ХРОНИСТ выполняет non-History вертикали C1-C10. C1 Run identity + Structured LIVE Journal foundation реализован как непроверенный до конца product candidate 264272b246a1fd235e1a55a372cc58262fd9f8cc и остаётся В РАБОТЕ до штатных smoke/tsc/build. Остальные verticals имеют readiness в CHRONIST_READINESS.md.",
+  "next_step": "Получить штатные repository проверки exact C1 candidate 264272b246a1fd235e1a55a372cc58262fd9f8cc. После зелёных gates принять C1 и параллельно открыть C2 Journal LIVE, C3 Metrics telemetry, C5 Laboratory runtime, C6 Series records; ИСТОРИК может использовать стабильные Run/Event refs C1 отдельно.",
   "key_decisions": [
     "HTML задаёт UX и planned functional scope, но не production architecture и не источник gameplay truth.",
     "Перенос считается полным только когда сохранены пользовательские сценарии, связи разделов и весь принятый planned scope, а не только внешний интерфейс.",
@@ -16,7 +16,8 @@
     "ИСТОРИК отвечает за HistoryProvider, viewTime, global timeline, historical projections, future leakage и recorded historical replay при history-artifact семантике.",
     "После C1 ХРОНИСТ и ИСТОРИК могут работать параллельно; History не блокирует Metrics/Lab/Series/Save.",
     "Current batch runner, fixed Combat Lab metrics и узкий experiment codec переиспользуются; не создаются второй runner, второй Metrics catalog или второй parameter catalog.",
-    "Каждый accepted feature SHA обязан обновить readiness в subproject.json, STATUS.md, implementation plan и JOURNAL.md.",
+    "C1 candidate не получает статус ГОТОВО без focused smoke, behavior smoke, TypeScript и build gates.",
+    "Каждый accepted feature SHA обязан обновить readiness в subproject.json, STATUS.md, implementation plan/readiness и JOURNAL.md.",
     "Transfer в real-wargame-preview и deployment остаются отдельными пользовательскими разрешениями."
   ],
   "must_read_first": [
@@ -28,6 +29,7 @@
     "docs/subprojects/polygon-html-to-product/EXECUTION_STREAMS.md",
     "docs/subprojects/polygon-html-to-product/CHRONIST_EXPERIMENT_CONTRACT.md",
     "docs/subprojects/polygon-html-to-product/CHRONIST_IMPLEMENTATION_PLAN.md",
+    "docs/subprojects/polygon-html-to-product/CHRONIST_READINESS.md",
     "docs/subprojects/polygon-html-to-product/HISTORY_EXECUTOR_HANDOFF.md",
     "docs/subprojects/polygon-html-to-product/PROJECT_MAP_TEMPLATE.md",
     "docs/subprojects/polygon-html-to-product/JOURNAL.md",
@@ -45,6 +47,7 @@
     "docs/subprojects/polygon-html-to-product/EXECUTION_STREAMS.md",
     "docs/subprojects/polygon-html-to-product/CHRONIST_EXPERIMENT_CONTRACT.md",
     "docs/subprojects/polygon-html-to-product/CHRONIST_IMPLEMENTATION_PLAN.md",
+    "docs/subprojects/polygon-html-to-product/CHRONIST_READINESS.md",
     "docs/subprojects/polygon-html-to-product/HISTORY_EXECUTOR_HANDOFF.md",
     "docs/subprojects/polygon-html-to-product/PROJECT_MAP_TEMPLATE.md",
     "docs/subprojects/polygon-html-to-product/JOURNAL.md"
@@ -57,25 +60,20 @@
     "docs/subprojects/polygon-html-to-product/EXECUTION_STREAMS.md",
     "docs/subprojects/polygon-html-to-product/CHRONIST_EXPERIMENT_CONTRACT.md",
     "docs/subprojects/polygon-html-to-product/CHRONIST_IMPLEMENTATION_PLAN.md",
+    "docs/subprojects/polygon-html-to-product/CHRONIST_READINESS.md",
     "docs/subprojects/polygon-html-to-product/HISTORY_EXECUTOR_HANDOFF.md",
     "docs/subprojects/polygon-html-to-product/PROJECT_MAP_TEMPLATE.md",
     "docs/subprojects/polygon-html-to-product/JOURNAL.md"
   ],
-  "do_not_read_by_default": [
-    "src/",
-    "public/",
-    "docs/subprojects/polygon-prototype/prototypes/"
-  ],
-  "commands": [
-    "npm run docs:sync",
-    "npm run docs:check"
-  ],
+  "do_not_read_by_default": ["src/", "public/", "docs/subprojects/polygon-prototype/prototypes/"],
+  "commands": ["npm run docs:sync", "npm run docs:check"],
   "important_sessions": [],
   "context_sources": [
     "polygon-series-v1.1-memory-v3-interface-linkage.html",
     "docs/subprojects/polygon-prototype/ACCEPTED_INTERFACE_LINKAGE_V1.md",
     "docs/subprojects/polygon-html-to-product/CHRONIST_EXPERIMENT_CONTRACT.md",
-    "docs/subprojects/polygon-html-to-product/CHRONIST_IMPLEMENTATION_PLAN.md"
+    "docs/subprojects/polygon-html-to-product/CHRONIST_IMPLEMENTATION_PLAN.md",
+    "docs/subprojects/polygon-html-to-product/CHRONIST_READINESS.md"
   ],
   "safety_rules": [
     "Каждая product-code вертикаль начинается от заново проверенного exact HEAD real-wargame-preview и отдельной feature-ветки.",
