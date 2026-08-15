@@ -367,6 +367,7 @@ function writeStoredRightTab(storage: Storage | null, tabId: PolygonRightPanelTa
 }
 
 function normalizeVisibleWorkspaceTab(value: unknown): CombatLabWorkspaceTab {
+  if (value === null || value === undefined || value === '') return 'program';
   const normalized = normalizeCombatLabWorkspaceTab(value);
   return POLYGON_LEFT_WORKSPACE_DEFINITIONS.some((definition) => definition.tabId === normalized)
     ? normalized
