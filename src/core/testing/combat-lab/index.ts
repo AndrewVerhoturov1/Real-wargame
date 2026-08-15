@@ -6,4 +6,5 @@ export * from './CombatLabMetrics';
 export * from './CombatLabTargetSurvivability';
 export * from './CombatLabRunner';
 export * from './CombatLabScenarioRegistry';
+export * from './metrics/CombatLabMeasurementTelemetry';
 export * from './experiment';
