@@ -13,9 +13,11 @@ import {
 import {
   CombatLabExperimentRunJournal,
   buildCombatLabExperimentVisualSnapshot,
+  createCombatLabRunIdentity,
   type CombatLabExperimentVisualRuntimeSnapshotV1,
   type CombatLabExperimentVisualStatusV1,
   type CombatLabRepresentativeReplayContextV1,
+  type CombatLabRunIdentityV1,
 } from './CombatLabExperimentRunState';
 
 const RUNTIME_PUBLICATION_INTERVAL_MS = 100;
@@ -27,7 +29,8 @@ export interface CombatLabExperimentVisualControllerOptions {
 }
 
 export class CombatLabExperimentVisualController implements CombatLabVisualStepHooks {
-  private readonly journal = new CombatLabExperimentRunJournal();
+  private journal: CombatLabExperimentRunJournal | null = null;
+  private runIdentity: CombatLabRunIdentityV1 | null = null;
   private executor: CombatLabScenarioExecutor | null = null;
   private experiment: CombatLabExperimentV1 | null = null;
   private selectedSeed = 1;
@@ -60,13 +63,14 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
     this.options.session.setPaused(true);
     this.options.session.resetExperimentScene(experiment.sceneSnapshot, this.selectedSeed);
     this.experiment = experiment;
+    this.runIdentity = createCombatLabRunIdentity(experiment, this.selectedSeed);
+    this.journal = new CombatLabExperimentRunJournal(this.runIdentity);
     const executor = CombatLabScenarioExecutor.create(experiment, this.options.session.state);
     this.executor = executor;
     this.visualRevision += 1;
     this.visualStatus = 'ready';
     this.blockedBeforeTick = false;
     this.representative = null;
-    this.journal.clear();
     this.publishImmediate(executor.getSnapshot());
   }
 
@@ -221,6 +225,8 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
     this.destroyed = true;
     this.executor = null;
     this.experiment = null;
+    this.journal = null;
+    this.runIdentity = null;
     this.publishedSnapshot = null;
   }
 
@@ -230,7 +236,7 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
     results: readonly CombatLabCommandResultV1[] = [],
   ): void {
     const experiment = this.requireExperiment();
-    for (const entry of this.journal.recordTransitions(experiment, previous, next, results)) {
+    for (const entry of this.requireJournal().recordTransitions(experiment, previous, next, results)) {
       this.options.session.appendRunJournal(entry.messageRu);
     }
   }
@@ -264,10 +270,11 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
       core,
       experiment: this.requireExperiment(),
       seed: this.selectedSeed,
+      runIdentity: this.requireRunIdentity(),
       visualRevision: this.visualRevision,
       visualStatus: this.visualStatus,
       speed: this.options.session.getSpeed(),
-      journal: this.journal.snapshot(),
+      journal: this.requireJournal().snapshot(),
       representative: this.representative,
     });
     this.publishedSnapshot = snapshot;
@@ -312,6 +319,16 @@ export class CombatLabExperimentVisualController implements CombatLabVisualStepH
   private requireExperiment(): CombatLabExperimentV1 {
     if (!this.experiment) throw new Error('Combat Lab visual controller has no experiment.');
     return this.experiment;
+  }
+
+  private requireJournal(): CombatLabExperimentRunJournal {
+    if (!this.journal) throw new Error('Combat Lab visual controller has no run journal.');
+    return this.journal;
+  }
+
+  private requireRunIdentity(): CombatLabRunIdentityV1 {
+    if (!this.runIdentity) throw new Error('Combat Lab visual controller has no run identity.');
+    return this.runIdentity;
   }
 
   private requirePublishedSnapshot(): CombatLabExperimentVisualRuntimeSnapshotV1 {
