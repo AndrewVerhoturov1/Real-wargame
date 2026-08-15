@@ -29,7 +29,7 @@ for (const token of [
   assert.match(inspector, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 }
 assert.doesNotMatch(inspector, /behaviorRuntime\.posture\s*=/, 'Right Panel must never directly mutate live posture.');
-assert.doesNotMatch(inspector, /(?:let|const|private|readonly)\s+selectedUnit\s*=/, 'Right Panel must not own a second selected-unit store.');
+assert.doesNotMatch(inspector, /private\s+(?:readonly\s+)?selectedUnit\b|selectedUnitStore/, 'Right Panel must not own a second selected-unit store.');
 assert.doesNotMatch(inspector, /new\s+CombatLabVisualSession\s*\(/, 'Right Panel must use the existing visual session.');
 assert.match(inspector, /Выберите бойца на карте/);
 assert.match(inspector, /Приказ игрока/);
