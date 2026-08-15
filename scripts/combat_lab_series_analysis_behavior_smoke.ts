@@ -13,6 +13,7 @@ import {
 } from '../src/core/testing/combat-lab/experiment/CombatLabSeriesRecords';
 
 const values = [5, 5, 5, 5, 5, 5, 5, 5, 5, 0];
+const maximumSimulationSeconds = 60;
 const series = seriesRecord(values.length);
 const runs = values.map((value, index) => runRecord(index, value));
 const archive = createCombatLabSeriesArchive(series, runs);
@@ -75,6 +76,7 @@ function seriesRecord(count: number): CombatLabSeriesRecordV1 {
     }],
     requestedRunCount: count,
     seedPolicy: 'random_per_run',
+    maximumSimulationSeconds,
     status: 'completed',
     runIds: Array.from({ length: count }, (_, index) => `run-${index}`),
     createdAtIso: '2026-08-16T00:00:00.000Z',
@@ -92,6 +94,7 @@ function runRecord(index: number, value: number): CombatLabRunRecordV1 {
     frozenInputRef: { artifactId: 'input-1', schemaId: 'polygon-experiment-envelope', schemaVersion: 1, contentDigest: 'input-digest' },
     runtimeVersionId: 'runtime-v1',
     seed: 1001 + index,
+    maximumSimulationSeconds,
     status: 'completed',
     success: true,
     stopReason: 'completed',
