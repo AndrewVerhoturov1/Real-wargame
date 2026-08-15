@@ -34,6 +34,12 @@ for (const label of ['Юнит', 'Инфо', 'Внимание', 'Память']
 
 assert.match(tabs, /polygon-shell-topbar/);
 assert.match(tabs, /polygon-shell-brand-mark/);
+assert.match(tabs, /topbarCenter\.append\(\s*shellButton\('ФАЙЛ',\s*'Файл'\),\s*shellButton\('РЕДАКТОРЫ',\s*'Редакторы'\),\s*\)/,
+  'Prototype FILE and EDITORS controls must live in the centered topbar group.');
+assert.match(tabs, /topbarRight\.append\(\s*shellButton\('ВИД ▾',\s*'Вид'\),\s*shellButton\('EN',\s*'Язык'\),\s*\)/,
+  'Prototype VIEW and EN controls must live in the right topbar group.');
+assert.doesNotMatch(tabs, /shellButton\('▤'|shellButton\('≛'|shellButton\('◉'/,
+  'The final exact shell must not replace prototype text controls with arbitrary icons.');
 assert.match(tabs, /polygon-shell-history-strip/);
 assert.match(tabs, /polygon-shell-history-track/);
 assert.match(tabs, /polygon-shell-history-live/);
@@ -104,7 +110,8 @@ assert.match(exactCss, /\.polygon-shell-map-board[\s\S]*background:\s*var\(--pol
 assert.match(exactCss, /#app\s+canvas[\s\S]*visibility:\s*hidden\s*!important/,
   'The live product canvas must be visually hidden during the placeholder-only visual pass.');
 assert.match(exactCss, /--polygon-board-gap:\s*65px/);
-assert.match(exactCss, /@media\s*\(max-width:\s*1120px\)[\s\S]*--polygon-board-gap:\s*45px/);
+assert.match(exactCss, /@media\s*\(max-width:\s*1120px\)[\s\S]*--polygon-left-w:\s*372px;[\s\S]*--polygon-right-w:\s*336px;[\s\S]*--polygon-panel-gap:\s*14px;[\s\S]*--polygon-board-gap:\s*45px/,
+  'At 1080px the exact shell must cancel the old Combat Lab 330/300px panel shrink; the prototype keeps 372/336px and 14px gaps.');
 assert.match(exactCss, /\.polygon-shell-left-tabs,[\s\S]*\.polygon-shell-right-tabs\s*\{[\s\S]*gap:\s*5px;[\s\S]*padding:\s*9px\s+10px;/,
   'Panel tab containers must retain the prototype spacing.');
 assert.match(exactCss, /\.polygon-shell-tab\s*\{[\s\S]*padding:\s*5px\s+9px;[\s\S]*letter-spacing:\s*\.045em;/,
@@ -123,6 +130,10 @@ assert.match(settingsSummary, /this\.seed\.textContent\s*=\s*`# \$\{experiment\.
   'Topbar seed must come from the real experiment draft, not demo data.');
 assert.match(settingsSummary, /this\.duration\.textContent\s*=\s*`⏱ \$\{formatSeconds\(experiment\.stopCondition\.maximumSimulationSeconds\)\}`/,
   'Topbar duration must come from the real experiment draft, not demo data.');
+assert.match(exactCss, /\.app-shell-menu-trigger\s*\{[\s\S]*min-width:\s*62px;[\s\S]*font-size:\s*0/,
+  'The existing product menu trigger must visually occupy the prototype MENU button slot.');
+assert.match(exactCss, /\.app-shell-menu-trigger::before\s*\{[\s\S]*content:\s*'МЕНЮ'/,
+  'The product menu trigger must show the prototype MENU label instead of a hamburger icon.');
 assert.match(visualCss, /left:\s*var\(--polygon-panel-gap\)/);
 assert.match(visualCss, /right:\s*var\(--polygon-panel-gap\)/);
 assert.match(visualCss, /width:\s*var\(--polygon-left-w\)/);
