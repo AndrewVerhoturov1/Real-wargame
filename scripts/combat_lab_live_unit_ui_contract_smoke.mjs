@@ -43,7 +43,7 @@ assert.match(main, /context\.addTickerListener\(\(\) => liveUnitInspector\.refre
 assert.match(main, /services\.selection\.subscribe\(\(\) => liveUnitInspector\.refresh\(true\)\)/);
 assert.match(main, /services\.draft\.subscribe\(\(\) => liveUnitInspector\.refresh\(true\)\)/);
 assert.match(main, /liveUnitInspector\.destroy\(\)/);
-assert.match(main, /data-polygon-right-content=\\"unit\\"/);
+assert.match(main, /data-polygon-right-content="unit"/);
 
 assert.match(css, /\.polygon-live-unit/);
 assert.match(css, /\.polygon-live-unit__posture/);
