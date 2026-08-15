@@ -19,9 +19,9 @@ export interface CombatLabExperimentRunToolbarOptions {
 
 export class CombatLabExperimentRunToolbar {
   private readonly root = document.createElement('div');
-  private readonly resetButton = button('Сбросить');
-  private readonly startButton = button('▶ Запустить', 'primary');
-  private readonly pauseButton = button('Пауза');
+  private readonly resetButton = button('↶');
+  private readonly startButton = button('▶ ПУСК', 'primary');
+  private readonly pauseButton = button('Ⅱ');
   private readonly stepButton = button('Шаг');
   private readonly stopButton = button('■ Остановить');
   private readonly batchButton = button('Серия');
@@ -38,6 +38,10 @@ export class CombatLabExperimentRunToolbar {
     const services = getCombatLabWorkspaceServices(workspaceRoot);
 
     this.root.className = 'combat-lab-experiment-run-toolbar combat-lab-run-toolbar';
+    this.resetButton.setAttribute('aria-label', 'Сбросить прогон');
+    this.resetButton.title = 'Сбросить';
+    this.startButton.setAttribute('aria-label', 'Запустить прогон');
+    this.pauseButton.setAttribute('aria-label', 'Пауза');
     this.speedSelect.className = 'combat-lab-experiment-speed';
     this.speedSelect.setAttribute('aria-label', 'Скорость визуального прогона');
     for (const speed of options.controller.getAvailableSpeeds()) {
