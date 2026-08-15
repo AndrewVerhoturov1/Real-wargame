@@ -5,20 +5,30 @@
   "updated_at": "2026-08-15",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
   "goal": "Перенести принятый пользовательский интерфейс режима «Полигон» из HTML-прототипа в штатную реализацию Real Wargame, сохранив видимое поведение, сценарии, связи разделов и смысл действий пользователя, но используя существующую архитектуру и настоящих владельцев данных.",
-  "current_focus": "Подготовлена организационная база подпроекта. Продуктовая реализация ещё не начата; следующим шагом является матрица соответствия пользовательского контракта HTML штатным владельцам данных и существующим точкам интеграции.",
-  "next_step": "После отдельного разрешения на Q подготовить матрицу: UI-контракт → штатный владелец данных → существующий код/документ → пробел или риск.",
+  "current_focus": "Аналитическая фаза завершена: готовы UX/runtime/owner audits, единый MIGRATION_SYNTHESIS и WORK_PLAN. Следующая фаза — оркестрированный параллельный запуск четырёх направлений АРКА, ПУЛЬС, ЛИНЗА и ХРОНИСТ с первой интеграцией АРКА+ПУЛЬС в настоящий LIVE Unit vertical slice.",
+  "next_step": "Codex-оркестратору подготовить четыре независимых handoff по EXECUTION_STREAMS.md, для каждой кодовой ветки заново получить exact current real-wargame-preview HEAD и вести визуальное состояние по PROJECT_MAP_TEMPLATE.md. Не ждать ЛИНЗУ/ХРОНИСТА для первой интеграции после принятия АРКИ+ПУЛЬСА.",
   "key_decisions": [
     "Подпроект ведётся отдельно от polygon-prototype: polygon-prototype остаётся источником принятого UX-контракта, а этот подпроект отвечает за перенос в продукт.",
     "Принятая исходная база — Interface Linkage v1, переданная пользователем как polygon-series-v1.1-memory-v3-interface-linkage.html; каноническое имя в документации — polygon-interface-linkage-v1.html.",
     "Идентичность исходного HTML: 2 292 772 байта, SHA-256 4f33f19578698947cd629a88c6963c325895995fdd78a5380966ae1ef2fa1cfd, дата 2026-08-15.",
     "HTML задаёт пользовательский контракт интерфейса и сценариев, но не является источником истины симуляции и не задаёт внутреннюю архитектуру продукта.",
     "Временные window/global API, mock-данные, синтетические прогоны и демонстрационное состояние HTML нельзя переносить как production-архитектуру или новые игровые владельцы данных.",
-    "До начала продуктовой реализации требуется определить штатных владельцев данных для карты, юнитов, Программы, Лаборатории, Метрик, Серии, Журнала, Внимания, Памяти и сквозной связности.",
-    "Сначала фиксируется текстовая карта переноса и границы подпроектов; отдельное изменение принятого пользовательского поведения требует решения пользователя."
+    "Три исследования UX_GAP_AUDIT, PRODUCT_OWNER_MAP и RUNTIME_GAP_AUDIT сведены в MIGRATION_SYNTHESIS; дальнейший перенос ведётся по WORK_PLAN вертикальными срезами.",
+    "Первый доказательный срез: карта → selected unitId → UnitModel → правый Юнит LIVE → штатная команда смены позы → readback того же UnitModel → переход к authoritative profile editor.",
+    "Следующая фаза ограничена четырьмя постоянными именованными направлениями: АРКА (UI shell), ПУЛЬС (LIVE Unit), ЛИНЗА (Инфо/Внимание/Память), ХРОНИСТ (Program/Journal/History/Metrics/Lab/Series/persistence).",
+    "АРКА и ПУЛЬС образуют первую точку интеграции; их принятых результатов достаточно для старта первого LIVE Unit slice, не требуется ждать ЛИНЗУ и ХРОНИСТА.",
+    "Codex поддерживает визуальную карту проекта по PROJECT_MAP_TEMPLATE.md: крупные этапы + четыре дорожки исполнителей + один маркер МЫ ЗДЕСЬ + exact accepted SHA у завершённых узлов.",
+    "Полный Unit Editor требует отдельного продуктового решения: authoring, LIVE или два явно разделённых режима.",
+    "Перенос в real-wargame-preview требует отдельного явного GO пользователя; deployment является отдельным разрешением."
   ],
   "must_read_first": [
     "AGENTS.md",
     "docs/subprojects/polygon-html-to-product/SUBPROJECT.md",
+    "docs/subprojects/polygon-html-to-product/STATUS.md",
+    "docs/subprojects/polygon-html-to-product/MIGRATION_SYNTHESIS.md",
+    "docs/subprojects/polygon-html-to-product/WORK_PLAN.md",
+    "docs/subprojects/polygon-html-to-product/EXECUTION_STREAMS.md",
+    "docs/subprojects/polygon-html-to-product/PROJECT_MAP_TEMPLATE.md",
     "docs/subprojects/polygon-html-to-product/JOURNAL.md",
     "docs/subprojects/polygon-prototype/SUBPROJECT.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_INTERFACE_LINKAGE_V1.md",
@@ -30,6 +40,10 @@
   ],
   "main_files": [
     "docs/subprojects/polygon-html-to-product/SUBPROJECT.md",
+    "docs/subprojects/polygon-html-to-product/MIGRATION_SYNTHESIS.md",
+    "docs/subprojects/polygon-html-to-product/WORK_PLAN.md",
+    "docs/subprojects/polygon-html-to-product/EXECUTION_STREAMS.md",
+    "docs/subprojects/polygon-html-to-product/PROJECT_MAP_TEMPLATE.md",
     "docs/subprojects/polygon-html-to-product/JOURNAL.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_INTERFACE_LINKAGE_V1.md",
     "docs/subprojects/polygon-prototype/ACCEPTED_RIGHT_PANEL_V1.md",
@@ -40,6 +54,10 @@
   "test_files": [],
   "manual_docs": [
     "docs/subprojects/polygon-html-to-product/SUBPROJECT.md",
+    "docs/subprojects/polygon-html-to-product/MIGRATION_SYNTHESIS.md",
+    "docs/subprojects/polygon-html-to-product/WORK_PLAN.md",
+    "docs/subprojects/polygon-html-to-product/EXECUTION_STREAMS.md",
+    "docs/subprojects/polygon-html-to-product/PROJECT_MAP_TEMPLATE.md",
     "docs/subprojects/polygon-html-to-product/JOURNAL.md"
   ],
   "do_not_read_by_default": [
@@ -55,14 +73,16 @@
   "context_sources": [
     "polygon-series-v1.1-memory-v3-interface-linkage.html",
     "docs/subprojects/polygon-prototype/ACCEPTED_INTERFACE_LINKAGE_V1.md",
-    "docs/subprojects/polygon-prototype/SUBPROJECT.md"
+    "docs/subprojects/polygon-html-to-product/MIGRATION_SYNTHESIS.md",
+    "docs/subprojects/polygon-html-to-product/WORK_PLAN.md"
   ],
   "safety_rules": [
-    "Не начинать продуктовую реализацию в рамках подготовки подпроекта.",
+    "Каждая продуктовая кодовая задача начинается только после повторного получения exact current real-wargame-preview HEAD и выполняется на отдельной feature-ветке.",
     "Не копировать в продукт временную модель данных, mock-данные, synthetic RNG, demo events, localStorage или standalone window/global API HTML.",
     "Сохранять принятые UX-связи Interface Linkage v1, включая Программа↔Журнал, Метрики↔Серия и linked-entity переходы.",
     "Внимание и Память остаются субъективными представлениями бойца; UI не становится владельцем gameplay truth.",
-    "До отдельного решения пользователя не менять принятый интерфейсный контракт, main, real-wargame-preview и не выполнять деплой.",
+    "UI может владеть только чистым UI-state; игровое/экспериментальное состояние читается у product owners и меняется через утверждённые write-boundaries.",
+    "До отдельного решения пользователя не менять принятый интерфейсный контракт, main или real-wargame-preview и не выполнять deployment.",
     "Исходный HTML не добавлять в репозиторий; использовать его имя, версию, размер и SHA-256 как идентичность принятой базы."
   ],
   "suggested_verification": [
@@ -72,11 +92,13 @@
   ],
   "zworker": {
     "boundaries": [
-      "До продуктовой реализации сначала составить матрицу UI-контракт → штатный владелец данных.",
+      "Использовать EXECUTION_STREAMS.md как постоянную идентичность четырёх направлений: АРКА, ПУЛЬС, ЛИНЗА, ХРОНИСТ.",
       "Передавать исполнителю только актуальные документы и точный SHA базы.",
+      "Принимать handoff только по exact current_commit и после независимой проверки оркестратором.",
+      "После принятого handoff обновлять визуальную карту по PROJECT_MAP_TEMPLATE.md.",
       "Не считать отдельную feature-ветку частью real-wargame-preview до явного GO пользователя.",
-      "Продуктовый код, перенос в preview и деплой не входят в эту подготовительную задачу."
+      "Deployment не следует из push или transfer и требует отдельного запроса пользователя."
     ],
-    "expected_answer_format": "Текстовая матрица соответствий, список пробелов и рисков, без продуктовых изменений до отдельного разрешения."
+    "expected_answer_format": "executor_name, base_commit, feature_branch, current_commit, result, changed_files, checks_run, not_checked, blockers, next_merge_point, preview_touched, main_touched, deployment_touched."
   }
 }
