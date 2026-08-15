@@ -1,5 +1,7 @@
 :root {
   --polygon-topbar-h: 58px;
+  --polygon-history-h: 30px;
+  --polygon-chrome-h: calc(var(--polygon-topbar-h) + var(--polygon-history-h));
   --polygon-left-w: 372px;
   --polygon-right-w: 336px;
   --polygon-panel-gap: 14px;
@@ -213,27 +215,93 @@ body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment
   font-weight: 900;
 }
 
-body.app-shell-mode-combat-lab .polygon-shell-runtime-status {
-  flex: 0 1 auto;
-  min-width: 58px;
-  max-width: 180px;
-  height: 34px;
+body.app-shell-mode-combat-lab .polygon-shell-history-strip {
+  position: absolute;
+  top: var(--polygon-topbar-h);
+  left: 0;
+  right: 0;
+  z-index: 96;
+  height: var(--polygon-history-h);
   display: flex;
   align-items: center;
-  padding: 0 9px;
+  gap: 8px;
+  padding: 0 10px;
+  border-bottom: 1px solid rgba(34, 39, 28, .28);
+  color: var(--polygon-ink);
+  background: #ebe9df;
+  box-shadow: 0 2px 9px rgba(22, 26, 17, .16);
+  font-size: 10px;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-history-live {
+  flex: 0 0 auto;
+  color: #344321;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .03em;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-history-track {
+  position: relative;
+  flex: 0 1 auto;
+  width: min(290px, 24vw);
+  height: 5px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, .16);
-  border-radius: 4px;
-  color: #e6e7da;
-  background: rgba(255, 255, 255, .08);
+  border-radius: 99px;
+  background: #c8c6bd;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-history-track-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: #727966;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-history-status {
+  min-width: 0;
+  max-width: 260px;
+  overflow: hidden;
+  color: #5f6258;
   font: 9px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+body.app-shell-mode-combat-lab .polygon-shell-history-spacer {
+  flex: 1 1 auto;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-history-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-history-button {
+  min-height: 22px;
+  height: 22px;
+  padding: 2px 7px;
+  border: 1px solid #aaa99f;
+  border-radius: 3px;
+  color: #33362f;
+  background: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-history-button:hover {
+  border-color: #95813a;
+  background: #f8f0c9;
+}
+
 body.app-shell-mode-combat-lab .polygon-shell-viewport {
   position: absolute;
-  inset: var(--polygon-topbar-h) 0 0;
+  inset: var(--polygon-chrome-h) 0 0;
   overflow: hidden;
   pointer-events: none;
 }
@@ -438,7 +506,7 @@ body.app-shell-mode-combat-lab .polygon-shell-hidden-hosts {
 
 body.app-shell-mode-combat-lab.workspace-simulation #app,
 body.app-shell-mode-combat-lab.workspace-editor #app {
-  top: var(--polygon-topbar-h) !important;
+  top: var(--polygon-chrome-h) !important;
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
@@ -477,8 +545,12 @@ body.app-shell-mode-combat-lab.workspace-editor #hud {
     padding: 0 9px;
   }
 
-  body.app-shell-mode-combat-lab .polygon-shell-runtime-status {
-    display: none;
+  body.app-shell-mode-combat-lab .polygon-shell-history-status {
+    max-width: 180px;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-history-track {
+    width: min(210px, 20vw);
   }
 }
 
@@ -496,6 +568,14 @@ body.app-shell-mode-combat-lab.workspace-editor #hud {
     max-width: calc(100vw - 180px);
   }
 
+  body.app-shell-mode-combat-lab .polygon-shell-history-status {
+    display: none;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-history-track {
+    width: min(180px, 25vw);
+  }
+
   body.app-shell-mode-combat-lab .polygon-shell-right {
     box-shadow: 0 16px 44px rgba(22, 26, 17, .24), 0 2px 8px rgba(22, 26, 17, .2);
   }
@@ -504,7 +584,9 @@ body.app-shell-mode-combat-lab.workspace-editor #hud {
 @media (max-width: 640px) {
   body.app-shell-mode-combat-lab .polygon-shell-topbar-right,
   body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button:nth-of-type(1),
-  body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-speed-field {
+  body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-speed-field,
+  body.app-shell-mode-combat-lab .polygon-shell-history-actions .polygon-shell-history-button:first-child,
+  body.app-shell-mode-combat-lab .polygon-shell-history-track {
     display: none;
   }
 
