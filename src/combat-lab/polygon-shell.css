@@ -355,6 +355,18 @@ body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-tab.act
   background: var(--polygon-top);
 }
 
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-tab:focus-visible {
+  outline: 2px solid var(--polygon-accent);
+  outline-offset: 2px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-tab.active:focus,
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-tab.active:focus-visible {
+  color: #fff !important;
+  border-color: var(--polygon-top) !important;
+  background: var(--polygon-top) !important;
+}
+
 body.app-shell-mode-combat-lab .polygon-shell-panel-body {
   min-height: 0;
   flex: 1;
@@ -385,6 +397,10 @@ body.app-shell-mode-combat-lab .polygon-shell-collapsed-label {
   text-transform: uppercase;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
+}
+
+body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .polygon-shell-topbar .polygon-shell-run-toolbar {
+  display: block !important;
 }
 
 body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .polygon-shell-left,
