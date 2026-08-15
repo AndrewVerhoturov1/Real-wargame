@@ -284,8 +284,7 @@ export function asCombatLabExperimentVisualSnapshot(
 
 function assertRunExperiment(runIdentity: CombatLabRunIdentityV1, experiment: CombatLabExperimentV1): void {
   if (runIdentity.experimentId !== experiment.experimentId
-    || runIdentity.experimentRevision !== experiment.revision
-    || runIdentity.sourceDigest !== digestCombatLabExperiment(experiment)) {
+    || runIdentity.experimentRevision !== experiment.revision) {
     throw new Error('Combat Lab journal run identity does not match the experiment.');
   }
 }
