@@ -4,6 +4,7 @@ import {
   beginWeaponDeploymentStepLocks,
   endWeaponDeploymentStepLocks,
 } from '../infantry-combat/runtime/WeaponDeploymentLocks';
+import { recordSimulationKnowledgeHistory } from '../knowledge/UnitKnowledgeHistory';
 import { reconcileCompletedTacticalPositionArrivals } from '../tactical/TacticalPositionArrival';
 import { reconcileTacticalPositionOccupation } from '../tactical/TacticalPositionOccupation';
 import { requestStaticTacticalPositionBasis } from '../tactical/static/StaticTacticalPositionService';
@@ -14,6 +15,8 @@ export * from './SimulationTickLegacy';
 
 export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
   requestStaticTacticalPositionBasis(state);
+  // Capture the exact pre-step subjective state, including t=0 scenario knowledge.
+  recordSimulationKnowledgeHistory(state);
 
   for (const unit of state.units) {
     reconcilePlayerPostureMovementAuthority(unit);
@@ -24,6 +27,8 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
   const deploymentStepLocks = beginWeaponDeploymentStepLocks(state.units);
   try {
     tickSimulationLegacy(state, deltaSeconds);
+    // Perception and threat memory are now current for this simulation time.
+    recordSimulationKnowledgeHistory(state);
     reconcileCompletedTacticalPositionArrivals(state);
     for (const unit of state.units) reconcileTacticalPositionOccupation(state, unit);
   } finally {
