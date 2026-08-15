@@ -31,6 +31,9 @@ for (const label of ['Юнит', 'Инфо', 'Внимание', 'Память']
 
 assert.match(tabs, /polygon-shell-topbar/);
 assert.match(tabs, /polygon-shell-brand-mark/);
+assert.match(tabs, /polygon-shell-history-strip/);
+assert.match(tabs, /polygon-shell-history-track/);
+assert.match(tabs, /polygon-shell-history-live/);
 assert.match(tabs, /polygon-shell-left/);
 assert.match(tabs, /polygon-shell-left-tabs/);
 assert.match(tabs, /polygon-shell-right/);
@@ -39,6 +42,8 @@ assert.match(tabs, /polygon-shell-hidden-hosts/);
 assert.match(tabs, /ФАЙЛ/);
 assert.match(tabs, /РЕДАКТОРЫ/);
 assert.match(tabs, /ВИД ▾/);
+assert.match(tabs, /ФИЛЬТРЫ/);
+assert.match(tabs, /ХРОНОЛОГИЯ ▾/);
 assert.match(tabs, /setCollapsed\(/);
 assert.match(tabs, /setRightCollapsed\(/);
 assert.match(tabs, /sessionStorage/);
@@ -51,8 +56,10 @@ assert.ok((tabs.match(/requestWorkspaceResize\(\)/g) ?? []).length >= 3,
 
 assert.doesNotMatch(tabs, /polygon-shell-primary-tabs/, 'Global full-width workspace tabs are not part of the accepted prototype shell.');
 assert.doesNotMatch(tabs, /polygon-shell-auxiliary-tabs/, 'Old auxiliary tabs must not be visible in the new shell.');
-assert.doesNotMatch(tabs, /polygon-shell-timeline/, 'ARKA shell must not show the previous fake timeline container.');
+assert.doesNotMatch(tabs, /polygon-shell-timeline/, 'ARKA shell must not restore the previous fake bottom timeline component.');
 assert.doesNotMatch(tabs, /polygon-shell-empty-state/, 'Visible shell bodies stay blank until product owners are integrated.');
+assert.doesNotMatch(tabs, /44\s*\/\s*54|событий\s*·\s*◆|Демонстрационная replay/i,
+  'The visual history strip must not copy demo event counts or fake replay state from standalone HTML.');
 assert.doesNotMatch(tabs, /selectedUnitId\s*=|new\s+CombatLabVisualSession|new\s+(?:PIXI\.)?Application\s*\(/);
 assert.doesNotMatch(tabs, /window\.[A-Za-z_$][\w$]*\s*=/, 'Shell must not publish a new window/global API.');
 
@@ -63,6 +70,8 @@ assert.match(main, /\.\/polygon-shell-compat\.css/);
 
 for (const token of [
   '--polygon-topbar-h: 58px',
+  '--polygon-history-h: 30px',
+  '--polygon-chrome-h: calc(var(--polygon-topbar-h) + var(--polygon-history-h))',
   '--polygon-left-w: 372px',
   '--polygon-right-w: 336px',
   '--polygon-panel-gap: 14px',
@@ -74,6 +83,11 @@ for (const token of [
   assert.ok(shellCss.includes(token), `Missing exact prototype token: ${token}`);
 }
 assert.match(shellCss, /grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\)\s+auto/);
+assert.match(shellCss, /\.polygon-shell-history-strip[\s\S]*top:\s*var\(--polygon-topbar-h\)/);
+assert.match(shellCss, /\.polygon-shell-history-strip[\s\S]*height:\s*var\(--polygon-history-h\)/);
+assert.match(shellCss, /\.polygon-shell-history-track[\s\S]*width:\s*min\(290px,\s*24vw\)/);
+assert.match(shellCss, /\.polygon-shell-viewport[\s\S]*inset:\s*var\(--polygon-chrome-h\)\s+0\s+0/);
+assert.match(shellCss, /workspace-simulation\s+#app,[\s\S]*top:\s*var\(--polygon-chrome-h\)\s*!important/);
 assert.match(shellCss, /left:\s*var\(--polygon-panel-gap\)/);
 assert.match(shellCss, /right:\s*var\(--polygon-panel-gap\)/);
 assert.match(shellCss, /width:\s*var\(--polygon-left-w\)/);
