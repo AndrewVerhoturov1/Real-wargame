@@ -42,6 +42,10 @@ assert.match(tabs, /ВИД ▾/);
 assert.match(tabs, /setCollapsed\(/);
 assert.match(tabs, /setRightCollapsed\(/);
 assert.match(tabs, /sessionStorage/);
+assert.match(tabs, /normalizeVisibleWorkspaceTab\(storedTab\)/,
+  'Persisted utility tabs from the old shell must normalize to a visible prototype workspace.');
+assert.match(tabs, /POLYGON_LEFT_WORKSPACE_DEFINITIONS\.some\(\(definition\) => definition\.tabId === normalized\)/,
+  'Visible-tab normalization must use the accepted seven-tab palette.');
 
 assert.doesNotMatch(tabs, /polygon-shell-primary-tabs/, 'Global full-width workspace tabs are not part of the accepted prototype shell.');
 assert.doesNotMatch(tabs, /polygon-shell-auxiliary-tabs/, 'Old auxiliary tabs must not be visible in the new shell.');
