@@ -33,8 +33,10 @@ export class CombatLabExperimentSettingsSummary {
   refresh(): void {
     if (this.destroyed) return;
     const experiment = this.options.getExperiment();
-    this.seed.textContent = `Seed: ${experiment.defaults.seed}`;
-    this.duration.textContent = `Лимит: ${formatSeconds(experiment.stopCondition.maximumSimulationSeconds)}`;
+    this.seed.textContent = `# ${experiment.defaults.seed}`;
+    this.seed.title = `Seed: ${experiment.defaults.seed}`;
+    this.duration.textContent = `⏱ ${formatSeconds(experiment.stopCondition.maximumSimulationSeconds)}`;
+    this.duration.title = `Лимит времени: ${formatSeconds(experiment.stopCondition.maximumSimulationSeconds)}`;
     this.grid.textContent = `Сетка: ${COMBAT_LAB_METRES_PER_CELL}×${COMBAT_LAB_METRES_PER_CELL} м`;
   }
 

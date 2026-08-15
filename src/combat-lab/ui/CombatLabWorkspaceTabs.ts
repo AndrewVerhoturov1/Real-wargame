@@ -83,12 +83,17 @@ export class CombatLabWorkspaceTabs {
     this.toolbarHost = toolbarHost;
     topbarLeft.append(brand, toolbarHost);
 
-    const topbarCenter = node('nav', 'polygon-shell-topbar-center');
-    topbarCenter.setAttribute('aria-label', 'Работа с экспериментом');
-    topbarCenter.append(shellButton('ФАЙЛ'), shellButton('РЕДАКТОРЫ'));
+    const topbarCenter = node('div', 'polygon-shell-topbar-center');
+    topbarCenter.append(
+      shellButton('ФАЙЛ', 'Файл'),
+      shellButton('РЕДАКТОРЫ', 'Редакторы'),
+    );
 
     const topbarRight = node('div', 'polygon-shell-topbar-right');
-    topbarRight.append(shellButton('ВИД ▾'), shellButton('EN'));
+    topbarRight.append(
+      shellButton('ВИД ▾', 'Вид'),
+      shellButton('EN', 'Язык'),
+    );
     topbar.append(topbarLeft, topbarCenter, topbarRight);
 
     const historyStrip = node('div', 'polygon-shell-history-strip');
@@ -109,6 +114,10 @@ export class CombatLabWorkspaceTabs {
     historyStrip.append(historyTrack, this.status, historySpacer, historyActions);
 
     const viewport = node('div', 'polygon-shell-viewport');
+    const mapPlaceholder = node('div', 'polygon-shell-map-placeholder');
+    mapPlaceholder.setAttribute('aria-hidden', 'true');
+    const mapBoard = node('div', 'polygon-shell-map-board');
+    mapPlaceholder.append(mapBoard);
 
     const left = node('aside', 'polygon-shell-side-panel polygon-shell-left');
     left.id = 'polygon-shell-left-panel';
@@ -116,7 +125,7 @@ export class CombatLabWorkspaceTabs {
     const leftHead = node('div', 'polygon-shell-panel-head');
     const leftHeadText = node('div', 'polygon-shell-panel-head-text');
     leftHeadText.append(node('div', 'polygon-shell-panel-kicker', 'РАБОЧИЙ РЕЖИМ'));
-    this.leftTitle = node('div', 'polygon-shell-panel-title', 'Редактор карты');
+    this.leftTitle = node('div', 'polygon-shell-panel-title', 'Программа');
     leftHeadText.append(this.leftTitle);
     this.toggle = button('‹', 'combat-lab-dock-toggle combat-lab-drawer-toggle polygon-shell-panel-collapse');
     this.toggle.setAttribute('aria-label', 'Скрыть левую панель');
@@ -182,7 +191,7 @@ export class CombatLabWorkspaceTabs {
     const rightCollapsedLabel = node('div', 'polygon-shell-collapsed-label', 'Информация о юните');
     right.append(rightHead, rightTabs, rightPanelHost, rightCollapsedLabel);
 
-    viewport.append(left, right);
+    viewport.append(mapPlaceholder, left, right);
 
     const hiddenHosts = node('div', 'polygon-shell-hidden-hosts');
     hiddenHosts.setAttribute('aria-hidden', 'true');
@@ -359,10 +368,11 @@ function writeStoredRightTab(storage: Storage | null, tabId: PolygonRightPanelTa
 }
 
 function normalizeVisibleWorkspaceTab(value: unknown): CombatLabWorkspaceTab {
+  if (value === null || value === undefined || value === '') return 'program';
   const normalized = normalizeCombatLabWorkspaceTab(value);
   return POLYGON_LEFT_WORKSPACE_DEFINITIONS.some((definition) => definition.tabId === normalized)
     ? normalized
-    : 'scene';
+    : 'program';
 }
 
 function normalizeRightPanelTab(value: unknown): PolygonRightPanelTab {
@@ -382,10 +392,11 @@ function requestWorkspaceResize(): void {
   window.requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
 }
 
-function shellButton(label: string): HTMLButtonElement {
+function shellButton(label: string, title = label): HTMLButtonElement {
   const element = button(label, 'polygon-shell-top-button');
   element.setAttribute('aria-disabled', 'true');
-  element.title = 'Команда будет подключена через штатный product owner в отдельной задаче.';
+  element.setAttribute('aria-label', title);
+  element.title = `${title}: команда будет подключена через штатный product owner в отдельной задаче.`;
   return element;
 }
 
