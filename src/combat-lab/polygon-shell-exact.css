@@ -307,6 +307,9 @@ body.app-shell-mode-combat-lab .app-shell-menu-trigger::before {
 
 @media (max-width: 1120px) {
   :root {
+    --polygon-left-w: 372px;
+    --polygon-right-w: 336px;
+    --polygon-panel-gap: 14px;
     --polygon-board-gap: 45px;
   }
 
