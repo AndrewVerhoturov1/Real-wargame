@@ -199,6 +199,7 @@ export class CombatLabWorkspaceTabs {
 
     this.activeRightTab = normalizeRightPanelTab(readStoredRightTab(this.storage));
     this.activateRightPanel(this.activeRightTab, false);
+    requestWorkspaceResize();
   }
 
   static create(options: CombatLabWorkspaceTabsOptions): CombatLabWorkspaceTabs {
