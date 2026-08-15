@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [hosts, tabs, extension, main, shellCss] = await Promise.all([
+const [hosts, tabs, main, shellCss] = await Promise.all([
   readFile('src/combat-lab/ui/CombatLabWorkspaceHosts.ts', 'utf8'),
   readFile('src/combat-lab/ui/CombatLabWorkspaceTabs.ts', 'utf8'),
-  readFile('src/combat-lab/CombatLabExtension.ts', 'utf8'),
   readFile('src/combat-lab/main.ts', 'utf8'),
   readFile('src/combat-lab/polygon-shell.css', 'utf8'),
 ]);
@@ -40,10 +39,9 @@ assert.match(tabs, /sessionStorage/);
 assert.doesNotMatch(tabs, /selectedUnitId\s*=|new\s+CombatLabVisualSession|new\s+(?:PIXI\.)?Application\s*\(/);
 assert.doesNotMatch(tabs, /window\.[A-Za-z_$][\w$]*\s*=/, 'Shell must not publish a new window/global API.');
 
-assert.match(extension, /hosts\.laboratory/);
-assert.match(extension, /не подключена к продуктовым параметрам/i);
-assert.doesNotMatch(extension, /fake|demo Unit|synthetic Series/i);
-
+assert.match(main, /workspaceHosts\.laboratory/);
+assert.match(main, /не подключена к продуктовым параметрам/i);
+assert.doesNotMatch(`${tabs}\n${main}`, /fake|demo Unit|synthetic Series/i);
 assert.match(main, /\.\/polygon-shell\.css/);
 assert.match(shellCss, /grid-template-columns:\s*var\(--polygon-shell-left-width\)\s+minmax\(0,\s*1fr\)\s+var\(--polygon-shell-right-width\)/);
 assert.match(shellCss, /combat-lab-dock-collapsed/);
