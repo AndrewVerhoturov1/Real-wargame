@@ -14,7 +14,7 @@ const [extension, hosts, tabs, editor, main, css, shellCss, layoutEnhancements, 
   readFile('src/core/testing/AiTestLabRuntime.ts', 'utf8'),
 ]);
 
-const expectedPrimaryTabs = [
+const expectedProductHosts = [
   ['scene', 'Карта'],
   ['program', 'Программа'],
   ['laboratory', 'Лаборатория'],
@@ -22,22 +22,25 @@ const expectedPrimaryTabs = [
   ['journal', 'Журнал'],
   ['batch', 'Серия'],
 ];
-for (const [tabId, label] of expectedPrimaryTabs) {
+for (const [tabId, label] of expectedProductHosts) {
   assert.match(hosts, new RegExp(`tabId: '${tabId}'`));
   assert.match(hosts, new RegExp(`labelRu: '${label}'`));
 }
-assert.equal((hosts.match(/tabId:/g) ?? []).length, 8, 'Integrated Polygon workspace must contain six primary tabs plus two preserved product utility tabs.');
+assert.equal((hosts.match(/tabId:/g) ?? []).length, 8, 'Prototype shell keeps the existing eight product hosts as hidden compatibility mounts.');
 assert.match(hosts, /tabId:\s*'parameters'[^\n]*labelRu:\s*'Параметры'/);
 assert.match(hosts, /tabId:\s*'settings'[^\n]*labelRu:\s*'Общие редакторы'/);
 assert.doesNotMatch(hosts, /labelRu:\s*'Стенд'/);
-assert.match(tabs, /shell\.append\(header, primaryTabList, main, timeline\)/,
-  'The Polygon shell must compose header, primary tabs, central workspace and timeline.');
+assert.match(tabs, /shell\.append\(topbar, viewport, hiddenHosts\)/,
+  'The Polygon shell must compose the prototype top bar, floating panels, and hidden compatibility hosts.');
+assert.match(tabs, /polygon-shell-left-tabs/);
 assert.match(tabs, /polygon-shell-right-tabs/);
+assert.match(tabs, /polygon-shell-hidden-hosts/);
+assert.doesNotMatch(tabs, /polygon-shell-primary-tabs|polygon-shell-timeline|polygon-shell-auxiliary-tabs/);
 assert.match(tabs, /setRightCollapsed\(/);
 assert.match(
   tabs,
   /for\s*\(const\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s+of\s+this\.panels\)\s*\2\.hidden\s*=\s*\1\s*!==\s*normalized/,
-  'Tab activation must keep only the normalized panel visible regardless of local variable names.',
+  'Tab activation must keep only the normalized compatibility host logically active.',
 );
 assert.match(tabs, /readonly hosts: CombatLabWorkspaceHosts/);
 
@@ -62,8 +65,10 @@ assert.match(main, /combat-lab:set-paused/);
 assert.match(main, /installLaboratoryPlaceholder/);
 assert.match(css, /\.combat-lab-workspace-tab-list/);
 assert.match(css, /overflow-x:\s*hidden/);
-assert.match(shellCss, /\.polygon-shell-primary-tabs/);
-assert.match(shellCss, /\.polygon-shell-timeline/);
+assert.match(shellCss, /\.polygon-shell-topbar/);
+assert.match(shellCss, /\.polygon-shell-side-panel/);
+assert.match(shellCss, /\.polygon-shell-hidden-hosts/);
+assert.doesNotMatch(shellCss, /\.polygon-shell-primary-tabs|\.polygon-shell-timeline/);
 assert.match(layoutEnhancements, /runToolbar\?\.classList\.add\('combat-lab-run-toolbar'\)/,
   'Stage 10 toolbar host must publish the stable combat-lab-run-toolbar DOM contract.');
 assert.match(layoutEnhancements, /advancedControls\?\.classList\.add\('combat-lab-advanced'\)/,
