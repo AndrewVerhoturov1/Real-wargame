@@ -1,0 +1,25 @@
+name: ARKA Exact Shell Full Verify
+
+on:
+  pull_request:
+    branches:
+      - ci/arka-exact-full-base-20260816-42261fe
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run Preview verification gate
+        run: npm run verify:preview -- --report /tmp/arka-preview-verification.json
+      - name: Build production app
+        run: npm run build:app
