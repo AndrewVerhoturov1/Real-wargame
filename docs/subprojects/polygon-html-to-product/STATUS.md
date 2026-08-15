@@ -14,16 +14,43 @@
 
 ## Current focus
 
-Подготовлена организационная база подпроекта. Продуктовая реализация ещё не начата; следующим шагом является матрица соответствия пользовательского контракта HTML штатным владельцам данных и существующим точкам интеграции.
+Аналитическая фаза завершена: готовы UX/runtime/owner audits, единый `MIGRATION_SYNTHESIS.md` и `WORK_PLAN.md`. Следующая фаза — оркестрированный параллельный запуск четырёх направлений **АРКА, ПУЛЬС, ЛИНЗА и ХРОНИСТ** с первой интеграцией АРКА+ПУЛЬС в настоящий LIVE Unit vertical slice.
 
 ## Next step
 
-После отдельного разрешения на Q подготовить матрицу: UI-контракт → штатный владелец данных → существующий код/документ → пробел или риск.
+Codex-оркестратору подготовить четыре независимых handoff по `EXECUTION_STREAMS.md`, для каждой кодовой ветки заново получить exact current `real-wargame-preview` HEAD и вести визуальное состояние по `PROJECT_MAP_TEMPLATE.md`. Не ждать ЛИНЗУ/ХРОНИСТА для первой интеграции после принятия АРКИ+ПУЛЬСА.
+
+## Active execution streams
+
+- **АРКА** — UI shell и визуальная оболочка без fake gameplay state.
+- **ПУЛЬС** — selection, `UnitModel`, LIVE Unit read/write contract и первый вертикальный срез.
+- **ЛИНЗА** — `Инфо / Внимание / Память`, их product owners и честный LIVE-scope.
+- **ХРОНИСТ** — `Program↔Journal`, History, Metrics, Laboratory, Series, replay/persistence и experiment envelope.
+
+Первая общая интеграция: `АРКА + ПУЛЬС → первый LIVE Unit`.
+
+## Project map
+
+Codex ведёт пользовательскую визуальную карту по `PROJECT_MAP_TEMPLATE.md`:
+
+- крупные этапы проекта;
+- четыре именные дорожки исполнителей;
+- один маркер `★ МЫ ЗДЕСЬ`;
+- единые статусы;
+- отдельные пользовательские decision gates;
+- отдельные integration nodes;
+- exact accepted commit SHA у принятых результатов.
+
+Карта обновляется только по проверенному GitHub-состоянию после handoff.
 
 ## Read first
 
 - `AGENTS.md`
 - `docs/subprojects/polygon-html-to-product/SUBPROJECT.md`
+- `docs/subprojects/polygon-html-to-product/MIGRATION_SYNTHESIS.md`
+- `docs/subprojects/polygon-html-to-product/WORK_PLAN.md`
+- `docs/subprojects/polygon-html-to-product/EXECUTION_STREAMS.md`
+- `docs/subprojects/polygon-html-to-product/PROJECT_MAP_TEMPLATE.md`
 - `docs/subprojects/polygon-html-to-product/JOURNAL.md`
 - `docs/subprojects/polygon-prototype/SUBPROJECT.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_INTERFACE_LINKAGE_V1.md`
@@ -36,6 +63,10 @@
 ## Main files
 
 - `docs/subprojects/polygon-html-to-product/SUBPROJECT.md`
+- `docs/subprojects/polygon-html-to-product/MIGRATION_SYNTHESIS.md`
+- `docs/subprojects/polygon-html-to-product/WORK_PLAN.md`
+- `docs/subprojects/polygon-html-to-product/EXECUTION_STREAMS.md`
+- `docs/subprojects/polygon-html-to-product/PROJECT_MAP_TEMPLATE.md`
 - `docs/subprojects/polygon-html-to-product/JOURNAL.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_INTERFACE_LINKAGE_V1.md`
 - `docs/subprojects/polygon-prototype/ACCEPTED_RIGHT_PANEL_V1.md`
@@ -51,9 +82,10 @@
 
 ## Safety rules
 
-- Не начинать продуктовую реализацию в рамках подготовки подпроекта.
+- Каждая продуктовая кодовая задача начинается только после повторного получения exact current `real-wargame-preview` HEAD и выполняется на отдельной feature-ветке.
 - Не копировать в продукт временную модель данных, mock-данные, synthetic RNG, demo events, localStorage или standalone window/global API HTML.
 - Сохранять принятые UX-связи Interface Linkage v1, включая Программа↔Журнал, Метрики↔Серия и linked-entity переходы.
 - Внимание и Память остаются субъективными представлениями бойца; UI не становится владельцем gameplay truth.
-- До отдельного решения пользователя не менять принятый интерфейсный контракт, main, real-wargame-preview и не выполнять деплой.
+- UI может владеть только чистым UI-state; игровое/экспериментальное состояние читается у product owners и меняется через утверждённые write-boundaries.
+- До отдельного решения пользователя не менять принятый интерфейсный контракт, `main` или `real-wargame-preview` и не выполнять deployment.
 - Исходный HTML не добавлять в репозиторий; использовать его имя, версию, размер и SHA-256 как идентичность принятой базы.
