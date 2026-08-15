@@ -1,0 +1,82 @@
+{
+  "id": "polygon-html-to-product",
+  "title": "Перенос Полигона из HTML-прототипа в продукт",
+  "status": "active",
+  "updated_at": "2026-08-15",
+  "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+  "goal": "Перенести принятый пользовательский интерфейс режима «Полигон» из HTML-прототипа в штатную реализацию Real Wargame, сохранив видимое поведение, сценарии, связи разделов и смысл действий пользователя, но используя существующую архитектуру и настоящих владельцев данных.",
+  "current_focus": "Подготовлена организационная база подпроекта. Продуктовая реализация ещё не начата; следующим шагом является матрица соответствия пользовательского контракта HTML штатным владельцам данных и существующим точкам интеграции.",
+  "next_step": "После отдельного разрешения на Q подготовить матрицу: UI-контракт → штатный владелец данных → существующий код/документ → пробел или риск.",
+  "key_decisions": [
+    "Подпроект ведётся отдельно от polygon-prototype: polygon-prototype остаётся источником принятого UX-контракта, а этот подпроект отвечает за перенос в продукт.",
+    "Принятая исходная база — Interface Linkage v1, переданная пользователем как polygon-series-v1.1-memory-v3-interface-linkage.html; каноническое имя в документации — polygon-interface-linkage-v1.html.",
+    "Идентичность исходного HTML: 2 292 772 байта, SHA-256 4f33f19578698947cd629a88c6963c325895995fdd78a5380966ae1ef2fa1cfd, дата 2026-08-15.",
+    "HTML задаёт пользовательский контракт интерфейса и сценариев, но не является источником истины симуляции и не задаёт внутреннюю архитектуру продукта.",
+    "Временные window/global API, mock-данные, синтетические прогоны и демонстрационное состояние HTML нельзя переносить как production-архитектуру или новые игровые владельцы данных.",
+    "До начала продуктовой реализации требуется определить штатных владельцев данных для карты, юнитов, Программы, Лаборатории, Метрик, Серии, Журнала, Внимания, Памяти и сквозной связности.",
+    "Сначала фиксируется текстовая карта переноса и границы подпроектов; отдельное изменение принятого пользовательского поведения требует решения пользователя."
+  ],
+  "must_read_first": [
+    "AGENTS.md",
+    "docs/subprojects/polygon-html-to-product/SUBPROJECT.md",
+    "docs/subprojects/polygon-html-to-product/JOURNAL.md",
+    "docs/subprojects/polygon-prototype/SUBPROJECT.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_INTERFACE_LINKAGE_V1.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_RIGHT_PANEL_V1.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_SERIES_V1.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_JOURNAL_V4.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_METRICS_V18.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_V44.md"
+  ],
+  "main_files": [
+    "docs/subprojects/polygon-html-to-product/SUBPROJECT.md",
+    "docs/subprojects/polygon-html-to-product/JOURNAL.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_INTERFACE_LINKAGE_V1.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_RIGHT_PANEL_V1.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_SERIES_V1.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_JOURNAL_V4.md",
+    "docs/subprojects/polygon-prototype/ACCEPTED_METRICS_V18.md"
+  ],
+  "test_files": [],
+  "manual_docs": [
+    "docs/subprojects/polygon-html-to-product/SUBPROJECT.md",
+    "docs/subprojects/polygon-html-to-product/JOURNAL.md"
+  ],
+  "do_not_read_by_default": [
+    "src/",
+    "public/",
+    "docs/subprojects/polygon-prototype/prototypes/"
+  ],
+  "commands": [
+    "npm run docs:sync",
+    "npm run docs:check"
+  ],
+  "important_sessions": [],
+  "context_sources": [
+    "polygon-series-v1.1-memory-v3-interface-linkage.html",
+    "docs/subprojects/polygon-prototype/ACCEPTED_INTERFACE_LINKAGE_V1.md",
+    "docs/subprojects/polygon-prototype/SUBPROJECT.md"
+  ],
+  "safety_rules": [
+    "Не начинать продуктовую реализацию в рамках подготовки подпроекта.",
+    "Не копировать в продукт временную модель данных, mock-данные, synthetic RNG, demo events, localStorage или standalone window/global API HTML.",
+    "Сохранять принятые UX-связи Interface Linkage v1, включая Программа↔Журнал, Метрики↔Серия и linked-entity переходы.",
+    "Внимание и Память остаются субъективными представлениями бойца; UI не становится владельцем gameplay truth.",
+    "До отдельного решения пользователя не менять принятый интерфейсный контракт, main, real-wargame-preview и не выполнять деплой.",
+    "Исходный HTML не добавлять в репозиторий; использовать его имя, версию, размер и SHA-256 как идентичность принятой базы."
+  ],
+  "suggested_verification": [
+    "npm run docs:sync",
+    "npm run docs:check",
+    "Проверить JSON-файлы и diff: изменены только документы подпроекта и сгенерированные индексы."
+  ],
+  "zworker": {
+    "boundaries": [
+      "До продуктовой реализации сначала составить матрицу UI-контракт → штатный владелец данных.",
+      "Передавать исполнителю только актуальные документы и точный SHA базы.",
+      "Не считать отдельную feature-ветку частью real-wargame-preview до явного GO пользователя.",
+      "Продуктовый код, перенос в preview и деплой не входят в эту подготовительную задачу."
+    ],
+    "expected_answer_format": "Текстовая матрица соответствий, список пробелов и рисков, без продуктовых изменений до отдельного разрешения."
+  }
+}

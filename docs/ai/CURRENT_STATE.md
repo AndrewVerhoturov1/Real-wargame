@@ -29,12 +29,21 @@ Generated from canonical repository and subproject metadata.
 - **Last verified commit:** `86071bb3d0c4ebd95adf4e87ee4d575fa7108da3`
 - **Status:** [generated status](../subprojects/infantry-combat-prototype-v1/STATUS.md)
 
+## Active subproject: Перенос Полигона из HTML-прототипа в продукт
+
+- **ID:** `polygon-html-to-product`
+- **Updated:** 2026-08-15
+- **Current focus:** Подготовлена организационная база подпроекта. Продуктовая реализация ещё не начата; следующим шагом является матрица соответствия пользовательского контракта HTML штатным владельцам данных и существующим точкам интеграции.
+- **Next step:** После отдельного разрешения на Q подготовить матрицу: UI-контракт → штатный владелец данных → существующий код/документ → пробел или риск.
+- **Last verified commit:** not recorded
+- **Status:** [generated status](../subprojects/polygon-html-to-product/STATUS.md)
+
 ## Active subproject: Полигон — редактор эксперимента
 
 - **ID:** `polygon-prototype`
-- **Updated:** 2026-08-14
-- **Current focus:** Пользователем принята Laboratory v1 — новая вкладка временных экспериментальных overrides, построенная непосредственно на Global Editors v1. Laboratory v1 является единственной текущей канонической базой следующих UI-итераций автономного Полигона. Приняты также Редактор юнита, Редактор карты, Программа, Metrics v18, Journal v4 и Global Editors v1. Следующая незавершённая крупная продуктовая вкладка — Серия; production telemetry/replay/registry/Laboratory wiring остаётся отдельной runtime-задачей.
-- **Next step:** Следующую крупную UI-итерацию начинать только от Laboratory v1. Ближайшая продуктовая вкладка — Серия. Production descriptor/adapter layer и resolution chain Laboratory overrides проектировать отдельно, сохраняя simulation и существующие registry/config sources единственными authoritative источниками игровых данных.
+- **Updated:** 2026-08-15
+- **Current focus:** Пользователем принята Interface Linkage v1 поверх актуальной Right Panel v1 / memory-tab-v3. Итерация сохраняет новую правую панель Юнит, Инфо, Внимание и Память и добавляет сквозную связность существующих разделов: Роль отдельно от Архетипа, linked-entity переходы и Используется, provenance Laboratory, двустороннюю связь Программа↔Журнал, единые Метрики для Серии, контекст исторического прогона и полный UX-контракт Сохранить эксперимент. Канонический внешний артефакт для ручной загрузки — polygon-interface-linkage-v1.html, 2 292 772 байта, SHA-256 4f33f19578698947cd629a88c6963c325895995fdd78a5380966ae1ef2fa1cfd; ACCEPTED_INTERFACE_LINKAGE_V1.md фиксирует контракт.
+- **Next step:** Пользователь вручную загружает polygon-interface-linkage-v1.html в docs/subprojects/polygon-prototype/prototypes/ и сверяет размер/SHA-256. После этого все следующие UI-итерации Полигона начинать только от Interface Linkage v1. Следующие вкладки правого инспектора и production wiring проектировать отдельно, не откатывая принятую связность интерфейса и Right Panel v1.
 - **Last verified commit:** `2549055956adff3e29c0b1f5ef9adb71d3146b66`
 - **Status:** [generated status](../subprojects/polygon-prototype/STATUS.md)
 

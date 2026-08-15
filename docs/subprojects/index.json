@@ -4,6 +4,7 @@
   "canonicalLauncher": "Run-Real-Wargame-Lab.bat",
   "activeSubprojects": [
     "infantry-combat-prototype-v1",
+    "polygon-html-to-product",
     "polygon-prototype",
     "soldier-topdown-appearance"
   ],
@@ -39,6 +40,20 @@
       "superseded_by": null,
       "status_path": "docs/subprojects/infantry-combat-prototype-v1/STATUS.md",
       "metadata_path": "docs/subprojects/infantry-combat-prototype-v1/subproject.json"
+    },
+    {
+      "id": "polygon-html-to-product",
+      "title": "Перенос Полигона из HTML-прототипа в продукт",
+      "status": "active",
+      "updated_at": "2026-08-15",
+      "goal": "Перенести принятый пользовательский интерфейс режима «Полигон» из HTML-прототипа в штатную реализацию Real Wargame, сохранив видимое поведение, сценарии, связи разделов и смысл действий пользователя, но используя существующую архитектуру и настоящих владельцев данных.",
+      "current_focus": "Подготовлена организационная база подпроекта. Продуктовая реализация ещё не начата; следующим шагом является матрица соответствия пользовательского контракта HTML штатным владельцам данных и существующим точкам интеграции.",
+      "next_step": "После отдельного разрешения на Q подготовить матрицу: UI-контракт → штатный владелец данных → существующий код/документ → пробел или риск.",
+      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+      "last_verified_commit": null,
+      "superseded_by": null,
+      "status_path": "docs/subprojects/polygon-html-to-product/STATUS.md",
+      "metadata_path": "docs/subprojects/polygon-html-to-product/subproject.json"
     },
     {
       "id": "polygon-prototype",
