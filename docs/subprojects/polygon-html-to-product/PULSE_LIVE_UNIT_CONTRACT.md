@@ -4,41 +4,47 @@
 
 Исполнитель: **ПУЛЬС** — связь нового интерфейса с живым юнитом симуляции.
 
-Этот документ фиксирует только первый настоящий вертикальный путь Полигона:
+Продуктовая база исследования:
+
+- `base_branch`: `real-wargame-preview`;
+- `base_commit`: `1246e1d612e648e7d7378db1c02be3bbf3d2a16a`;
+- `feature_branch`: `feature/20260815-polygon-pulse-live-unit-contract`.
+
+Цель ПУЛЬСА — зафиксировать настоящий сквозной путь:
 
 ```text
 карта
 → настоящий unitId
 → SimulationState / UnitModel
-→ вкладка «Юнит» LIVE
+→ правый «Юнит» LIVE
 → штатная команда смены позы
-→ повторное чтение того же UnitModel
+→ тот же UnitModel
+→ readback
 ```
 
-Контракт исследован по продуктовой базе:
+Новая реализация в этой ветке не создаётся. Документ фиксирует owners, read/write boundaries, planned scope, пробелы и следующую точку интеграции.
 
-- `base_branch`: `real-wargame-preview`;
-- `base_commit`: `1246e1d612e648e7d7378db1c02be3bbf3d2a16a`;
-- рабочая ветка: `feature/20260815-polygon-pulse-live-unit-contract`.
+### Важное уточнение источника Right Panel
 
-Документационный handoff прочитан из `feature/20260815-polygon-execution-map` (`078423776a890547533c0519b60417c39a9eda69`), потому что `Q_HANDOFFS.md` ещё не находится в указанном выше product base.
+В `Q_HANDOFFS.md` обязательный документ указан по пути:
 
-### Не входит в этот контракт
+`docs/subprojects/polygon-html-to-product/ACCEPTED_RIGHT_PANEL_V1.md`.
 
-- полный Unit Editor;
-- редактирование стартового описания участника эксперимента;
-- новый runtime;
-- новый selection store;
-- локальная копия `UnitModel` в UI;
-- прямое изменение `UnitModel` из новой вкладки;
-- HISTORY;
-- универсальный resolver всех связанных сущностей.
+Такого файла по этому пути нет. Однако канонический принятый документ существует на той же product base по правильному пути:
+
+`docs/subprojects/polygon-prototype/ACCEPTED_RIGHT_PANEL_V1.md`.
+
+Он прочитан и использован при обязательной проверке полного planned scope. Это **ошибка пути в handoff, а не отсутствие принятого UX-контракта**.
+
+Дополнительно учтён:
+
+`docs/subprojects/polygon-prototype/ACCEPTED_INTERFACE_LINKAGE_V1.md`.
 
 ---
 
 ## 1. Короткий итог
 
-На точной базе уже существует достаточный продуктовый путь для первого LIVE-среза.
+На exact base уже есть правильная основа первого LIVE Unit vertical slice:
 
 ```text
 BoardInputController.handlePointerUp
@@ -46,495 +52,401 @@ BoardInputController.handlePointerUp
 → selectUnit(state, unit.id)
 → state.selectedUnitId
 → CombatLabSelectionController.syncFromState()
-→ participant { roleId, unitId }
 → getSelectedUnit(state)
-→ тот же UnitModel из state.units
-→ session.executeInteractive({ kind: 'posture', unitId, targetPosture })
+→ живой UnitModel
+→ CombatLabVisualSession.executeInteractive({ kind: 'posture', ... })
 → executeCombatLabCommand(...)
 → requestPlayerPostureTransition(...)
 → simulation ticks
-→ повторное getSelectedUnit(state)
-→ behaviorRuntime.posture / physicalAction
+→ повторное чтение того же UnitModel
 ```
 
-Главное правило: **UI никогда не считает успешно принятую команду уже совершившимся изменением позы**. Смена позы в продукте временная. После команды панель обязана заново прочитать живой `UnitModel` и показывать фактическое состояние владельца.
+Главное правило: новый UI не хранит копию игрового состояния и не считает принятую команду уже завершившимся физическим действием.
+
+Первоначальный контракт был корректен по этому сквозному пути, но **недостаточно полно охватывал planned scope вкладки `Юнит`**. После самопроверки полный принятый объём вкладки внесён ниже отдельной матрицей.
 
 ---
 
-## 2. Владелец selection и настоящий `unitId`
+## 2. Владелец выбранного юнита
 
-### 2.1. Выбор на карте
+### Карта
 
-Файл:
+`src/input/BoardInputController.ts` при клике по карте получает настоящий объект из `state.units` через `findUnitAtGridPosition(...)` и передаёт в `selectUnit(...)` его настоящий `unit.id`.
 
-`src/input/BoardInputController.ts`
+### Каноническая selection identity
 
-В обычном режиме карты `handlePointerUp`:
+`SimulationState` хранит:
 
-1. переводит координату указателя в координату сетки;
-2. вызывает `findUnitAtGridPosition(this.state.units, grid)`;
-3. при попадании в бойца вызывает `selectUnit(this.state, unit.id)`;
-4. при снятии выбора вызывает `selectUnit(this.state, null)`.
+- `selectedUnitId`;
+- `selectedUnitIds`.
 
-То есть карта уже получает **настоящий `UnitModel` из `SimulationState.units`**, а идентичность выбора — это его настоящий `unit.id`.
+`getSelectedUnit(state)` разрешает выбранный ID обратно в объект из `state.units`.
 
-Никакого преобразования через название, роль UI или demo-ID здесь нет.
+Следовательно:
 
-### 2.2. Каноническая запись selection
+**владелец выбранного live-юнита — `SimulationState`, а не новый интерфейс Полигона.**
 
-Файлы:
+### Combat Lab selection bridge
 
-- `src/core/simulation/SimulationState.ts`;
-- `src/core/simulation/SimulationStateLegacy.ts`.
+`CombatLabSelectionController` уже синхронизирует выбор Combat Lab с `SimulationState`. Для participant текущего эксперимента связь разрешается через настоящий `unitId` роли.
 
-Публичный фасад `SimulationState.ts` экспортирует штатные `getSelectedUnit`, `getSelectedUnits` и прочие функции selection из существующей реализации.
+Мост не является вторым gameplay-selection store.
 
-`selectUnit(state, unitId)` устанавливает:
-
-```text
-state.selectedUnitId = unitId
-state.selectedUnitIds = unitId ? [unitId] : []
-```
-
-`getSelectedUnit(state)` возвращает:
-
-```text
-state.units.find(unit => unit.id === state.selectedUnitId)
-```
-
-**Владелец выбранного live-юнита — `SimulationState`, а не новый интерфейс.**
-
-### 2.3. Мост Combat Lab
-
-Файлы:
-
-- `src/combat-lab/selection/CombatLabSelectionController.ts`;
-- `src/combat-lab/CombatLabWorkspaceServices.ts`;
-- `src/combat-lab/CombatLabExtension.ts`.
-
-`CombatLabExtension` уже синхронизирует мост на существующем тикере:
-
-```text
-context.addTickerListener(
-  () => workspaceServices.selection.syncFromState()
-)
-```
-
-`CombatLabSelectionController.syncFromState()` читает `state.selectedUnitId`. Для участника `CombatLabWorkspaceServices` разрешает `unitId` обратно в роль текущего эксперимента через:
-
-```text
-draft.getExperiment().roles.find(role => role.unitId === unitId)
-```
-
-и публикует:
-
-```text
-{ kind: 'participant', roleId, unitId }
-```
-
-При выборе участника со стороны Combat Lab обратный путь также штатный: `CombatLabSelectionController.select(...)` вызывает `selectUnit(state, selection.unitId)`.
-
-Таким образом, мост двунаправленный и не является вторым gameplay-selection store.
-
-### Ограничение моста
-
-Если в `state.selectedUnitId` находится настоящий юнит, которого нет среди `experiment.roles`, `resolveParticipantByUnitId` возвращает `null`, и selection Combat Lab становится `none`.
-
-Для первого среза это допустимо: вкладка `Юнит` относится к участнику текущего эксперимента. Реализация не должна создавать локальную роль или поддельную связь. Если UX должен инспектировать произвольные юниты вне `experiment.roles`, это отдельное расширение product contract.
+Ограничение остаётся честным: если выбран настоящий юнит, которого нет среди `experiment.roles`, Combat Lab не должен создавать поддельную роль ради интерфейса.
 
 ---
 
-## 3. Контракт чтения вкладки «Юнит» LIVE
+## 3. Read-contract вкладки «Юнит» LIVE
 
-### 3.1. Источник
-
-Источник истины:
+Основной путь чтения:
 
 ```text
 SimulationState
-→ state.selectedUnitId
+→ selectedUnitId
 → getSelectedUnit(state)
 → UnitModel
 ```
 
-Файл модели:
+Вкладка должна при смене selection, после команды, на штатном цикле обновления и после reset/new run снова читать текущего владельца, а не считать ранее сохранённую JS-ссылку самостоятельной истиной.
 
-`src/core/units/UnitModel.ts`
+### Основные владельцы данных
 
-Для узкого первого среза достаточно подтвердить минимум:
+| Принятое поле / смысл | Product owner / read path | Готовность контракта |
+|---|---|---|
+| идентичность | `UnitModel.id`, `labels`, `side`, `type` | готово |
+| главное состояние | `UnitModel.behaviorRuntime.state`, боевые capabilities из combat/infantry runtime | готово для чтения; UI-агрегация должна быть тонкой |
+| здоровье | `UnitModel.soldier.condition.health` + combat/physiology runtime | готово |
+| ранения | `UnitModel.infantryCombatRuntime.wounds` | готово |
+| мораль | `UnitModel.soldier.condition.morale` | готово |
+| подавление | `UnitModel.behaviorRuntime.suppression` и/или соответствующий infantry suppression runtime для подробностей | готово |
+| усталость | `UnitModel.soldier.condition.fatigue`; расширенный physiology/fatigue runtime — только если нужен принятый уровень детализации | готово |
+| поза | `UnitModel.behaviorRuntime.posture` | готово |
+| текущий физический переход | `UnitModel.behaviorRuntime.physicalAction` | готово |
+| приказ игрока | `UnitModel.playerCommand`; `UnitModel.order` не смешивать с ним без явной семантики | готово для базового чтения |
+| действие сейчас | `behaviorRuntime.currentAction` + active physical/movement/infantry-combat runtime | **частично**: нужен единый presentation resolver/priority, если одновременно активны несколько runtime-подсистем |
+| оружие | `UnitModel.infantryCombatRuntime.primaryWeapon` и его resolved definition; legacy `WeaponModel` не должен становиться вторым UI-owner | готово для основного combat runtime |
+| боезапас | `primaryWeapon.roundsInWeapon` + `ammoInventory`; legacy fields использовать только как совместимость, не как новый SSOT | готово |
+| готовность оружия | infantry combat weapon/action/deployment state и effective capabilities; упрощённый legacy `behaviorRuntime.weaponReady` недостаточен для полной карточки | **частично**: нужен единый presentation resolver готовности |
+| тело/раны кратко | `infantryCombatRuntime.wounds.slots`, capabilities, physiology/medical runtime | готово для чтения |
+| вторичные сведения | только подтверждённые поля `UnitModel`/runtime; сворачивание — UI-owned state | готово как принцип; точный набор определяется интеграционной задачей |
+| связанные профили | `resolveCombatLabSelectedUnitProfileLinks(unit)` → `GameEditorRegistry` | готово |
 
-| UI | Источник |
-|---|---|
-| `unitId` | `UnitModel.id` |
-| имя | `UnitModel.labels.ru` |
-| сторона | `UnitModel.side` |
-| тип | `UnitModel.type` |
-| текущая поза | `UnitModel.behaviorRuntime.posture` |
-| текущий физический переход | `UnitModel.behaviorRuntime.physicalAction` |
-| подавление | `UnitModel.behaviorRuntime.suppression` |
-| стресс | `UnitModel.behaviorRuntime.stress` |
-| состояние бойца | `UnitModel.soldier.condition` |
-| текущий приказ | `UnitModel.order` / `UnitModel.playerCommand` — показывать раздельно только если UI действительно различает эти понятия |
-| боевой runtime | `UnitModel.infantryCombatRuntime` |
+### Что нельзя делать
 
-Этот документ **не утверждает полный набор полей принятого Right Panel**, потому что обязательный источник `docs/subprojects/polygon-html-to-product/ACCEPTED_RIGHT_PANEL_V1.md`, названный в `Q_HANDOFFS.md`, не найден ни в точной product base, ни в доступной документационной ветке `0784237...`. Нельзя восстанавливать отсутствующие поля по памяти или по HTML.
-
-### 3.2. Запрещённая схема
-
-Нельзя делать:
+Нельзя создавать:
 
 ```text
-map click
-→ copy UnitModel into new uiState.selectedUnit
-→ UI edits copy
-→ later sync back
+uiState.selectedUnit = copy(UnitModel)
 ```
 
-Допустимо хранить только UI-owned состояние — например, активную вкладку или раскрытие секции. Доменные значения читаются заново из настоящего `UnitModel`.
+и затем редактировать эту копию.
 
-### 3.3. Механизм обновления
-
-На точной базе нет отдельного общего события вида `UnitModelChanged` с полной ревизией каждого runtime-поля.
-
-Уже есть подходящий жизненный цикл:
-
-- selection синхронизируется через `context.addTickerListener(...)`;
-- Combat Lab получает кадры через существующий visual/session цикл;
-- `UnitModel` мутируется симуляцией in-place;
-- после reset/new run `CombatLabVisualSession` сохраняет объект `SimulationState` стабильным, но заменяет его содержимое и увеличивает `stateRevision`.
-
-Поэтому первый LIVE Unit должен:
-
-1. на смене selection заново получить выбранный юнит;
-2. при отрисовке/штатном тике читать поля из текущего `UnitModel`;
-3. после команды немедленно выполнить readback;
-4. на последующих simulation ticks продолжать readback до фактического состояния;
-5. после reset/new run снова разрешить выбранный `unitId`, а не держать старую ссылку как самостоятельный источник истины.
-
-Это **не** означает создание нового store. Это только повторное чтение владельца.
+Допустимо хранить только чистое UI-state: активную вкладку, раскрытие вторичного блока, локальный hover/focus и подобное.
 
 ---
 
-## 4. Штатная команда смены позы
+## 4. Разделение «Приказ игрока» и «Действие сейчас»
 
-### 4.1. Публичный для Combat Lab путь
+Принятый Right Panel требует показывать эти понятия отдельно.
 
-Файл:
+### Приказ игрока
 
-`src/combat-lab/runtime/CombatLabVisualSession.ts`
+Главный кандидат владельца намерения игрока:
 
-Для интерактивного действия уже существует:
+`UnitModel.playerCommand`.
+
+`UnitModel.order` является более узким текущим order/runtime-механизмом и не должен автоматически подменять собой весь блок `Приказ игрока`.
+
+### Действие сейчас
+
+Фактическое действие может находиться в нескольких runtime-подсистемах:
+
+- `behaviorRuntime.currentAction`;
+- `behaviorRuntime.physicalAction`;
+- `movementRuntime`;
+- `infantryCombatRuntime.activeFireTask`;
+- reload/deployment/transfer/first-aid action state внутри infantry combat runtime.
+
+Поэтому для production UI нужен **тонкий read-only presentation resolver**, если одного `currentAction` недостаточно для понятного пользователю описания. Он не должен становиться новым gameplay owner и не должен менять runtime.
+
+Статус этого пункта: **частично**.
+
+---
+
+## 5. Штатная смена позы
+
+### Публичная граница для текущей visual session
+
+Использовать:
 
 `CombatLabVisualSession.executeInteractive(command)`.
 
-Он:
-
-1. помечает текущий прогон как interactive;
-2. увеличивает штатную последовательность команд;
-3. вызывает `executeCombatLabCommand(this.state, command, context)`;
-4. сохраняет `lastCommandResult`;
-5. пишет результат в существующий журнал сессии.
-
-Поэтому вкладка `Юнит` первого среза должна использовать существующую session-boundary:
+Команда:
 
 ```text
-session.executeInteractive({
+{
   kind: 'posture',
   unitId: selectedUnitId,
-  targetPosture
-})
+  targetPosture: 'standing' | 'crouched' | 'prone'
+}
 ```
 
-где `targetPosture` — существующий `UnitPosture`:
+Дальше существующий путь идёт через:
 
-- `standing`;
-- `crouched`;
-- `prone`.
+`executeCombatLabCommand(...) → requestPlayerPostureTransition(...)`.
 
-Новая вкладка не должна сама придумывать `ownerId`, `commandSequence` или обходить `CombatLabVisualSession`, если работает внутри текущей visual session.
+Production сам проверяет ограничения, включая боеспособность, возможность встать и конфликт с физическими/оружейными действиями.
 
-### 4.2. Внутренний product path
+### Accepted не означает completed
 
-Файлы:
+`CombatLabCommandResultV1.accepted === true` означает, что запрос принят, а не что тело уже оказалось в новой позе.
 
-- `src/core/testing/combat-lab/CombatLabContracts.ts`;
-- `src/core/testing/combat-lab/CombatLabCommands.ts`;
-- `src/core/actions/PostureTransition.ts`.
+Поза меняется во времени через simulation ticks.
 
-Команда уже типизирована:
+Следовательно UI обязан:
+
+1. отправить штатную команду;
+2. показать `accepted/reasonRu` как результат запроса;
+3. заново прочитать настоящий `UnitModel`;
+4. продолжать показывать фактическую `behaviorRuntime.posture` и action state;
+5. не ставить целевую позу локально оптимистично.
+
+---
+
+## 6. Старый live Unit Editor нельзя использовать как shortcut
+
+`ProductionUnitEditor` имеет режим `live`, но существующий путь `GameEditorWorkbench` для `patch.posture` напрямую пишет в runtime-поля позы.
+
+Для нового Полигона это недопустимо: такой shortcut обходит `PostureTransition`, временную длительность, ownership физического действия и штатные причины отказа.
+
+Разрешение:
+
+- читать полезные значения из настоящих владельцев;
+- не переиспользовать direct-live write позы;
+- позу менять только штатной командой.
+
+Полная переделка старого Unit Editor не входит в текущую задачу ПУЛЬСА.
+
+---
+
+## 7. Связанные профили и GameEditorRegistry
+
+`GameEditorRegistry` — каталог общих редакторов, а не хранилище UnitModel.
+
+На exact base уже существует `resolveCombatLabSelectedUnitProfileLinks(unit)`, который может вернуть ссылки на реальные product profiles, в том числе:
+
+- профиль маршрута;
+- профиль движения;
+- профиль внимания;
+- архетип бойца;
+- профиль восприятия;
+- профиль состояния/ранений — когда соответствующие IDs присутствуют у юнита.
+
+Открытие должно идти через существующий механизм общего редактора с настоящим `editorId/profileId`.
+
+Interface Linkage v1 требует, чтобы это было ссылкой на authoritative source, а не копией профиля внутри правой панели.
+
+После возврата к `Юнит` данные снова читаются из `SimulationState` / `UnitModel`; selection owner не меняется.
+
+---
+
+## 8. LIVE и authoring — разные режимы
+
+Accepted HTML содержит более широкий замысел редактирования юнита, но продукт различает как минимум:
+
+- стартовое описание участника эксперимента;
+- живой runtime после запуска.
+
+ПУЛЬС фиксирует только границу:
+
+- Right Panel `Юнит` в LIVE читает runtime;
+- единственное прямо принятое live-изменение в этой карточке, для которого сейчас доказан штатный путь, — смена позы;
+- стартовые параметры нельзя менять через live runtime shortcut;
+- полный Unit Editor остаётся отдельной product-задачей после решения `authoring / LIVE / два режима`.
+
+---
+
+## 9. Reset, удаление и stale references
+
+После reset/new run интерфейс обязан заново разрешать selection и UnitModel из актуального `SimulationState`.
+
+Если:
+
+- `selectedUnitId === null`;
+- выбранный ID больше не существует в `state.units`;
+- текущий участник эксперимента больше не разрешается;
+
+вкладка переходит в честное пустое/unsupported состояние. Последний показанный объект не остаётся LIVE-истиной только потому, что UI ещё держит ссылку.
+
+---
+
+## 10. HISTORY
+
+Right Panel v1 требует, чтобы в историческом режиме Журнала карточка `Юнит` была read-only и показывала состояние на выбранный `viewTime`.
+
+Это **часть общего planned scope прототипа**, но реализация history provider относится к зоне ХРОНИСТА.
+
+ПУЛЬС должен сохранить семантическую границу для будущей интеграции:
 
 ```text
-{ kind: 'posture'; unitId: string; targetPosture: UnitPosture }
+LIVE Unit read
+!=
+HISTORY Unit read-at-viewTime
 ```
 
-`executeCombatLabCommand(...)`:
+Нельзя использовать текущий live `UnitModel` как будто это состояние прошлого момента.
 
-1. находит юнит по `unitId` в `state.units`;
-2. при отсутствии возвращает `combat_lab_unit_missing`;
-3. вызывает `requestPlayerPostureTransition(unit, targetPosture, now, context.ownerId)`;
-4. нормализует production result в `CombatLabCommandResultV1`.
+Статус: **не твоя зона для foundation; зависимость ПУЛЬСА при подключении исторической карточки**.
 
-`requestPlayerPostureTransition(...)` проверяет реальные ограничения продукта, включая:
+---
 
-- блокировку позы развёрнутым оружием;
-- жив/в сознании ли боец;
-- может ли боец встать.
+# 11. Проверка полного planned scope
 
-То есть UI не должен повторять эти правила и не должен решать сам, допустима ли поза.
+Эта проверка добавлена по обязательному требованию подпроекта: переносится не только минимальный первый срез, но и весь запланированный функциональный объём принятого HTML-прототипа, относящийся к зоне ПУЛЬСА.
 
-### 4.3. Результат команды — не результат физического перехода
+Статусы ниже означают **готовность контракта/продуктовой основы**, а не наличие уже реализованного нового UI. В этой ветке product code не создаётся.
 
-`CombatLabCommandResultV1` содержит:
+| Плановая функция прототипа в зоне ПУЛЬСА | Статус | Учтено теперь | Owner / зависимость / следующий шаг |
+|---|---|---|---|
+| выбор настоящего бойца на карте | **готово** | да | `BoardInputController` + `SimulationState` |
+| единая identity выбранного бойца между картой и правой панелью | **готово** | да | `SimulationState.selectedUnitId`, `CombatLabSelectionController` |
+| отсутствие второго `selectedUnit` store | **готово** | да | архитектурный инвариант первого среза |
+| имя/ID/сторона/тип выбранного бойца | **готово** | да | `UnitModel` |
+| боеспособность и главное состояние | **готово** | да | behavior + combat/infantry capabilities; UI только агрегирует для показа |
+| здоровье | **готово** | да | `soldier.condition.health`, physiology/combat runtime |
+| ранения | **готово** | да | `infantryCombatRuntime.wounds` |
+| мораль | **готово** | да, в первой версии было недостаточно явно | `soldier.condition.morale` |
+| подавление | **готово** | да | behavior/infantry suppression runtime |
+| усталость | **готово** | да, в первой версии было недостаточно явно | `soldier.condition.fatigue` + physiology при необходимости |
+| текущая поза | **готово** | да | `behaviorRuntime.posture` |
+| переключение `стоя / пригнувшись / лёжа` | **готово** | да | `CombatLabVisualSession.executeInteractive` → posture command |
+| readback после смены позы | **готово** | да | повторное чтение того же `UnitModel` после команды и simulation ticks |
+| показать штатную причину отказа команды | **готово** | да | `CombatLabCommandResultV1.reasonRu/reasonCode` |
+| `Приказ игрока` отдельным блоком | **готово** | да, теперь явно | `UnitModel.playerCommand`; не смешивать с текущим действием |
+| `Действие сейчас` отдельным блоком | **частично** | да, ранее было слишком общо | runtime источники есть, но нужен единый read-only presentation resolver/priority |
+| вооружение | **готово** | да, ранее было недостаточно явно | `infantryCombatRuntime.primaryWeapon.resolved` |
+| боекомплект | **готово** | да, ранее было недостаточно явно | `roundsInWeapon` + `ammoInventory` |
+| готовность оружия | **частично** | да, ранее не выделено | данные есть в weapon/action/deployment/capability runtime; нужен единый UI read resolver |
+| краткая информация о теле/ранениях | **готово** | да, ранее не раскрыто | wound slots + capabilities + physiology/medical runtime |
+| вторичные сведения в сворачиваемом блоке | **готово как UI/read boundary** | да | ARKA владеет collapse UI-state; ПУЛЬС допускает только подтверждённые runtime-поля |
+| переход к связанным профилям | **готово** | да; исправлена прежняя чрезмерная осторожность | `resolveCombatLabSelectedUnitProfileLinks` + `GameEditorRegistry` |
+| сохранить того же выбранного бойца при переходе к профилю и обратно | **частично** | да | существующие request/return links есть; интеграционный сценарий должен доказать continuity selection |
+| роль бойца и архетип — независимые сущности | **частично / не полностью зона ПУЛЬСА** | зафиксировано | authoring-модель/Unit Editor; ПУЛЬС не должен смешивать их при read/link navigation |
+| полный Unit Editor | **не твоя зона в этой задаче** | да | нужен отдельный product decision `authoring / LIVE / два режима` |
+| изменение здоровья, морали, боезапаса, traits и loadout прямо из LIVE Right Panel | **не твоя зона / не принято как обязательный live-control Right Panel v1** | да | не выдумывать write-path; если станет требованием — отдельный owner/write-contract |
+| fire/move/reload/deploy/transfer/first aid как существующие Combat Lab commands | **не твоя зона текущего Right Panel v1** | да | команды существуют, но не превращать наличие API в неутверждённые кнопки вкладки `Юнит` |
+| read-only `Юнит` на историческом `viewTime` | **не твоя зона foundation / зависимость** | да | ХРОНИСТ должен дать history provider; ПУЛЬС затем маппит Unit presentation на historical snapshot |
+| универсальная linked-entity система для всех сущностей Полигона | **не твоя зона** | да | общий navigation/resolver contract вне узкого Unit path |
+| `Инфо / Внимание / Память` | **не твоя зона** | да | ЛИНЗА |
+
+### Вывод самопроверки
+
+Первая версия контракта **не была полной по planned scope**. Она хорошо закрывала доказательный путь selection → posture command → readback, но недостаточно явно учитывала полный принятый состав `Юнит`: мораль, усталость, вооружение, боезапас, готовность оружия, тело/раны, отдельные `Приказ игрока` и `Действие сейчас`, а также реальный linked-profile flow.
+
+Эти пункты теперь зафиксированы без начала новой реализации.
+
+---
+
+## 12. Оставшиеся product gaps и зависимости
+
+### G1 — единый read-only resolver «Действие сейчас»
+
+Runtime-данные существуют, но фактическое действие может одновременно отражаться в behavior, physical action, movement и infantry-combat подсистемах.
+
+Следующий кодовый исполнитель не должен собирать случайный набор `if` прямо в DOM. Нужен тонкий presentation adapter/resolver с явным приоритетом состояний.
+
+Он не становится gameplay owner.
+
+### G2 — единый read-only resolver «Готовность оружия»
+
+Для полной принятой карточки простого boolean недостаточно: на готовность влияют наличие оружия/патронов, физическая возможность пользоваться оружием, текущая перезарядка, deployment/action locks и другие штатные состояния.
+
+Нужен небольшой presentation contract поверх настоящих owners, без второго weapon state.
+
+### G3 — continuity при открытии общего профиля
+
+Механизм ссылок на profile/editor существует. Интеграционная задача должна доказать пользовательский сценарий:
 
 ```text
-accepted
-reasonCode
-reasonRu
-ownerToken
+выбран боец A
+→ открыть его authoritative profile
+→ вернуться
+→ правый «Юнит» по-прежнему относится к A, если gameplay selection не менялся
 ```
 
-`accepted: true` означает, что production-система **приняла запрос**, а не что `behaviorRuntime.posture` уже равен `targetPosture`.
+### G4 — полный Unit Editor
 
-Это подтверждается `scripts/posture_transition_smoke.ts`: например, после запроса `standing → crouched` текущая поза остаётся `standing` до завершения временного перехода; лишь после simulation tick на нужную длительность она становится `crouched`.
+Блокируется отдельным product decision о том, что именно редактируется:
 
-Следовательно, optimistic UI вида «нажал Лёжа → немедленно локально показать `prone`» запрещён.
+- стартовое состояние;
+- LIVE runtime;
+- два явно разделённых режима.
 
----
+ПУЛЬС не должен решать это скрыто внутри Right Panel.
 
-## 5. Readback: как доказать, что изменился тот же живой юнит
+### G5 — historical Unit
 
-### Обязательная последовательность
+Нужен history/read-at-time provider от ХРОНИСТА. До него `viewTime` нельзя имитировать чтением текущего `UnitModel`.
 
-```text
-1. selectedUnitId = state.selectedUnitId
-2. before = getSelectedUnit(state)
-3. проверить before?.id === selectedUnitId
-4. result = session.executeInteractive({ kind:'posture', unitId:selectedUnitId, targetPosture })
-5. не менять UI-модель позы вручную
-6. afterRequest = getSelectedUnit(state)
-7. показать result.accepted/reasonRu как результат запроса
-8. показать afterRequest.behaviorRuntime.posture как фактическую текущую позу
-9. если physicalAction.status === 'running', показать состояние перехода только из runtime, без собственного таймера истины
-10. после штатных simulation ticks снова получить getSelectedUnit(state)
-11. завершение подтверждено только когда живой UnitModel отражает фактическую позу/terminal action state
-```
+### G6 — handoff path cleanup
 
-### Инварианты
+`Q_HANDOFFS.md` указывает accepted Right Panel по неверному подпроекту. Для будущих исполнителей оркестратору следует исправить ссылку на:
 
-- `before` и readback разрешаются через один `SimulationState`;
-- идентичность подтверждается `UnitModel.id === selectedUnitId`;
-- кнопка не меняет `behaviorRuntime.posture`;
-- `accepted` не подменяет фактическое runtime-состояние;
-- отказ команды оставляет панель на данных владельца и показывает `reasonRu`;
-- после reset/new run старый объект не считается живым только потому, что UI ещё держит ссылку;
-- уничтоженный или отсутствующий `unitId` должен привести вкладку к состоянию «нет выбранного живого юнита», а не к stale-карточке.
+`docs/subprojects/polygon-prototype/ACCEPTED_RIGHT_PANEL_V1.md`.
+
+ПУЛЬС не меняет `Q_HANDOFFS.md`, потому что текущая задача разрешает изменять только этот контракт.
 
 ---
 
-## 6. Почему нельзя переиспользовать live-write старого ProductionUnitEditor для позы
-
-Файлы:
-
-- `src/ui/ProductionUnitEditor.ts`;
-- `src/ui/GameEditorWorkbench.ts`.
-
-`ProductionUnitEditorAdapterV1` действительно имеет режим `live`, а `GameEditorWorkbench` умеет читать `snapshotFromLiveUnit(selected)`.
-
-Но существующий `applyProductionPatchToLiveUnit(...)` для `patch.posture` делает прямую запись:
-
-```text
-unit.behaviorRuntime.posture = patch.posture
-unit.behaviorRuntime.previousPosture = patch.posture
-```
-
-Это несовместимо с новым контрактом Полигона, потому что обходит временный `PostureTransition`, ownership физического действия и production rejection semantics.
-
-**Решение для первого среза:**
-
-- чтение полезных полей из `UnitModel` можно повторно использовать как ориентир;
-- live-write позы из `GameEditorWorkbench` / `ProductionUnitEditor` **не использовать**;
-- изменение позы — только через `CombatLabVisualSession.executeInteractive(...)` и штатную posture command.
-
-Полное исправление/переосмысление старого live Unit Editor не является задачей ПУЛЬС и не должно попасть в первый vertical slice.
-
----
-
-## 7. `GameEditorRegistry`: его роль и граница
-
-Файл:
-
-`src/game-editors/GameEditorRegistry.ts`.
-
-`GameEditorRegistry` является каталогом зарегистрированных общих редакторов и их activation policy по surfaces. Он **не владеет live-состоянием выбранного бойца** и не должен становиться промежуточным хранилищем UnitModel.
-
-Для будущей ссылки из вкладки `Юнит` на authoritative profile/editor допустим путь через уже зарегистрированный shared editor, но:
-
-- ссылка должна нести настоящий product entity/profile id;
-- открытие редактора не меняет владельца selection;
-- возвращение к вкладке снова читает `SimulationState` / `UnitModel`;
-- профильный редактор не заменяет posture command и не превращает первый срез в полный Unit Editor.
-
-Точный linked-profile UX должен сверяться с отсутствующим сейчас `ACCEPTED_RIGHT_PANEL_V1.md`; поэтому в этом документе он не объявляется частью обязательного минимального среза.
-
----
-
-## 8. Read/write boundary первого среза
-
-| Операция | Разрешённый путь | Запрещено |
-|---|---|---|
-| выбрать бойца на карте | `BoardInputController → findUnitAtGridPosition → selectUnit` | отдельный `selectedUnit` store |
-| получить `unitId` | `SimulationState.selectedUnitId` / participant selection bridge | имя, индекс массива, demo role id вместо unitId |
-| получить живой юнит | `getSelectedUnit(state)` / `state.units` по тому же id | копия UnitModel как источник истины |
-| показать LIVE-поля | читать текущий `UnitModel` | вычислять/подменять значения в UI |
-| запросить позу | `CombatLabVisualSession.executeInteractive({kind:'posture', ...})` | `unit.behaviorRuntime.posture = ...` |
-| решить, разрешена ли поза | production `requestPlayerPostureTransition` | дублировать правила в UI |
-| показать результат запроса | `CombatLabCommandResultV1` | считать `accepted` завершением перехода |
-| подтвердить фактическую позу | повторное чтение `UnitModel.behaviorRuntime.posture` и action state | optimistic локальное значение |
-| reset/new run | заново разрешить selection и UnitModel из текущего state | продолжать показывать старую ссылку |
-
----
-
-## 9. Ошибки и крайние случаи
-
-### Нет выбранного юнита
-
-`state.selectedUnitId === null` или `getSelectedUnit(state) === undefined`:
-
-- вкладка показывает пустое честное состояние;
-- posture controls недоступны;
-- никакой последний UnitModel не остаётся видимым как LIVE.
-
-### Юнит выбран, но не является participant текущего эксперимента
-
-- `SimulationState` всё ещё содержит настоящий `unitId`;
-- Combat Lab selection bridge может дать `kind: 'none'`;
-- не создавать фальшивую роль;
-- для первого среза показывать/управлять только подтверждённым participant flow либо явно считать такой selection неподдержанным.
-
-### Команда отклонена
-
-- показать `reasonRu` из `CombatLabCommandResultV1`;
-- не менять отображаемую позу вручную;
-- заново прочитать UnitModel.
-
-### Переход идёт
-
-- `accepted` может быть `true`, а текущая поза ещё старая;
-- состояние перехода брать из `behaviorRuntime.physicalAction`;
-- продолжать читать runtime на simulation ticks.
-
-### Прогон на паузе
-
-Команда может быть принята, но физический переход не завершится без продвижения simulation time. UI не должен запускать собственный таймер, чтобы «доделать» позу.
-
-### Reset/new run
-
-`CombatLabVisualSession` заменяет содержимое стабильного `SimulationState` in-place и увеличивает свою ревизию. После reset необходимо reconciliate selection и заново получить live unit; старая JS-ссылка на UnitModel не является гарантией актуальности.
-
----
-
-## 10. Что подтверждено и что пока не поддержано
-
-### Подтверждено на exact base
-
-- карта выбирает настоящий `UnitModel.id`;
-- `SimulationState.selectedUnitId` — каноническая selection identity;
-- `CombatLabSelectionController` синхронизируется с этой identity в обе стороны;
-- `getSelectedUnit(state)` возвращает настоящий live `UnitModel`;
-- posture command типизирована в `CombatLabScriptCommandV1`;
-- `CombatLabVisualSession.executeInteractive(...)` — готовая интерактивная session-boundary;
-- posture write идёт в production `requestPlayerPostureTransition`;
-- transition имеет настоящие отказы и временную длительность;
-- readback должен читать тот же UnitModel, а не UI-копию;
-- старый `ProductionUnitEditor` direct-live posture write непригоден для нового пути.
-
-### Не утверждается этим контрактом
-
-- полный список полей Right Panel v1;
-- редактирование здоровья, морали, suppression, traits, loadout и других полей из новой вкладки;
-- единая семантика полного Unit Editor (`authoring / LIVE / два режима`);
-- произвольный inspection unit вне `experiment.roles` через Combat Lab selection;
-- HISTORY/read-at-time;
-- общий typed linked-entity resolver;
-- изменение shared profile через правую панель.
-
----
-
-## 11. Блокеры и пробелы
-
-### B1 — отсутствует обязательный accepted source
-
-`Q_HANDOFFS.md` требует `docs/subprojects/polygon-html-to-product/ACCEPTED_RIGHT_PANEL_V1.md`, но файл не найден:
-
-- в product base `1246e1d...`;
-- в документационной ветке/коммите handoff `0784237...`;
-- через поиск доступного репозитория.
-
-Это **не блокирует узкий** путь selection → UnitModel → posture command → readback, потому что он подтверждён кодом и `MIGRATION_SYNTHESIS`/`WORK_PLAN`/`EXECUTION_STREAMS`.
-
-Это блокирует заявление, что здесь зафиксирован полный field contract вкладки `Юнит` и точный linked-profile UX.
-
-### B2 — старый live Unit Editor имеет неподходящий write-path
-
-`GameEditorWorkbench` напрямую меняет live posture. Это не блокирует новый срез, если новый Right Panel не переиспользует этот write-path. Исправление старого полного редактора — отдельная задача после продуктового решения о режимах Unit Editor.
-
-### B3 — нет отдельного общего UnitModel change event
-
-Для первого среза достаточно существующего tick/render цикла и повторного чтения владельца. Если позднее потребуется реактивная подписка без кадрового reread, её надо проектировать как тонкий product adapter, а не как новый store.
-
----
-
-## 12. Точная точка интеграции с АРКА
-
-Следующая задача:
+## 13. Следующая точка интеграции
 
 `АРКА + ПУЛЬС → первый настоящий LIVE Unit`.
 
-Минимальный интеграционный сценарий:
+Интеграционная задача должна строиться не как минимальная демо-карточка из двух полей, а как **первый production slice с дорогой к полному planned Unit scope**.
 
-```text
-1. АРКА предоставляет контейнер правой вкладки «Юнит» и только UI-owned состояние оболочки.
-2. ПУЛЬС подключает существующий CombatLabWorkspaceServices.selection / SimulationState.
-3. Клик по настоящему бойцу на штатной карте приводит к state.selectedUnitId = unit.id.
-4. Вкладка разрешает тот же UnitModel через getSelectedUnit(state).
-5. Вкладка показывает минимум identity + текущую posture из UnitModel.
-6. Нажатие «Стоя / Пригнувшись / Лёжа» вызывает session.executeInteractive(posture command).
-7. UI показывает command result, но позу берёт только из readback UnitModel.
-8. После simulation ticks фактическое изменение posture появляется без локальной UI-мутации.
-9. Выбор другого бойца, снятие selection и reset/new run не оставляют stale UnitModel.
-```
-
-### Acceptance первого интеграционного среза
+Минимальная доказательная приёмка остаётся:
 
 ```text
 выбрать A на карте
-→ справа unitId A и фактическая поза A
-→ запросить другую позу
-→ увидеть accepted/rejected от production command
-→ если accepted, увидеть реальный переход, а не мгновенную подмену
-→ после simulation ticks справа фактическая новая поза A
+→ справа настоящий A
+→ изменить позу штатной командой
+→ получить accepted/rejected
+→ увидеть реальный переход и readback
 → выбрать B
-→ справа данные B
+→ справа B
 → reset/new run
-→ старая ссылка A/B не остаётся источником LIVE-данных
+→ stale A/B не остаётся источником данных
 ```
 
-Если для реализации этого сценария потребуется новый gameplay store или прямой `UnitModel` write из UI, интеграцию надо остановить: это будет нарушение контракта, а не допустимое упрощение.
+Но план реализации вкладки должен сразу учитывать полный read-scope из раздела 11 и не закладывать архитектуру, которая потом помешает добавить здоровье, мораль, усталость, ранения, оружие, боезапас, готовность, приказ/действие и linked profiles.
+
+После первого среза рекомендуемая очередь внутри `Юнит`:
+
+```text
+1. identity + posture + command result/readback
+2. health/morale/suppression/fatigue + combat capability
+3. weapon/ammo + weapon readiness resolver
+4. wounds/body summary
+5. player order vs current action resolver
+6. linked authoritative profiles + return continuity
+7. HISTORY Unit после history-provider ХРОНИСТА
+```
 
 ---
 
-## 13. Источники, проверенные для контракта
+## 14. Проверенные источники
 
 Документация:
 
 - `AGENTS.md`;
-- `docs/orchestration/ORCHESTRATION_PROTOCOL.md`;
 - `.agents/skills/real-wargame-orchestration/SKILL.md`;
 - `docs/ai/repo-context.json`;
-- `docs/subprojects/polygon-html-to-product/Q_HANDOFFS.md` — из `078423776a890547533c0519b60417c39a9eda69`;
-- `docs/subprojects/polygon-html-to-product/MIGRATION_SYNTHESIS.md` — из того же документационного контекста;
-- `docs/subprojects/polygon-html-to-product/WORK_PLAN.md` — из того же документационного контекста;
-- `docs/subprojects/polygon-html-to-product/EXECUTION_STREAMS.md` — из того же документационного контекста.
+- `docs/subprojects/polygon-html-to-product/Q_HANDOFFS.md`;
+- `docs/subprojects/polygon-html-to-product/MIGRATION_SYNTHESIS.md`;
+- `docs/subprojects/polygon-html-to-product/WORK_PLAN.md`;
+- `docs/subprojects/polygon-html-to-product/EXECUTION_STREAMS.md`;
+- `docs/subprojects/polygon-prototype/ACCEPTED_RIGHT_PANEL_V1.md`;
+- `docs/subprojects/polygon-prototype/ACCEPTED_INTERFACE_LINKAGE_V1.md`.
 
 Код exact base `1246e1d612e648e7d7378db1c02be3bbf3d2a16a`:
 
@@ -542,6 +454,11 @@ unit.behaviorRuntime.previousPosture = patch.posture
 - `src/core/simulation/SimulationState.ts`;
 - `src/core/simulation/SimulationStateLegacy.ts`;
 - `src/core/units/UnitModel.ts`;
+- `src/core/behavior/BehaviorModel.ts`;
+- `src/core/combat/CombatDamage.ts`;
+- `src/core/combat/WeaponModel.ts`;
+- `src/core/infantry-combat/runtime/InfantryCombatRuntimeTypes.ts`;
+- `src/core/infantry-combat/runtime/InfantryBodyTypes.ts`;
 - `src/combat-lab/selection/CombatLabSelectionController.ts`;
 - `src/combat-lab/CombatLabWorkspaceServices.ts`;
 - `src/combat-lab/CombatLabExtension.ts`;
@@ -549,23 +466,14 @@ unit.behaviorRuntime.previousPosture = patch.posture
 - `src/core/testing/combat-lab/CombatLabContracts.ts`;
 - `src/core/testing/combat-lab/CombatLabCommands.ts`;
 - `src/core/actions/PostureTransition.ts`;
-- `scripts/posture_transition_smoke.ts`;
+- `src/combat-lab/game-editors/CombatLabGameEditorLinks.ts`;
+- `src/game-editors/GameEditorRegistry.ts`;
 - `src/ui/ProductionUnitEditor.ts`;
 - `src/ui/GameEditorWorkbench.ts`;
-- `src/game-editors/GameEditorRegistry.ts`.
+- `scripts/posture_transition_smoke.ts`.
 
 ## Итог
 
-Первый LIVE Unit **не требует нового runtime, нового selection store или прямого редактирования модели**. На exact base уже есть правильный сквозной каркас:
+ПУЛЬС подтверждает: первый LIVE Unit может быть подключён без нового runtime, без нового selection store и без прямого изменения `UnitModel` из UI.
 
-```text
-штатная карта
-→ SimulationState selection
-→ настоящий UnitModel
-→ read-only LIVE view
-→ CombatLabVisualSession.executeInteractive(posture)
-→ production PostureTransition
-→ readback того же UnitModel
-```
-
-Главный интеграционный запрет: не использовать прямой live posture write старого `ProductionUnitEditor` как shortcut.
+После самопроверки контракт также фиксирует **полный planned scope вкладки `Юнит`**, а не только минимальную смену позы. Не закрытые части теперь обозначены как конкретные product gaps или зависимости, а не потеряны из плана.
