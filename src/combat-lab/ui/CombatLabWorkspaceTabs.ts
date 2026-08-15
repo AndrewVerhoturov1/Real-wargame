@@ -84,13 +84,14 @@ export class CombatLabWorkspaceTabs {
     topbarLeft.append(brand, toolbarHost);
 
     const topbarCenter = node('div', 'polygon-shell-topbar-center');
-    topbarCenter.setAttribute('aria-hidden', 'true');
+    topbarCenter.append(
+      shellButton('ФАЙЛ', 'Файл'),
+      shellButton('РЕДАКТОРЫ', 'Редакторы'),
+    );
 
     const topbarRight = node('div', 'polygon-shell-topbar-right');
     topbarRight.append(
-      shellButton('▤', 'Файл'),
-      shellButton('≛', 'Редакторы'),
-      shellButton('◉', 'Вид'),
+      shellButton('ВИД ▾', 'Вид'),
       shellButton('EN', 'Язык'),
     );
     topbar.append(topbarLeft, topbarCenter, topbarRight);
