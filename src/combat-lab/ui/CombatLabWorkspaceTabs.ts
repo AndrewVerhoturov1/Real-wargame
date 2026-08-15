@@ -81,8 +81,7 @@ export class CombatLabWorkspaceTabs {
     const toolbarHost = node('div', 'combat-lab-workspace-toolbar combat-lab-stage10-toolbar-host polygon-shell-run-toolbar');
     toolbarHost.dataset.combatLabRunToolbarHost = 'true';
     this.toolbarHost = toolbarHost;
-    this.status = node('span', 'combat-lab-dock-status polygon-shell-runtime-status', 'LIVE');
-    topbarLeft.append(brand, toolbarHost, this.status);
+    topbarLeft.append(brand, toolbarHost);
 
     const topbarCenter = node('nav', 'polygon-shell-topbar-center');
     topbarCenter.setAttribute('aria-label', 'Работа с экспериментом');
@@ -91,6 +90,23 @@ export class CombatLabWorkspaceTabs {
     const topbarRight = node('div', 'polygon-shell-topbar-right');
     topbarRight.append(shellButton('ВИД ▾'), shellButton('EN'));
     topbar.append(topbarLeft, topbarCenter, topbarRight);
+
+    const historyStrip = node('div', 'polygon-shell-history-strip');
+    historyStrip.setAttribute('aria-label', 'Хронология эксперимента');
+    historyStrip.append(node('strong', 'polygon-shell-history-live', 'LIVE'));
+    const historyTrack = node('span', 'polygon-shell-history-track');
+    historyTrack.setAttribute('aria-hidden', 'true');
+    historyTrack.append(node('i', 'polygon-shell-history-track-fill'));
+    this.status = node('span', 'combat-lab-dock-status polygon-shell-history-status', 'LIVE');
+    const historySpacer = node('span', 'polygon-shell-history-spacer');
+    const historyActions = node('div', 'polygon-shell-history-actions');
+    historyActions.append(
+      historyButton('ФИЛЬТРЫ'),
+      historyButton('‹', 'Предыдущее событие'),
+      historyButton('›', 'Следующее событие'),
+      historyButton('ХРОНОЛОГИЯ ▾'),
+    );
+    historyStrip.append(historyTrack, this.status, historySpacer, historyActions);
 
     const viewport = node('div', 'polygon-shell-viewport');
 
@@ -187,7 +203,7 @@ export class CombatLabWorkspaceTabs {
     workspaceHostsByRoot.set(this.root, this.hosts);
     registeredWorkspaceRoots.add(this.root);
 
-    shell.append(topbar, viewport, hiddenHosts);
+    shell.append(topbar, historyStrip, viewport, hiddenHosts);
     options.host.append(shell);
 
     this.listen(this.toggle, 'click', () => this.setCollapsed(!this.collapsed));
@@ -370,6 +386,13 @@ function shellButton(label: string): HTMLButtonElement {
   const element = button(label, 'polygon-shell-top-button');
   element.setAttribute('aria-disabled', 'true');
   element.title = 'Команда будет подключена через штатный product owner в отдельной задаче.';
+  return element;
+}
+
+function historyButton(label: string, title = label): HTMLButtonElement {
+  const element = button(label, 'polygon-shell-history-button');
+  element.setAttribute('aria-disabled', 'true');
+  element.title = title;
   return element;
 }
 
