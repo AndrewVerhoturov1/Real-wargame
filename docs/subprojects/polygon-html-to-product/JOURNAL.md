@@ -41,15 +41,49 @@
 - `HISTORY_EXECUTOR_HANDOFF.md` — отдельный scope HistoryProvider/viewTime/timeline;
 - `EXECUTION_STREAMS.md` — пять дорожек вместо четырёх;
 - `PROJECT_MAP_TEMPLATE.md` — параллельные дорожки ХРОНИСТ/ИСТОРИК;
-- `SUBPROJECT.md` и status metadata — новая граница ответственности.
+- `SUBPROJECT.md` и status metadata — новая граница ответственности;
+- `CHRONIST_READINESS.md` — живая матрица текущих product-кандидатов и проверок.
 
 Текущая readiness ХРОНИСТА:
 
 - ready core: stable Program IDs, structured Program journal, fixed Combat Lab metrics, batch/headless runner, seed, узкий experiment codec;
 - partial: общий LIVE Journal, Program↔Journal, Series analysis, current rerun, full Save/Open;
-- absent: durable RunId, Metrics v18 telemetry/report, generic Laboratory, durable Series/Run records, verified frozen rerun, full ExperimentEnvelope;
+- absent: durable/persisted Run records, Metrics v18 telemetry/report, generic Laboratory, durable Series records, verified frozen rerun, full ExperimentEnvelope;
 - History/timeline: отдельная дорожка ИСТОРИК.
 
-Следующая продуктовая вертикаль ХРОНИСТА: **C1 Run identity + Structured LIVE Journal foundation**.
+## 2026-08-16 — C1 Run/Event identity: implementation candidate
 
-Документационная ветка не является product implementation. Для C1 перед стартом требуется свежий exact HEAD `real-wargame-preview` и отдельная feature-ветка.
+Product branch:
+
+`feature/20260816-polygon-journal-live-foundation`
+
+Base:
+
+`1246e1d612e648e7d7378db1c02be3bbf3d2a16a`
+
+Candidate HEAD:
+
+`264272b246a1fd235e1a55a372cc58262fd9f8cc`
+
+Реализовано в кандидате:
+
+- новый `RunId` каждого visual reset/run;
+- `RunIdentity = runId + experimentId + revision + sourceDigest + seed`;
+- `eventId` каждого structured Program Journal event;
+- точный `ProgramStepRef = experimentId + revision + trackId + stepId`;
+- `runIdentity` публикуется в visual runtime snapshot;
+- journal остаётся bounded до 256 entries;
+- History/viewTime/historyStore не добавлены;
+- после performance self-review убран повторный digest из горячего event path: digest считается при создании RunIdentity, а runtime-проверка соответствия O(1) по experimentId/revision.
+
+TDD/проверки:
+
+- до production changes создан failing source-contract; RED подтверждён на отсутствии `CombatLabRunIdentityV1`;
+- контрольный RED commit: `5f36b61ab9f20e5ac2f1877258ecf8d98c29f210`;
+- в рабочую ветку добавлены `combat_lab_journal_live_identity_smoke.mjs` и `combat_lab_journal_live_identity_behavior_smoke.ts`;
+- локальная зеркальная focused source-contract проверка ключевых инвариантов: PASS;
+- штатные repository `smoke / tsc / build` в текущем remote-only окружении не запущены, поэтому C1 **не принят и остаётся В РАБОТЕ**.
+
+Следующая точка C1: получить штатные проверки exact candidate `264272b...`; только после зелёных gates C1 получает `ГОТОВО` и открывает C2/C3 и основу для ИСТОРИКА.
+
+`real-wargame-preview`, `main`, deployment не затронуты.
