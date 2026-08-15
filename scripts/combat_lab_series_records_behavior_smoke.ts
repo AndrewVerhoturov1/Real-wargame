@@ -25,6 +25,7 @@ const measurement = {
   titleRu: 'Попадания',
   streamId: 'fire.impact',
 } as const;
+const maximumSimulationSeconds = 60;
 
 const series: CombatLabSeriesRecordV1 = {
   schemaVersion: 1,
@@ -35,6 +36,7 @@ const series: CombatLabSeriesRecordV1 = {
   measurementSetSnapshot: [measurement],
   requestedRunCount: 2,
   seedPolicy: 'random_per_run',
+  maximumSimulationSeconds,
   status: 'completed',
   runIds: ['run-0', 'run-1'],
   createdAtIso: '2026-08-16T00:00:00.000Z',
@@ -46,6 +48,7 @@ const archive = createCombatLabSeriesArchive(series, runs);
 assert.equal(archive.runs.length, 2);
 assert.ok(archive.archiveDigest.length > 0);
 assert.equal(archive.runs[0]?.seed, 111);
+assert.equal(archive.runs[0]?.maximumSimulationSeconds, maximumSimulationSeconds);
 assert.equal(archive.runs[1]?.measurementValues[0]?.value, 5);
 
 const serialized = serializeCombatLabSeriesArchive(archive);
@@ -55,6 +58,10 @@ assert.deepEqual(restored, archive);
 assert.throws(
   () => createCombatLabSeriesArchive(series, [{ ...runs[0]!, runtimeVersionId: 'different-runtime' }, runs[1]!]),
   /runtimeVersionId differs from Series/,
+);
+assert.throws(
+  () => createCombatLabSeriesArchive(series, [{ ...runs[0]!, maximumSimulationSeconds: 30 }, runs[1]!]),
+  /maximumSimulationSeconds differs from Series/,
 );
 assert.throws(
   () => createCombatLabSeriesArchive(series, [{
@@ -88,6 +95,7 @@ function run(runId: string, runIndex: number, seed: number, hits: number): Comba
     frozenInputRef,
     runtimeVersionId: 'simulation-runtime-v1',
     seed,
+    maximumSimulationSeconds,
     status: 'completed',
     success: true,
     stopReason: 'completed',
