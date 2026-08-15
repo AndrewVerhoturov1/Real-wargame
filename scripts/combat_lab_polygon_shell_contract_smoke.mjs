@@ -34,16 +34,15 @@ assert.match(tabs, /polygon-shell-brand-mark/);
 assert.match(tabs, /polygon-shell-history-strip/);
 assert.match(tabs, /polygon-shell-history-track/);
 assert.match(tabs, /polygon-shell-history-live/);
+assert.match(tabs, /polygon-shell-map-placeholder/,
+  'The approved visual pass must mask the live map with a prototype-style placeholder.');
+assert.match(tabs, /polygon-shell-map-board/,
+  'The placeholder must include the central prototype-style board field.');
 assert.match(tabs, /polygon-shell-left/);
 assert.match(tabs, /polygon-shell-left-tabs/);
 assert.match(tabs, /polygon-shell-right/);
 assert.match(tabs, /polygon-shell-right-tabs/);
 assert.match(tabs, /polygon-shell-hidden-hosts/);
-assert.match(tabs, /ФАЙЛ/);
-assert.match(tabs, /РЕДАКТОРЫ/);
-assert.match(tabs, /ВИД ▾/);
-assert.match(tabs, /ФИЛЬТРЫ/);
-assert.match(tabs, /ХРОНОЛОГИЯ ▾/);
 assert.match(tabs, /setCollapsed\(/);
 assert.match(tabs, /setRightCollapsed\(/);
 assert.match(tabs, /sessionStorage/);
@@ -79,15 +78,23 @@ for (const token of [
   '--polygon-top-2: #273318',
   '--polygon-accent: #d8b941',
   '--polygon-panel-solid: #f6f5ee',
+  '--polygon-grid-small: 20px',
+  '--polygon-grid-large: 80px',
 ]) {
   assert.ok(shellCss.includes(token), `Missing exact prototype token: ${token}`);
 }
 assert.match(shellCss, /grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\)\s+auto/);
 assert.match(shellCss, /\.polygon-shell-history-strip[\s\S]*top:\s*var\(--polygon-topbar-h\)/);
 assert.match(shellCss, /\.polygon-shell-history-strip[\s\S]*height:\s*var\(--polygon-history-h\)/);
-assert.match(shellCss, /\.polygon-shell-history-track[\s\S]*width:\s*min\(290px,\s*24vw\)/);
 assert.match(shellCss, /\.polygon-shell-viewport[\s\S]*inset:\s*var\(--polygon-chrome-h\)\s+0\s+0/);
-assert.match(shellCss, /workspace-simulation\s+#app,[\s\S]*top:\s*var\(--polygon-chrome-h\)\s*!important/);
+assert.match(shellCss, /\.polygon-shell-map-placeholder[\s\S]*pointer-events:\s*none/,
+  'Map placeholder must remain inert and must not fabricate map interaction.');
+assert.match(shellCss, /\.polygon-shell-map-placeholder[\s\S]*background-image:[\s\S]*linear-gradient/,
+  'Map placeholder must reproduce the prototype grid instead of exposing the live map.');
+assert.match(shellCss, /\.polygon-shell-map-board[\s\S]*background:\s*var\(--polygon-map\)/,
+  'Central board must use the prototype map surface token.');
+assert.match(shellCss, /#app\s+canvas[\s\S]*visibility:\s*hidden\s*!important/,
+  'The live product canvas must be visually hidden during the placeholder-only visual pass.');
 assert.match(shellCss, /left:\s*var\(--polygon-panel-gap\)/);
 assert.match(shellCss, /right:\s*var\(--polygon-panel-gap\)/);
 assert.match(shellCss, /width:\s*var\(--polygon-left-w\)/);
