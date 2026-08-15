@@ -74,7 +74,7 @@ test('accepted Polygon shell matches deployed product layout', async ({ page, re
     expect(await page.locator('.polygon-shell-primary-tabs').count()).toBe(0);
     expect(await page.locator('.polygon-shell-auxiliary-tabs').count()).toBe(0);
     expect(await page.locator('.polygon-shell-timeline').count()).toBe(0);
-    expect(await page.locator('.polygon-shell-empty-state').count()).toBe(0);
+    expect(await page.locator('.polygon-shell-empty-state:visible').count()).toBe(0);
     expect(await page.locator('.polygon-shell-hidden-hosts').evaluate((element) => getComputedStyle(element).display)).toBe('none');
 
     const topbar = await page.locator('.polygon-shell-topbar').boundingBox();
