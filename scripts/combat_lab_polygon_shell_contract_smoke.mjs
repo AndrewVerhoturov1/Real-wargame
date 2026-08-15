@@ -50,10 +50,10 @@ assert.match(tabs, /setRightCollapsed\(/);
 assert.match(tabs, /sessionStorage/);
 assert.match(tabs, /normalizeVisibleWorkspaceTab\(storedTab\)/,
   'Persisted utility tabs from the old shell must normalize to a visible prototype workspace.');
+assert.match(tabs, /if\s*\(value\s*===\s*null\s*\|\|\s*value\s*===\s*undefined\s*\|\|\s*value\s*===\s*''\)\s*return\s*'program'/,
+  'A fresh exact-shell session must open on the prototype Program workspace before generic workspace normalization.');
 assert.match(tabs, /POLYGON_LEFT_WORKSPACE_DEFINITIONS\.some\(\(definition\) => definition\.tabId === normalized\)/,
   'Visible-tab normalization must use the accepted seven-tab palette.');
-assert.match(tabs, /:\s*'program';/,
-  'A fresh exact-shell session must open on the prototype Program workspace.');
 assert.ok((tabs.match(/requestWorkspaceResize\(\)/g) ?? []).length >= 3,
   'The shell must request an initial viewport resize in addition to both collapse-state resizes.');
 
@@ -85,6 +85,8 @@ for (const token of [
   '--polygon-panel-solid: #f6f5ee',
   '--polygon-grid-small: 20px',
   '--polygon-grid-large: 80px',
+  '--polygon-placeholder-bg: #c5c4ba',
+  '--polygon-placeholder-board: #b7b4a6',
 ]) {
   assert.ok(visualCss.includes(token), `Missing exact prototype token: ${token}`);
 }
@@ -96,12 +98,16 @@ assert.match(exactCss, /\.polygon-shell-map-placeholder[\s\S]*pointer-events:\s*
   'Map placeholder must remain inert and must not fabricate map interaction.');
 assert.match(exactCss, /\.polygon-shell-map-placeholder[\s\S]*background-image:[\s\S]*linear-gradient/,
   'Map placeholder must reproduce the prototype grid instead of exposing the live map.');
-assert.match(exactCss, /\.polygon-shell-map-board[\s\S]*background:\s*var\(--polygon-map\)/,
-  'Central board must use the prototype map surface token.');
+assert.match(exactCss, /\.polygon-shell-map-board[\s\S]*background:\s*var\(--polygon-placeholder-board\)/,
+  'Central board must use the screenshot-matched placeholder board tone.');
 assert.match(exactCss, /#app\s+canvas[\s\S]*visibility:\s*hidden\s*!important/,
   'The live product canvas must be visually hidden during the placeholder-only visual pass.');
 assert.match(exactCss, /--polygon-board-gap:\s*65px/);
 assert.match(exactCss, /@media\s*\(max-width:\s*1120px\)[\s\S]*--polygon-board-gap:\s*45px/);
+assert.match(exactCss, /\.polygon-shell-left-tabs,[\s\S]*\.polygon-shell-right-tabs\s*\{[\s\S]*gap:\s*5px;[\s\S]*padding:\s*9px\s+10px;/,
+  'Panel tab rows must retain the prototype spacing so Journal stays on the second row.');
+assert.match(exactCss, /\.polygon-shell-tab\s*\{[\s\S]*padding:\s*5px\s+9px;[\s\S]*letter-spacing:\s*\.045em;/,
+  'Panel tabs must match the prototype density and typography.');
 assert.match(visualCss, /left:\s*var\(--polygon-panel-gap\)/);
 assert.match(visualCss, /right:\s*var\(--polygon-panel-gap\)/);
 assert.match(visualCss, /width:\s*var\(--polygon-left-w\)/);
