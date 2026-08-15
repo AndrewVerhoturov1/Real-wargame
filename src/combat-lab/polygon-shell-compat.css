@@ -1,0 +1,20 @@
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-collapse-button {
+  width: auto !important;
+  height: auto !important;
+  writing-mode: horizontal-tb !important;
+  transform: none !important;
+}
+
+body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .polygon-shell-primary-tabs {
+  display: grid !important;
+}
+
+body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .polygon-shell-live-status {
+  display: block !important;
+}
+
+@media (max-width: 720px) {
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-collapse-button {
+    width: 36px !important;
+  }
+}

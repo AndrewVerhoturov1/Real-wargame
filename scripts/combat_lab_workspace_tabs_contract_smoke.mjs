@@ -7,27 +7,27 @@ const [hosts, tabs, extension] = await Promise.all([
   readFile('src/combat-lab/CombatLabExtension.ts', 'utf8'),
 ]);
 
-const expected = [
-  ['scene', 'Сцена', 'Начальная сцена'],
+const primary = [
+  ['scene', 'Карта', 'Карта эксперимента'],
   ['program', 'Программа', 'Программа эксперимента'],
-  ['batch', 'Серия', 'Серия прогонов'],
-  ['parameters', 'Параметры', 'Параметры бойцов'],
-  ['settings', 'Настройка игры', 'Настройка игры'],
+  ['laboratory', 'Лаборатория', 'Лаборатория'],
   ['metrics', 'Метрики', 'Метрики текущего прогона'],
   ['journal', 'Журнал', 'Журнал'],
+  ['batch', 'Серия', 'Серия прогонов'],
 ];
-for (const [id, label, title] of expected) {
+for (const [id, label, title] of primary) {
   assert.match(hosts, new RegExp(`'${id}'`));
   assert.match(hosts, new RegExp(`'${label}'`));
   assert.match(hosts, new RegExp(`'${title}'`));
 }
-assert.equal((hosts.match(/tabId:/g) ?? []).length, 7, 'Integrated workspace requires six Stage 10 tabs plus game settings.');
-assert.doesNotMatch(hosts, /tabId:\s*'stand'|labelRu:\s*'Стенд'/);
-assert.match(tabs, /dock\.append\(header, toolbarHost, tabList, panelHost\)/, 'Run toolbar must sit outside switchable panels.');
+assert.equal((hosts.match(/tabId:/g) ?? []).length, 8, 'Polygon shell requires six primary tabs and two preserved product utility tabs.');
+assert.match(hosts, /tabId:\s*'parameters'[^\n]*labelRu:\s*'Параметры'/);
+assert.match(hosts, /tabId:\s*'settings'[^\n]*labelRu:\s*'Общие редакторы'/);
+assert.match(tabs, /shell\.append\(header, primaryTabList, main, timeline\)/, 'Workspace must publish the full Polygon shell.');
 assert.match(
   tabs,
   /for\s*\(const\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s+of\s+this\.panels\)\s*\2\.hidden\s*=\s*\1\s*!==\s*normalized/,
-  'Tab activation must keep only the normalized panel visible regardless of local variable names.',
+  'Tab activation must keep only the normalized workspace panel visible regardless of local variable names.',
 );
 const activateBody = tabs.match(/activate\(tabId:[\s\S]*?\n  getActiveTab\(\)/)?.[0] ?? '';
 assert.doesNotMatch(activateBody, /replaceChildren\(/, 'Tab switching must not recreate workspace hosts.');
