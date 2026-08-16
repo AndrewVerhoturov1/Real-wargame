@@ -1,0 +1,33 @@
+name: ARKA Final Visual QA 277dc05
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TARGET_URL: https://repo-htlztff5p-111s-projects-807221af.vercel.app/combat-lab.html
+      EXPECTED_PRODUCT_SHA: 277dc05a0c9683558d10de310bcdf55ddd39d4e7
+      CANONICAL_FEATURE_BRANCH: feature/20260816-polygon-arka-exact-shell
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --config=ci/playwright.arka-final-277dc05.config.ts
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arka-final-visual-evidence-${{ github.run_id }}
+          path: |
+            artifacts/vercel-e2e/**
+            test-results/**
+            playwright-report/**
+          retention-days: 14
