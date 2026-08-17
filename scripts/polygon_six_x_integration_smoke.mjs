@@ -38,6 +38,7 @@ for (const file of [
   'src/combat-lab/right-panel/PolygonRightPanelLiveView.ts',
   'src/combat-lab/game-editors/CombatLabEditorShellBridge.ts',
   'src/combat-lab/game-editors/polygon-global-editor-feature-grid.css',
+  'src/combat-lab/game-editors/PolygonGlobalEditorNavigation.ts',
   'src/combat-lab/game-editors/PolygonGlobalEditorParity.ts',
   'src/combat-lab/game-editors/polygon-global-editor-inner-parity.css',
   'src/input/TacticalOrderRadialInput.ts',
@@ -119,6 +120,15 @@ expectIncludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
   'selected.definition.mount',
   'GameEditorInstallation',
   'POLYGON_GLOBAL_EDITOR_GROUPS',
+  'installPolygonGlobalEditorParity',
+  "'surfaceTypes'",
+]);
+expectExcludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
+  'for (const definition of registry.listForSurface(\'combat-lab\'))',
+]);
+
+expectIncludes('src/combat-lab/game-editors/PolygonGlobalEditorNavigation.ts', [
+  'POLYGON_GLOBAL_EDITOR_GROUPS',
   "'routeProfiles'",
   "'tacticalPositions'",
   "'soldierArchetypes'",
@@ -130,10 +140,6 @@ expectIncludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
   "'surfaceTypes'",
   "'environmentProfiles'",
   "'directionalTerrain'",
-  'installPolygonGlobalEditorParity',
-]);
-expectExcludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
-  'for (const definition of registry.listForSurface(\'combat-lab\'))',
 ]);
 
 expectIncludes('src/combat-lab/game-editors/PolygonGlobalEditorParity.ts', [
