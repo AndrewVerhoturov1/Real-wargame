@@ -436,6 +436,7 @@ function sideLabel(side: string): string {
 }
 
 function unitTypeLabel(type: string): string {
+  if (type === 'infantry_squad') return 'Пехотное отделение';
   if (type === 'infantry') return 'Пехотинец';
   if (type === 'vehicle') return 'Техника';
   return type || 'Юнит';
