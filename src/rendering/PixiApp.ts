@@ -308,12 +308,11 @@ export class PixiTacticalBoardApp {
   }
 
   /**
-   * Interface Linkage v1 uses one continuous map surface below the top chrome.
-   * Combat Lab therefore contains the complete finite product map inside that
-   * surface and leaves the surrounding canvas transparent over the prototype
-   * grid. This removes the legacy black frame without cropping real units or
-   * targets out of the initial view. Normal game mode keeps its existing camera
-   * startup behavior.
+   * Interface Linkage v1 presents the real tactical view inside a central frame.
+   * In Combat Lab that frame is a camera viewport, not a second map container.
+   * The existing world is cover-fitted so there is no internal letterbox, then
+   * shifted as far toward the selected real unit as map bounds allow. Normal
+   * game mode keeps its existing camera startup behavior.
    */
   private fitMapToViewport(force = false): void {
     if (!this.isPolygonCombatLabViewport()) return;
@@ -324,15 +323,22 @@ export class PixiTacticalBoardApp {
     const mapHeight = this.state.map.height * this.state.map.cellSize;
     if (viewportWidth <= 0 || viewportHeight <= 0 || mapWidth <= 0 || mapHeight <= 0) return;
 
-    const fitKey = `${viewportWidth}x${viewportHeight}:${mapWidth}x${mapHeight}`;
+    const focusUnit = getSelectedUnit(this.state);
+    const fitKey = `${viewportWidth}x${viewportHeight}:${mapWidth}x${mapHeight}:${focusUnit?.id ?? 'map'}`;
     if (!force && fitKey === this.lastViewportFitKey) return;
     this.lastViewportFitKey = fitKey;
 
-    const scale = Math.min(viewportWidth / mapWidth, viewportHeight / mapHeight);
-    const x = Math.round((viewportWidth - mapWidth * scale) / 2);
-    const y = Math.round((viewportHeight - mapHeight * scale) / 2);
+    const scale = Math.max(viewportWidth / mapWidth, viewportHeight / mapHeight);
+    const focusX = (focusUnit?.position.x ?? this.state.map.width / 2) * this.state.map.cellSize;
+    const focusY = (focusUnit?.position.y ?? this.state.map.height / 2) * this.state.map.cellSize;
+    const targetX = viewportWidth * 0.46;
+    const targetY = viewportHeight * 0.63;
+    const scaledWidth = mapWidth * scale;
+    const scaledHeight = mapHeight * scale;
+    const x = clamp(targetX - focusX * scale, viewportWidth - scaledWidth, 0);
+    const y = clamp(targetY - focusY * scale, viewportHeight - scaledHeight, 0);
     this.worldContainer.scale.set(scale);
-    this.worldContainer.position.set(x, y);
+    this.worldContainer.position.set(Math.round(x), Math.round(y));
   }
 
   private isPolygonCombatLabViewport(): boolean {
@@ -495,6 +501,10 @@ export class PixiTacticalBoardApp {
       copy.htmlLabels,
     ].join('\n');
   }
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.max(minimum, Math.min(maximum, value));
 }
 
 function formatHoveredCellDetails(cell: MapCell | undefined, locale: Locale): string[] {
