@@ -30,20 +30,51 @@ function expectExcludes(relativePath, snippets) {
   }
 }
 
+function expectDefaultRegistryInventory() {
+  const relativePath = 'src/game-editors/createDefaultGameEditorRegistry.ts';
+  if (!exists(relativePath)) {
+    failures.push(`${relativePath}: file is missing`);
+    return;
+  }
+  const source = read(relativePath);
+  const ids = [...source.matchAll(/\bid:\s*'([^']+)'/g)].map((match) => match[1]);
+  const expected = [
+    'behaviorGraph',
+    'routeProfiles',
+    'tacticalPositions',
+    'soldierData',
+    'soldierArchetypes',
+    'attentionProfiles',
+    'perceptionProfiles',
+    'movementProfiles',
+    'weapons',
+    'conditionProfiles',
+    'environmentProfiles',
+    'directionalTerrain',
+  ];
+  if (JSON.stringify(ids) !== JSON.stringify(expected)) {
+    failures.push(`${relativePath}: registry inventory changed: ${JSON.stringify(ids)}`);
+  }
+}
+
 const requiredFiles = [
   'src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts',
   'src/combat-lab/game-editors/CombatLabGameEditorOverlay.ts',
   'src/combat-lab/game-editors/CombatLabGameEditorLinks.ts',
   'src/combat-lab/game-editors/CombatLabGameEditors.ts',
+  'src/combat-lab/game-editors/CombatLabEditorShellBridge.ts',
   'src/combat-lab/game-editors/combat-lab-game-editors.css',
+  'src/combat-lab/game-editors/combat-lab-game-editor-shell.css',
   'src/game-editors/GameEditorReturnTarget.ts',
 ];
 for (const file of requiredFiles) expectFile(file);
 
 expectIncludes('src/combat-lab/ui/CombatLabWorkspaceHosts.ts', [
-  "{ tabId: 'settings', labelRu: 'Настройка игры', titleRu: 'Настройка игры' }",
+  "{ tabId: 'settings', labelRu: 'Общие редакторы', titleRu: 'Общие редакторы игры' }",
   'readonly settings: HTMLElement',
 ]);
+
+expectDefaultRegistryInventory();
 
 expectIncludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
   "registry.listForSurface('combat-lab')",
@@ -56,6 +87,26 @@ expectExcludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
   "'perceptionProfiles'",
   "'soldierArchetypes'",
   "'conditionProfiles'",
+  'setInterval(',
+  'requestAnimationFrame(',
+]);
+
+expectIncludes('src/combat-lab/game-editors/CombatLabEditorShellBridge.ts', [
+  "const PRESENTED_LEFT_TABS = new Set<CombatLabWorkspaceTab>(['scene', 'parameters'])",
+  "const EDITOR_PANEL_TABS = ['scene', 'parameters', 'settings'] as const",
+  "'#combat-lab-workspace-panel-scene'",
+  "'#combat-lab-workspace-panel-parameters'",
+  "'#combat-lab-workspace-panel-settings'",
+  "'combat-lab:activate-tab'",
+  "new URLSearchParams(search).get('tab') === 'settings'",
+  "this.presentPanel('settings', this.portalBody)",
+  'this.hiddenHosts.append(panel)',
+]);
+expectExcludes('src/combat-lab/game-editors/CombatLabEditorShellBridge.ts', [
+  'new GameEditorRegistry',
+  'createDefaultGameEditorRegistry',
+  'new CombatLabExperimentDraft',
+  'localStorage',
   'setInterval(',
   'requestAnimationFrame(',
 ]);
@@ -84,6 +135,17 @@ expectIncludes('src/combat-lab/game-editors/combat-lab-game-editors.css', [
   'height: calc(100vh - 24px)',
 ]);
 
+expectIncludes('src/combat-lab/game-editors/combat-lab-game-editor-shell.css', [
+  '.polygon-shell-editor-tab-host',
+  '.polygon-shell-editors-portal',
+  '.polygon-shell-editors-return',
+  '.polygon-shell-top-button--editors[aria-pressed="true"]',
+  '.combat-lab-game-editor-workbench-header',
+  '@media (max-width: 1180px)',
+  '@media (max-width: 760px)',
+  'overflow: auto',
+]);
+
 expectIncludes('src/game-editors/GameEditorReturnTarget.ts', [
   'getSafeGameEditorReturnTarget',
   "'/combat-lab.html'",
@@ -108,12 +170,17 @@ expectIncludes('src/ai-node-editor/AiEditorGameEditorPlatform.ts', [
 expectIncludes('src/combat-lab/main.ts', [
   'CombatLabGameEditors',
   'workspaceHosts.settings',
+  'CombatLabEditorShellBridge.create',
+  'editorShellBridge?.destroy()',
   'gameEditorsInstallation?.destroy()',
   './game-editors/combat-lab-game-editors.css',
+  './game-editors/combat-lab-game-editor-shell.css',
 ]);
 
 expectIncludes('src/combat-lab/CombatLabExtension.ts', [
   'parametersHost: this.layout.parametersPanelHost,',
+  'hosts.scene.append(templatePanel, validationHost, scenePanelHost);',
+  'hosts.parameters.append(',
 ]);
 
 expectIncludes('src/combat-lab/parameters/installCombatLabQuickParameters.ts', [
