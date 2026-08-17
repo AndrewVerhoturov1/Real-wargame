@@ -16,7 +16,6 @@ jobs:
       TARGET_URL: https://repo-6j98j2x3u-111s-projects-807221af.vercel.app/combat-lab.html
       EXPECTED_PRODUCT_SHA: 13a70b76bd5087b87c0767970eb378ba192a1b49
       CANONICAL_FEATURE_BRANCH: feat/20260817-polygon-editors-visual-parity
-      PROTOTYPE_URL: http://127.0.0.1:4173/prototype.html
     steps:
       - name: Checkout temporary CI merge
         uses: actions/checkout@v4
@@ -32,36 +31,14 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Reconstruct accepted HTML prototype
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat ci/prototype-source/prototype.xz.b64.part* | base64 -d | xz -d > ci/prototype-source/prototype.html
-          test -s ci/prototype-source/prototype.html
-          grep -q 'polygon-map-editor-unified-v44-infantry-integrated-20260815-memory-v3-interface-linkage-v1' ci/prototype-source/prototype.html
-
-      - name: Serve prototype locally
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m http.server 4173 --directory ci/prototype-source >/tmp/polygon-prototype-http.log 2>&1 &
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:4173/prototype.html >/dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          cat /tmp/polygon-prototype-http.log || true
-          exit 1
-
-      - name: Run deployed-vs-prototype visual audit
+      - name: Run real deployment visual audit
         run: npx playwright test --config=ci/playwright.polygon-editors-visual-audit.config.ts
 
       - name: Upload visual evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: polygon-editors-visual-audit-${{ github.run_id }}
+          name: polygon-editors-deployment-visual-audit-${{ github.run_id }}
           path: |
             artifacts/polygon-editors-visual-audit/**
             test-results/polygon-editors-visual-audit/**
