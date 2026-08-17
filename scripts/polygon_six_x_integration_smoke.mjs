@@ -115,6 +115,11 @@ expectIncludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
   "selected.activation === 'embedded'",
   'selected.definition.mount',
   'GameEditorInstallation',
+  'polygon-route-profile-feature-grid',
+  'polygon-route-profile-feature',
+  "profileFeature(host, 'Опасность', 'dangerWeight')",
+  "profileFeature(host, 'Укрытия', 'coverWeight')",
+  "profileFeature(host, 'Цена дороги', 'terrainCosts.road')",
 ]);
 
 expectIncludes('src/combat-lab/right-panel/polygon-right-panel-live.css', [
