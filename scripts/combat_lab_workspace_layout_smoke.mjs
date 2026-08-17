@@ -112,7 +112,7 @@ for (const token of [
 }
 
 assert.match(visualSession, /COMBAT_LAB_VISUAL_SPEEDS\s*=\s*AI_TEST_TIME_SCALES/, 'Combat Lab must use the canonical shared speed list.');
-assert.match(aiTestRuntime, /AI_TEST_TIME_SCALES\s*=\s*\[0\.1, 0\.25, 0\.5, 1, 2, 4, 10\]/, 'The shared header and Combat Lab must retain the ×0.1 speed.');
+assert.match(aiTestRuntime, /AI_TEST_TIME_SCALES\s*=\s*\[0\.1, 0\.25, 0\.5, 1, 2, 5, 10\]/, 'The shared header and Combat Lab must retain the canonical speed list.');
 assert.match(labMain, /combat-lab-header-final\.css[\s\S]*polygon-shell\.css[\s\S]*polygon-shell-compat\.css/,
   'Prototype shell compatibility overrides must load after legacy Combat Lab layout styles.');
 assert.match(workspaceBase, /WORKSPACE_LAYOUT_TRANSITION_MILLISECONDS\s*=\s*150/, 'Workspace must retain the 150 ms layout transition.');

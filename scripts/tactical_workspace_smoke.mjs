@@ -7,3 +7,4 @@ import './tactical_workspace_smoke_vector_semantics.mjs';
 import './tactical_order_radial_menu_smoke.mjs';
 import './route_cost_inspector_smoke.mjs';
 import './danger_view_cones_smoke.mjs';
+import './unit_map_token_smoke.mjs';
