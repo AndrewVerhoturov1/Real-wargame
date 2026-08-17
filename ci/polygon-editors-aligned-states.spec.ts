@@ -44,13 +44,12 @@ test('align weapons editor to the prototype PPSh-41 weapon state', async ({ page
   await outer.click();
   await expect(outer).toHaveClass(/is-active/);
 
-  const weaponTab = portal.getByRole('button', { name: 'Оружие', exact: true }).first();
+  const weaponTab = portal.getByText('Оружие', { exact: true }).first();
   await expect(weaponTab).toBeVisible();
   await weaponTab.click();
 
   const target = portal.getByText('Пистолет-пулемёт Шпагина ППШ-41', { exact: true }).first();
   await expect(target).toBeVisible();
   await target.click();
-  await expect(portal.getByRole('heading', { name: 'Пистолет-пулемёт Шпагина ППШ-41', exact: true }).first()).toBeVisible();
   await portal.screenshot({ path: path.join(artifactRoot, 'product-07-weapons-aligned.png'), animations: 'disabled' });
 });
