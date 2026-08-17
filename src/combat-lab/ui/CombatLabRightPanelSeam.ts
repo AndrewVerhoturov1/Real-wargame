@@ -23,6 +23,7 @@ export interface CombatLabRightPanelSeamV1 {
   readonly selection: CombatLabWorkspaceServices['selection'];
   readonly hosts: CombatLabRightPanelHosts;
   isTabActive(tabId: CombatLabRightPanelTab): boolean;
+  activateTab(tabId: CombatLabRightPanelTab): void;
   setHeader(header: CombatLabRightPanelHeaderV1): void;
 }
 
@@ -69,6 +70,14 @@ export function getCombatLabRightPanelSeam(
     selection: services.selection,
     hosts,
     isTabActive: (tabId: CombatLabRightPanelTab) => !hosts[tabId].hidden,
+    activateTab: (tabId: CombatLabRightPanelTab) => {
+      const button = requiredElement<HTMLButtonElement>(
+        rightPanel,
+        `[data-polygon-right-tab="${tabId}"]`,
+        `Не найдена кнопка правой панели Полигона: ${tabId}.`,
+      );
+      button.click();
+    },
     setHeader: (header: CombatLabRightPanelHeaderV1) => {
       kicker.textContent = header.kickerRu;
       title.textContent = header.titleRu;
