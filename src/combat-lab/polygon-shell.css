@@ -1,0 +1,605 @@
+:root {
+  --polygon-topbar-h: 58px;
+  --polygon-history-h: 30px;
+  --polygon-chrome-h: calc(var(--polygon-topbar-h) + var(--polygon-history-h));
+  --polygon-left-w: 372px;
+  --polygon-right-w: 336px;
+  --polygon-panel-gap: 14px;
+  --polygon-collapsed-w: 48px;
+  --polygon-bg: #d9d7cd;
+  --polygon-map: #d2d0c5;
+  --polygon-ink: #171913;
+  --polygon-muted: #6f7268;
+  --polygon-line: rgba(30, 34, 24, .18);
+  --polygon-line-strong: rgba(30, 34, 24, .34);
+  --polygon-panel: rgba(246, 245, 238, .96);
+  --polygon-panel-solid: #f6f5ee;
+  --polygon-top: #344321;
+  --polygon-top-2: #273318;
+  --polygon-accent: #d8b941;
+  --polygon-accent-soft: #efe3a6;
+  --polygon-shadow: 0 16px 44px rgba(22, 26, 17, .18), 0 2px 8px rgba(22, 26, 17, .16);
+  --polygon-radius: 7px;
+}
+
+body.app-shell-mode-combat-lab {
+  overflow: hidden;
+  color: var(--polygon-ink);
+  background: var(--polygon-bg);
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  width: auto;
+  height: auto;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--polygon-ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-topbar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 100;
+  height: var(--polygon-topbar-h);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 0 96px 0 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  color: #fffef4;
+  background: linear-gradient(180deg, var(--polygon-top), var(--polygon-top-2));
+  box-shadow: 0 2px 12px rgba(13, 17, 8, .25);
+  pointer-events: auto;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-topbar-left,
+body.app-shell-mode-combat-lab .polygon-shell-topbar-center,
+body.app-shell-mode-combat-lab .polygon-shell-topbar-right {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-topbar-left {
+  gap: 18px;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-topbar-center {
+  justify-content: center;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-topbar-right {
+  justify-content: flex-end;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-brand {
+  min-width: max-content;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fffef4;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: .11em;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-brand-mark {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .45);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .08);
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-top-button {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 13px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 4px;
+  color: #fffef4;
+  background: rgba(255, 255, 255, .08);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .035em;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-top-button:hover {
+  background: rgba(255, 255, 255, .15);
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-top-button-label {
+  display: inline;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-top-button > svg {
+  display: none;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar {
+  min-width: 0;
+  max-width: min(620px, 48vw);
+  overflow: hidden;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button,
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-speed-field {
+  flex: 0 0 auto;
+  height: 34px;
+  min-height: 34px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 4px;
+  color: #fffef4;
+  background: rgba(255, 255, 255, .08);
+  box-shadow: none;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button {
+  padding: 0 10px;
+  text-transform: uppercase;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button.primary {
+  color: #191a11;
+  border-color: var(--polygon-accent);
+  background: var(--polygon-accent);
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button:hover:not(:disabled),
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-speed-field:hover {
+  background: rgba(255, 255, 255, .15);
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button.primary:hover:not(:disabled) {
+  background: #e3c64f;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-step,
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-stop,
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-batch,
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-settings-summary {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-speed-field {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-speed-field > span {
+  display: none;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-speed {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 22px 0 9px;
+  border: 0;
+  color: #171913;
+  background: #f4f2e7;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-history-strip {
+  position: absolute;
+  top: var(--polygon-topbar-h);
+  left: 0;
+  right: 0;
+  z-index: 96;
+  height: var(--polygon-history-h);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-bottom: 1px solid rgba(34, 39, 28, .28);
+  color: var(--polygon-ink);
+  background: #ebe9df;
+  box-shadow: 0 2px 9px rgba(22, 26, 17, .16);
+  font-size: 10px;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-history-live {
+  flex: 0 0 auto;
+  color: #344321;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .03em;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-history-track {
+  position: relative;
+  flex: 0 1 auto;
+  width: min(290px, 24vw);
+  height: 5px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #c8c6bd;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-history-track-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: #727966;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-history-status {
+  min-width: 0;
+  max-width: 260px;
+  overflow: hidden;
+  color: #5f6258;
+  font: 9px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-history-spacer {
+  flex: 1 1 auto;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-history-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-history-button {
+  min-height: 22px;
+  height: 22px;
+  padding: 2px 7px;
+  border: 1px solid #aaa99f;
+  border-radius: 3px;
+  color: #33362f;
+  background: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-history-button:hover {
+  border-color: #95813a;
+  background: #f8f0c9;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-viewport {
+  position: absolute;
+  inset: var(--polygon-chrome-h) 0 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-side-panel {
+  position: absolute;
+  top: var(--polygon-panel-gap);
+  bottom: var(--polygon-panel-gap);
+  z-index: 40;
+  min-width: 278px;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(34, 39, 28, .28);
+  border-radius: var(--polygon-radius);
+  background: var(--polygon-panel);
+  box-shadow: var(--polygon-shadow);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-left {
+  left: var(--polygon-panel-gap);
+  width: var(--polygon-left-w);
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-right {
+  right: var(--polygon-panel-gap);
+  width: var(--polygon-right-w);
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-panel-head {
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px 8px 13px;
+  border-bottom: 1px solid var(--polygon-line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .58), rgba(235, 234, 226, .64));
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-panel-head-text {
+  min-width: 0;
+  flex: 1;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-panel-kicker {
+  color: var(--polygon-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-panel-title {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--polygon-ink);
+  font-size: 16px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-panel-collapse {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--polygon-line);
+  border-radius: 4px;
+  color: #55594f;
+  background: #fff;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-panel-collapse:hover {
+  border-color: #9e8b3f;
+  background: var(--polygon-accent-soft);
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-left-tabs,
+body.app-shell-mode-combat-lab .polygon-shell-right-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--polygon-line);
+  background: #efeee7;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-tab {
+  min-height: 29px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #373a33;
+  background: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-tab:hover {
+  border-color: var(--polygon-line-strong);
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-tab.active {
+  color: #fff;
+  border-color: var(--polygon-top);
+  background: var(--polygon-top);
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-tab:focus-visible {
+  outline: 2px solid var(--polygon-accent);
+  outline-offset: 2px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-tab.active:focus,
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-tab.active:focus-visible {
+  color: #fff !important;
+  border-color: var(--polygon-top) !important;
+  background: var(--polygon-top) !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-panel-body {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  background: rgba(250, 249, 244, .72);
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-right-panel {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-right-panel[hidden] {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-collapsed-label {
+  display: none;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0;
+  color: #4d5148;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .polygon-shell-topbar .polygon-shell-run-toolbar {
+  display: block !important;
+}
+
+body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .polygon-shell-left,
+body.app-shell-mode-combat-lab.polygon-shell-right-collapsed .polygon-shell-right {
+  min-width: var(--polygon-collapsed-w);
+  width: var(--polygon-collapsed-w) !important;
+  max-width: var(--polygon-collapsed-w);
+}
+
+body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .polygon-shell-left .polygon-shell-panel-head,
+body.app-shell-mode-combat-lab.polygon-shell-right-collapsed .polygon-shell-right .polygon-shell-panel-head {
+  padding: 8px;
+  justify-content: center;
+  border-bottom: 0;
+  background: transparent;
+}
+
+body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .polygon-shell-left .polygon-shell-panel-head-text,
+body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .polygon-shell-left .polygon-shell-left-tabs,
+body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .polygon-shell-left .polygon-shell-panel-body,
+body.app-shell-mode-combat-lab.polygon-shell-right-collapsed .polygon-shell-right .polygon-shell-panel-head-text,
+body.app-shell-mode-combat-lab.polygon-shell-right-collapsed .polygon-shell-right .polygon-shell-right-tabs,
+body.app-shell-mode-combat-lab.polygon-shell-right-collapsed .polygon-shell-right .polygon-shell-panel-body {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .polygon-shell-left .polygon-shell-collapsed-label,
+body.app-shell-mode-combat-lab.polygon-shell-right-collapsed .polygon-shell-right .polygon-shell-collapsed-label {
+  display: flex;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-hidden-hosts {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab.workspace-simulation #app,
+body.app-shell-mode-combat-lab.workspace-editor #app {
+  top: var(--polygon-chrome-h) !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+body.app-shell-mode-combat-lab .simulation-sidebar,
+body.app-shell-mode-combat-lab .simulation-unit-bar,
+body.app-shell-mode-combat-lab.workspace-editor #hud {
+  display: none !important;
+}
+
+@media (max-width: 1120px) {
+  :root {
+    --polygon-left-w: 330px;
+    --polygon-right-w: 300px;
+    --polygon-panel-gap: 10px;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-topbar {
+    gap: 8px;
+    padding-left: 10px;
+    padding-right: 88px;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-brand-text {
+    display: none;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-topbar-left {
+    gap: 8px;
+  }
+
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-top-button {
+    padding: 0 9px;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-history-status {
+    max-width: 180px;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-history-track {
+    width: min(210px, 20vw);
+  }
+}
+
+@media (max-width: 860px) {
+  :root {
+    --polygon-left-w: min(330px, calc(100vw - 76px));
+    --polygon-right-w: min(300px, calc(100vw - 76px));
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-topbar-center {
+    display: none;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-run-toolbar {
+    max-width: calc(100vw - 180px);
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-history-status {
+    display: none;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-history-track {
+    width: min(180px, 25vw);
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-right {
+    box-shadow: 0 16px 44px rgba(22, 26, 17, .24), 0 2px 8px rgba(22, 26, 17, .2);
+  }
+}
+
+@media (max-width: 640px) {
+  body.app-shell-mode-combat-lab .polygon-shell-topbar-right,
+  body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button:nth-of-type(1),
+  body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-speed-field,
+  body.app-shell-mode-combat-lab .polygon-shell-history-actions .polygon-shell-history-button:first-child,
+  body.app-shell-mode-combat-lab .polygon-shell-history-track {
+    display: none;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-topbar {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding-right: 82px;
+  }
+}

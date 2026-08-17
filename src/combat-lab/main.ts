@@ -5,6 +5,9 @@ import './combat-lab.css';
 import './combat-lab-workspace.css';
 import './combat-lab-ui-polish.css';
 import './combat-lab-header-final.css';
+import './polygon-shell.css';
+import './polygon-shell-compat.css';
+import './polygon-shell-exact.css';
 import './ui/combat-lab-experiment-run.css';
 import './ui/combat-lab-batch-results.css';
 import './game-editors/combat-lab-game-editors.css';
@@ -55,6 +58,7 @@ async function startCombatLab(): Promise<void> {
     });
     const workspaceRoot = getOnlyCombatLabWorkspaceRoot();
     const workspaceHosts = getCombatLabWorkspaceHosts(workspaceRoot);
+    installLaboratoryPlaceholder(workspaceHosts.laboratory);
     gameEditorsInstallation = CombatLabGameEditors.create({
       host: workspaceHosts.settings,
       eventTarget: extensionRoot,
@@ -87,6 +91,13 @@ window.addEventListener('beforeunload', () => {
   application = null;
   shellMenuInstallation.destroy();
 });
+
+function installLaboratoryPlaceholder(host: HTMLElement): void {
+  const message = document.createElement('div');
+  message.className = 'polygon-shell-empty-state';
+  message.textContent = 'Лаборатория пока не подключена к продуктовым параметрам. Каркас не создаёт временные значения или отдельное состояние эксперимента.';
+  host.replaceChildren(message);
+}
 
 function createCombatLabRenderContext(context: GameApplicationContext): GameApplicationContext {
   return {
