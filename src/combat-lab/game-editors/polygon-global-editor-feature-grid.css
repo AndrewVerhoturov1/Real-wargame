@@ -1,0 +1,91 @@
+/* Final visual polish for the shared Editors workspace. No data is invented:
+   metric values are populated from the mounted authoritative route profile. */
+
+body.app-shell-mode-combat-lab .polygon-route-profile-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin: 10px 12px 0;
+}
+
+body.app-shell-mode-combat-lab .polygon-route-profile-feature {
+  min-width: 0;
+  min-height: 58px;
+  box-sizing: border-box;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 8px 9px;
+  border: 1px solid #d0cfc6;
+  border-radius: 5px;
+  background: #fff;
+}
+
+body.app-shell-mode-combat-lab .polygon-route-profile-feature span {
+  overflow: hidden;
+  color: #777a71;
+  font-size: 7.5px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab .polygon-route-profile-feature strong {
+  overflow: hidden;
+  color: #34372f;
+  font-size: 10px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Prototype category rail uses small square pictograms beside each editor. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-item {
+  position: relative;
+  min-height: 42px;
+  padding-left: 42px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-item::before {
+  content: '□';
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 1px solid #b8baaf;
+  border-radius: 4px;
+  color: #666a5f;
+  background: rgba(255, 255, 255, .72);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-item.is-active::before {
+  border-color: rgba(255, 255, 255, .34);
+  color: #fff;
+  background: rgba(255, 255, 255, .08);
+}
+
+body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="routeProfiles"]::before { content: '⇢'; }
+body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="behaviorProfiles"]::before { content: '◉'; }
+body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="soldierData"]::before { content: '♟'; }
+body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="weapons"]::before { content: '⌁'; }
+body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="projectiles"]::before { content: '↗'; }
+body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="injuries"]::before { content: '+'; }
+body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="maps"]::before { content: '▦'; }
+body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="terrain"]::before { content: '⌂'; }
+body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="environment"]::before { content: '☼'; }
+body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="structureMaterials"]::before { content: '▤'; }
+body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="visibility"]::before { content: '◎'; }
+body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="perception"]::before { content: '◌'; }
+body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="ruleset"]::before { content: '⚙'; }
+
+@media (max-width: 980px) {
+  body.app-shell-mode-combat-lab .polygon-route-profile-feature-grid {
+    grid-template-columns: 1fr;
+  }
+}
