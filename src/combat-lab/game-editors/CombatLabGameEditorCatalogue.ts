@@ -201,13 +201,33 @@ export class CombatLabGameEditorCatalogue {
       const installation = await selected.definition.mount({
         host,
         surface: 'combat-lab',
-        request: { editorId: selected.definition.id },
+        request: {
+          editorId: selected.definition.id,
+          profileId: selected.definition.id === 'routeProfiles' ? 'cautious' : undefined,
+        },
         requestClose: () => {},
       });
       if (this.destroyed || generation !== this.mountGeneration || selected.definition.id !== this.selectedEditorId) {
         installation.destroy();
         return;
       }
+
+      if (selected.definition.id === 'routeProfiles') {
+        const observer = new MutationObserver(() => {
+          queueMicrotask(() => decorateRouteProfileEditor(host));
+        });
+        decorateRouteProfileEditor(host);
+        observer.observe(host, { childList: true });
+        this.installation = {
+          beforeClose: installation.beforeClose ? () => installation.beforeClose!() : undefined,
+          destroy(): void {
+            observer.disconnect();
+            installation.destroy();
+          },
+        };
+        return;
+      }
+
       this.installation = installation;
     } catch (error) {
       if (this.destroyed || generation !== this.mountGeneration) return;
@@ -229,6 +249,135 @@ export class CombatLabGameEditorCatalogue {
     for (const [control, listener] of this.listeners) control.removeEventListener('click', listener);
     this.listeners.length = 0;
   }
+}
+
+function decorateRouteProfileEditor(host: HTMLElement): void {
+  if (host.querySelector('.polygon-route-profile-tabs')) return;
+  const layout = host.querySelector<HTMLElement>('.navigation-profile-layout');
+  const listPanel = host.querySelector<HTMLElement>('.navigation-profile-list-panel');
+  const listHeading = host.querySelector<HTMLElement>('.navigation-profile-list-heading');
+  const list = host.querySelector<HTMLElement>('.navigation-profile-list');
+  const listActions = host.querySelector<HTMLElement>('.navigation-profile-list-actions');
+  const form = host.querySelector<HTMLElement>('.navigation-profile-form-panel');
+  const formHeading = host.querySelector<HTMLElement>('.navigation-profile-form-heading');
+  const formActions = host.querySelector<HTMLElement>('.navigation-profile-form-actions');
+  const nameCard = host.querySelector<HTMLElement>('.navigation-profile-name-card');
+  if (!layout || !listPanel || !listHeading || !list || !listActions || !form || !formHeading) return;
+
+  host.classList.add('polygon-route-profile-editor');
+  const profileButtons = [...list.querySelectorAll<HTMLButtonElement>('[data-profile-id]')];
+  const selectedButton = profileButtons.find((button) => button.classList.contains('active')) ?? profileButtons[0];
+  const profileId = selectedButton?.dataset.profileId ?? '—';
+  const profileName = selectedButton?.querySelector('strong')?.textContent?.trim()
+    ?? formHeading.querySelector('h2')?.textContent?.trim()
+    ?? 'Профиль';
+  const description = formHeading.querySelector('p')?.textContent?.trim() ?? '';
+  const kicker = formHeading.querySelector('.navigation-profile-kicker')?.textContent?.trim() ?? '';
+
+  const headingCount = listHeading.querySelector<HTMLElement>('span');
+  if (headingCount) {
+    headingCount.textContent = String(profileButtons.length);
+    headingCount.title = 'Количество доступных профилей';
+  }
+  const headingTitle = listHeading.querySelector<HTMLElement>('h2');
+  if (headingTitle) headingTitle.textContent = 'Профили маршрута';
+  const headingDescription = listHeading.querySelector<HTMLElement>('p');
+  if (headingDescription) headingDescription.textContent = 'Выберите профиль';
+
+  const createButton = listActions.querySelector<HTMLButtonElement>('[data-profile-action="create"]');
+  if (createButton) createButton.textContent = '+ Создать профиль';
+  const copyButton = listActions.querySelector<HTMLButtonElement>('[data-profile-action="copy"]');
+  const management = document.createElement('details');
+  management.className = 'polygon-route-profile-management';
+  const managementSummary = document.createElement('summary');
+  managementSummary.textContent = '⋯ Управление';
+  const managementBody = node('div', 'polygon-route-profile-management-body');
+  management.append(managementSummary, managementBody);
+
+  for (const child of [...listActions.children]) {
+    if (child === createButton || child === copyButton) continue;
+    managementBody.append(child);
+  }
+  listActions.append(management);
+
+  if (formActions) {
+    for (const child of [...formActions.children]) managementBody.append(child);
+    if (copyButton) {
+      copyButton.textContent = 'Создать свою копию';
+      formActions.append(copyButton);
+    }
+  } else if (copyButton) {
+    managementBody.append(copyButton);
+  }
+
+  const tabs = node('nav', 'polygon-route-profile-tabs');
+  tabs.setAttribute('aria-label', 'Разделы профиля маршрута');
+  const summary = node('section', 'polygon-route-profile-summary');
+  summary.append(
+    node('span', 'polygon-route-profile-summary-kicker', 'КРАТКОЕ РЕЗЮМЕ'),
+    node('strong', '', profileName),
+    node('p', '', description || 'Описание хранится в авторитетном профиле маршрута.'),
+  );
+
+  const primary = node('section', 'polygon-route-profile-primary');
+  primary.append(node('header', '', 'Основное ограничение'));
+  const maximumInput = host.querySelector<HTMLInputElement>('[data-profile-number="maximumDetourRatio"]');
+  const maximumField = maximumInput?.closest<HTMLElement>('label');
+  if (maximumField) primary.append(maximumField);
+  else primary.append(node('p', '', 'Параметр максимального обхода недоступен.'));
+
+  const metadata = node('section', 'polygon-route-profile-metadata');
+  metadata.append(
+    node('header', '', 'О ПРОФИЛЕ'),
+    metaRow('Название', profileName),
+    metaRow('Тип', kicker.toLowerCase().includes('встроенный') ? 'Встроенный' : 'Пользовательский'),
+    metaRow('Технический ID', profileId),
+    metaRow('Ревизия', kicker.match(/revision\s+(\d+)/i)?.[1] ?? '—'),
+  );
+
+  const groups = [...form.querySelectorAll<HTMLElement>('.navigation-profile-group')];
+  if (nameCard) form.append(nameCard);
+  formHeading.after(tabs, summary, primary, metadata);
+
+  const views = [
+    { id: 'main', label: 'Основное', groups: [] as HTMLElement[], showName: false },
+    { id: 'terrain', label: 'Местность', groups: groups.slice(0, 1), showName: false },
+    { id: 'tactics', label: 'Тактика', groups: groups.slice(1, 3), showName: false },
+    { id: 'route', label: 'Маршрут', groups: groups.slice(3), showName: true },
+  ] as const;
+
+  const activate = (id: string): void => {
+    const main = id === 'main';
+    summary.hidden = !main;
+    primary.hidden = !main;
+    metadata.hidden = !main;
+    groups.forEach((group) => { group.hidden = true; });
+    if (nameCard) nameCard.hidden = true;
+    const view = views.find((candidate) => candidate.id === id) ?? views[0];
+    for (const group of view.groups) group.hidden = false;
+    if (nameCard) nameCard.hidden = !view.showName;
+    tabs.querySelectorAll<HTMLButtonElement>('button').forEach((control) => {
+      const active = control.dataset.routeProfileTab === view.id;
+      control.classList.toggle('is-active', active);
+      control.setAttribute('aria-selected', String(active));
+    });
+  };
+
+  for (const view of views) {
+    const control = document.createElement('button');
+    control.type = 'button';
+    control.dataset.routeProfileTab = view.id;
+    control.textContent = view.label;
+    control.addEventListener('click', () => activate(view.id));
+    tabs.append(control);
+  }
+  activate('main');
+}
+
+function metaRow(label: string, value: string): HTMLElement {
+  const row = node('div', 'polygon-route-profile-meta-row');
+  row.append(node('span', '', label), node('strong', '', value));
+  return row;
 }
 
 function node<K extends keyof HTMLElementTagNameMap>(
