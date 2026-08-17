@@ -2,7 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: '.',
-  testMatch: 'polygon-editors-visual-audit.spec.ts',
+  testMatch: [
+    'polygon-editors-visual-audit.spec.ts',
+    'polygon-editors-aligned-states.spec.ts',
+  ],
   timeout: 240_000,
   expect: { timeout: 20_000 },
   workers: 1,
