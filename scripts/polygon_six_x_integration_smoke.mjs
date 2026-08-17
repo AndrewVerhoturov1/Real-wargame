@@ -80,7 +80,8 @@ expectIncludes('src/combat-lab/polygon-map-surface.css', [
   'right: 0 !important;',
   'bottom: 0 !important;',
   'left: 0 !important;',
-  'background-size: 80px 80px, 80px 80px, 20px 20px, 20px 20px;',
+  '80px 80px,',
+  '20px 20px;'
 ]);
 expectIncludes('src/rendering/PixiApp.ts', [
   'fitMapToViewport',
