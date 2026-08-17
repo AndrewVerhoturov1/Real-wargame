@@ -123,3 +123,28 @@ Handoff оркестратору:
 - не переносить mock/demo/localStorage architecture HTML в product;
 - visual tasks проверять свежими screenshots exact SHA через repository screenshot skill;
 - runtime/render/UI changes проверять по performance skill и `CI_RISK_BASED_ACCEPTANCE.md`.
+
+## ПЕШКА — текущий handoff новой волны
+
+ПЕШКА выполнила реализацию нового unit token в отдельной ветке, но результат **не интегрирован и не принят пользователем**.
+
+```text
+branch: feature/20260817-polygon-unit-map-token-x
+implementation_head: bdae5ea0a5e3d282370b1401429d194ec2787da7
+PR: #286
+status: PAUSED BY USER / NOT INTEGRATED
+```
+
+Основной результат: существующий `PixiUnitRenderer` развит без создания второго renderer. В него перенесены круг / скруглённый треугольник / вытянутый прямоугольник, три LOD и реальные presentation-сигналы aim/fire/wound/suppression/movement там, где их даёт текущий `UnitModel`.
+
+Подробный отчёт:
+
+`docs/subprojects/polygon-html-to-product/PESHKA_IMPLEMENTATION_HANDOFF.md`
+
+На предыдущем exact HEAD `9678ca624140c7e7caf3ceddaea8b8b77ce7b161` `PR Risk CI` run #593 был зелёным, включая TypeScript, focused UI/editor contracts, новый `unit_map_token_smoke` и production build.
+
+По отдельной команде пользователя была предпринята одна попытка Vercel Preview через repository exact-source fallback. Deployment `dpl_7gqX1zzGSGjuxmBAfWF3okrEikb5` не дошёл до `READY` и завершился `ERROR` внутри обязательного `verify:preview` из-за устаревшего Combat Lab smoke, ожидавшего скорость `4` при уже каноническом значении `5`. Stale test contract исправлен в feature-ветке; product behavior этим не менялся.
+
+После исправления автоматически запущенный `PR Risk CI` run #594 прошёл TypeScript, но остановился в legacy `infantry-combat-stage8:verify`: широкий `git diff --check` нашёл исторические trailing whitespace в посторонних документах/прототипах, которых ПЕШКА не меняла. Эта проблема сейчас не исправляется.
+
+Пользователь затем явно приказал остановить деплой. Активного Vercel deployment к этому моменту уже не было, второй deploy не создавался, готового Preview ПЕШКИ нет. До новой команды не выполнять deploy, transfer, merge, auto-merge или дополнительные исправления по этой ветке.
