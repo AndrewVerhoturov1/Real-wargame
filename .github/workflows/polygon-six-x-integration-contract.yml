@@ -1,0 +1,14 @@
+name: Polygon Six-X Integration Contract
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+
+jobs:
+  integration-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify six-X integration wiring
+        run: node scripts/polygon_six_x_integration_smoke.mjs
