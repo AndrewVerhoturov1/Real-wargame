@@ -191,7 +191,7 @@ export function readPolygonAttentionLive(state: SimulationState, unitId: string 
   const runtime = unit.attentionRuntime;
   const settings = unit.attentionSettings;
   const profile = settings.profiles[runtime.mode];
-  const profileId = unit.playerAttentionProfileId;
+  const profileId = unit.playerAttentionProfileId ?? null;
   const profileNameRu = profileId && registry.hasProfile(profileId)
     ? registry.getProfile(profileId).nameRu ?? null
     : null;
