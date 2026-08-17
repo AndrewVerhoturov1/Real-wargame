@@ -22,6 +22,17 @@ function expectIncludes(relativePath, snippets) {
   }
 }
 
+function expectExcludes(relativePath, snippets) {
+  if (!exists(relativePath)) {
+    failures.push(`${relativePath}: file is missing`);
+    return;
+  }
+  const source = read(relativePath);
+  for (const snippet of snippets) {
+    if (source.includes(snippet)) failures.push(`${relativePath}: must not include ${JSON.stringify(snippet)}`);
+  }
+}
+
 for (const file of [
   'src/combat-lab/right-panel/PolygonRightPanelLive.ts',
   'src/combat-lab/right-panel/PolygonRightPanelLiveView.ts',
@@ -53,6 +64,40 @@ expectIncludes('src/ui/EntityContextMenu.ts', [
 ]);
 expectIncludes('src/input/TacticalOrderRadialInput.ts', [
   'contextRoutes: EntityContextMenuRoutes = {}',
+]);
+
+// Accepted Interface Linkage v1 presents one continuous live map surface below
+// the top chrome. The product must not frame the existing Pixi board into a
+// centred square or keep the old black letterbox presentation.
+expectExcludes('src/combat-lab/polygon-map-surface.css', [
+  '--polygon-map-size: min(',
+  'width: var(--polygon-map-size)',
+  'height: var(--polygon-map-size)',
+]);
+expectIncludes('src/combat-lab/polygon-map-surface.css', [
+  'top: var(--polygon-chrome-h) !important;',
+  'right: 0 !important;',
+  'bottom: 0 !important;',
+  'left: 0 !important;',
+]);
+expectIncludes('src/rendering/PixiApp.ts', [
+  'fitMapToViewport',
+]);
+
+// Existing authoritative game editors remain the owners, but their Combat Lab
+// catalogue must be presented as the prototype editor workspace rather than a
+// grid of dark/independent cards.
+expectIncludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
+  'combat-lab-game-editor-workspace',
+  'combat-lab-game-editor-nav',
+  'combat-lab-game-editor-stage',
+]);
+
+// LINZA still supplies real Info values; these markers are presentation-only
+// hooks used to enforce the accepted compact light inspector language.
+expectIncludes('src/combat-lab/right-panel/polygon-right-panel-live.css', [
+  'polygon-info-parity',
+  'polygon-info-kv-row',
 ]);
 
 if (failures.length > 0) {
