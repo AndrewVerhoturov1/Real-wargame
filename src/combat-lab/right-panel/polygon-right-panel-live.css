@@ -293,6 +293,126 @@
 .polygon-linza-empty strong { display: block; color: #40433d; font-size: 11px; }
 .polygon-linza-empty p { margin: 5px 0 0; font-size: 9px; line-height: 1.4; }
 
+/* Interface Linkage v1 Info parity. These presentation aliases map the existing
+   live LINZA DOM to the prototype map-inspector language; data remains owned by
+   readPolygonInfoLive and its prepared product owners. */
+.polygon-info-parity,
+[data-polygon-right-panel="info"].polygon-linza-panel {
+  --linza-line: #c9c8bf;
+  --linza-soft-line: #e6e5dd;
+  --linza-paper-soft: #f0efe8;
+  background: rgba(248, 247, 241, .78);
+}
+
+.polygon-info-parity .polygon-linza-scroll,
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-info-tab {
+  padding: 8px;
+  gap: 8px;
+}
+
+/* Visual header text follows the accepted inspector state without creating a
+   second state owner. The real Info data remains in the panel body. */
+body.app-shell-mode-combat-lab .polygon-shell-right:has([data-polygon-right-tab="info"].active) .polygon-shell-panel-kicker,
+body.app-shell-mode-combat-lab .polygon-shell-right:has([data-polygon-right-tab="info"].active) .polygon-shell-panel-title {
+  font-size: 0;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-right:has([data-polygon-right-tab="info"].active) .polygon-shell-panel-kicker::after {
+  content: 'ИНСПЕКТОР КАРТЫ';
+  color: var(--polygon-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-right:has([data-polygon-right-tab="info"].active) .polygon-shell-panel-title::after {
+  content: 'Под курсором';
+  color: var(--polygon-ink);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-summary {
+  padding: 8px 9px;
+  border-color: #c8c7bd;
+  border-radius: 5px;
+  background: #f3f2eb;
+}
+
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-summary-main strong {
+  font-size: 11px;
+  font-weight: 900;
+}
+
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-card {
+  border-color: #c8c7bd;
+  border-radius: 5px;
+  background: #fdfcf8;
+}
+
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-card-head {
+  min-height: 32px;
+  padding: 7px 8px;
+  background: #efeee7;
+}
+
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-card-head strong {
+  color: #3f433a;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: .08em;
+}
+
+.polygon-info-kv-row,
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-metric {
+  min-height: 45px;
+  padding: 7px 8px;
+  background: #fff;
+}
+
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-metric span {
+  color: #7b7e75;
+  font-size: 7.5px;
+  font-weight: 700;
+}
+
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-metric strong {
+  margin-top: 3px;
+  color: #2d302a;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-list-row,
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-unavailable-row {
+  min-height: 39px;
+  padding: 7px 8px;
+  background: #fff;
+}
+
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-empty {
+  padding-top: 17px;
+  align-items: start;
+  color: #777a72;
+}
+
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-empty-icon {
+  display: none;
+}
+
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-empty strong {
+  color: #5a5d55;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+[data-polygon-right-panel="info"].polygon-linza-panel .polygon-linza-empty p {
+  max-width: 250px;
+  margin-top: 3px;
+  color: #777a72;
+  font-size: 9px;
+}
+
 @media (max-width: 760px) {
   .polygon-linza-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .polygon-linza-card-head + .polygon-linza-metrics .polygon-linza-metric:nth-child(3),
