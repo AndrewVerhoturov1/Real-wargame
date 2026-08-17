@@ -121,10 +121,11 @@ export class PixiTacticalBoardApp {
     state: SimulationState,
   ): Promise<PixiTacticalBoardApp> {
     const app = new Application();
+    const polygonSurface = document.body.classList.contains('app-shell-mode-combat-lab');
     try {
       await app.init({
-        background: 0x121612,
-        backgroundAlpha: 1,
+        background: polygonSurface ? 0xd2d0c5 : 0x121612,
+        backgroundAlpha: polygonSurface ? 0 : 1,
         antialias: true,
         preference: 'webgl',
         resizeTo: root,
@@ -232,7 +233,7 @@ export class PixiTacticalBoardApp {
     const report = this.performanceMonitor.buildReport(this.state, this.camera.zoom, {
       pixiMajorVersion: '8',
       antialias: true,
-      backgroundAlpha: 1,
+      backgroundAlpha: this.isPolygonCombatLabViewport() ? 0 : 1,
       maxFPS: TARGET_MAX_FPS,
       mapRender: 'revision-driven map rebuilds; editable batched Pixi Graphics terrain + raster relief/forest + grid/objects',
       mapRendererDiagnostics: this.mapRenderer.getDiagnostics(),
@@ -307,10 +308,12 @@ export class PixiTacticalBoardApp {
   }
 
   /**
-   * Interface Linkage v1 uses the map as the complete surface below the top
-   * chrome. Combat Lab therefore uses a cover-style initial camera transform
-   * instead of letterboxing the authoritative Pixi map inside a square frame.
-   * Normal game mode keeps its existing camera startup behavior.
+   * Interface Linkage v1 uses one continuous map surface below the top chrome.
+   * Combat Lab therefore contains the complete finite product map inside that
+   * surface and leaves the surrounding canvas transparent over the prototype
+   * grid. This removes the legacy black frame without cropping real units or
+   * targets out of the initial view. Normal game mode keeps its existing camera
+   * startup behavior.
    */
   private fitMapToViewport(force = false): void {
     if (!this.isPolygonCombatLabViewport()) return;
@@ -325,7 +328,7 @@ export class PixiTacticalBoardApp {
     if (!force && fitKey === this.lastViewportFitKey) return;
     this.lastViewportFitKey = fitKey;
 
-    const scale = Math.max(viewportWidth / mapWidth, viewportHeight / mapHeight);
+    const scale = Math.min(viewportWidth / mapWidth, viewportHeight / mapHeight);
     const x = Math.round((viewportWidth - mapWidth * scale) / 2);
     const y = Math.round((viewportHeight - mapHeight * scale) / 2);
     this.worldContainer.scale.set(scale);
