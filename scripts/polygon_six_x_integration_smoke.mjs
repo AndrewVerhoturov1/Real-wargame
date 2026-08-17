@@ -66,9 +66,10 @@ expectIncludes('src/input/TacticalOrderRadialInput.ts', [
   'contextRoutes: EntityContextMenuRoutes = {}',
 ]);
 
-// Accepted Interface Linkage v1 presents one continuous live map surface below
+// Accepted Interface Linkage v1 presents one continuous light map surface below
 // the top chrome. The product must not frame the existing Pixi board into a
-// centred square or keep the old black letterbox presentation.
+// centred black square, and it must keep the complete live map visible instead
+// of cover-cropping real units/targets out of the initial viewport.
 expectExcludes('src/combat-lab/polygon-map-surface.css', [
   '--polygon-map-size: min(',
   'width: var(--polygon-map-size)',
@@ -79,9 +80,16 @@ expectIncludes('src/combat-lab/polygon-map-surface.css', [
   'right: 0 !important;',
   'bottom: 0 !important;',
   'left: 0 !important;',
+  'background-size: 80px 80px, 80px 80px, 20px 20px, 20px 20px;',
 ]);
 expectIncludes('src/rendering/PixiApp.ts', [
   'fitMapToViewport',
+  'const polygonSurface = document.body.classList.contains(\'app-shell-mode-combat-lab\');',
+  'backgroundAlpha: polygonSurface ? 0 : 1,',
+  'const scale = Math.min(viewportWidth / mapWidth, viewportHeight / mapHeight);',
+]);
+expectExcludes('src/rendering/PixiApp.ts', [
+  'const scale = Math.max(viewportWidth / mapWidth, viewportHeight / mapHeight);',
 ]);
 
 // Existing authoritative game editors remain the owners, but their Combat Lab
