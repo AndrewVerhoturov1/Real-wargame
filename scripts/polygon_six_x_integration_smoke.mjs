@@ -119,12 +119,11 @@ expectIncludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
   "selected.activation === 'embedded'",
   'selected.definition.mount',
   'GameEditorInstallation',
+  'listCombatLabGameEditorGroups',
+  'listPolygonCombatLabGameEditorGroups',
   'POLYGON_GLOBAL_EDITOR_GROUPS',
   'installPolygonGlobalEditorParity',
   "'surfaceTypes'",
-]);
-expectExcludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
-  'for (const definition of registry.listForSurface(\'combat-lab\'))',
 ]);
 
 expectIncludes('src/combat-lab/game-editors/PolygonGlobalEditorNavigation.ts', [
