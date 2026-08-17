@@ -6,6 +6,7 @@ import type {
   GameEditorActivation,
   GameEditorDefinition,
   GameEditorGroup,
+  GameEditorInstallation,
 } from '../../game-editors/GameEditorTypes';
 
 export interface CombatLabGameEditorCatalogueItem {
@@ -46,6 +47,8 @@ export class CombatLabGameEditorCatalogue {
   private readonly root = document.createElement('section');
   private readonly listeners: Array<readonly [HTMLButtonElement, EventListener]> = [];
   private selectedEditorId: string | null = null;
+  private installation: GameEditorInstallation | null = null;
+  private mountGeneration = 0;
   private destroyed = false;
 
   private constructor(private readonly options: CombatLabGameEditorCatalogueOptions) {
@@ -61,12 +64,15 @@ export class CombatLabGameEditorCatalogue {
 
   refresh(): void {
     if (this.destroyed) return;
+    this.disposeInstallation();
     this.removeListeners();
 
     const groups = listCombatLabGameEditorGroups(this.options.registry);
     const allItems = groups.flatMap((group) => [...group.items]);
     if (!allItems.some((item) => item.definition.id === this.selectedEditorId)) {
-      this.selectedEditorId = allItems[0]?.definition.id ?? null;
+      this.selectedEditorId = allItems.find((item) => item.activation === 'embedded' && item.definition.mount)?.definition.id
+        ?? allItems[0]?.definition.id
+        ?? null;
     }
 
     if (allItems.length === 0) {
@@ -93,6 +99,7 @@ export class CombatLabGameEditorCatalogue {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.disposeInstallation();
     this.removeListeners();
     this.options.host.replaceChildren();
   }
@@ -106,28 +113,32 @@ export class CombatLabGameEditorCatalogue {
   }
 
   private renderNavigationItem(item: CombatLabGameEditorCatalogueItem): HTMLButtonElement {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'combat-lab-game-editor-item';
-    button.dataset.gameEditorId = item.definition.id;
-    button.dataset.gameEditorActivation = item.activation;
-    button.classList.toggle('is-active', item.definition.id === this.selectedEditorId);
-    button.setAttribute('aria-pressed', String(item.definition.id === this.selectedEditorId));
-    button.append(
+    const control = document.createElement('button');
+    control.type = 'button';
+    control.className = 'combat-lab-game-editor-item';
+    control.dataset.gameEditorId = item.definition.id;
+    control.dataset.gameEditorActivation = item.activation;
+    control.classList.toggle('is-active', item.definition.id === this.selectedEditorId);
+    control.setAttribute('aria-pressed', String(item.definition.id === this.selectedEditorId));
+    control.append(
       node('strong', 'combat-lab-game-editor-item-label', item.definition.labelRu),
       node(
         'span',
         'combat-lab-game-editor-item-mode',
-        item.activation === 'route' ? 'Полноэкранный редактор' : 'Редактор поверх карты',
+        item.activation === 'route' ? 'Полноэкранный редактор' : 'Встроенный редактор',
       ),
     );
-    const listener: EventListener = () => {
-      this.selectedEditorId = item.definition.id;
-      this.refresh();
-    };
-    button.addEventListener('click', listener);
-    this.listeners.push([button, listener]);
-    return button;
+    const listener: EventListener = () => { void this.selectItem(item); };
+    control.addEventListener('click', listener);
+    this.listeners.push([control, listener]);
+    return control;
+  }
+
+  private async selectItem(item: CombatLabGameEditorCatalogueItem): Promise<void> {
+    if (this.destroyed || item.definition.id === this.selectedEditorId) return;
+    if (this.installation?.beforeClose && !(await this.installation.beforeClose())) return;
+    this.selectedEditorId = item.definition.id;
+    this.refresh();
   }
 
   private renderStage(
@@ -146,10 +157,18 @@ export class CombatLabGameEditorCatalogue {
     header.append(titleWrap, node(
       'span',
       'combat-lab-game-editor-stage-mode',
-      selected.activation === 'route' ? 'ПОЛНОЭКРАННЫЙ' : 'ПОВЕРХ КАРТЫ',
+      selected.activation === 'route' ? 'ПОЛНОЭКРАННЫЙ' : 'ВСТРОЕННЫЙ',
     ));
 
-    const body = node('div', 'combat-lab-game-editor-stage-body');
+    const body = node('div', `combat-lab-game-editor-stage-body${selected.activation === 'embedded' ? ' is-editor-mounted' : ''}`);
+    if (selected.activation === 'embedded' && selected.definition.mount) {
+      const mountHost = node('div', 'combat-lab-game-editor-mounted-host');
+      body.append(mountHost);
+      stage.replaceChildren(header, body);
+      void this.mountEmbedded(selected, mountHost);
+      return;
+    }
+
     const empty = node('div', 'combat-lab-game-editor-stage-empty');
     empty.append(
       node('div', 'combat-lab-game-editor-stage-empty-mark', '↗'),
@@ -157,7 +176,7 @@ export class CombatLabGameEditorCatalogue {
       node(
         'p',
         '',
-        'Редактор остаётся авторитетным продуктовым инструментом. Полигон показывает его через единый реестр без копии данных или отдельного состояния.',
+        'Этот authoritative editor живёт на отдельном product-route. Полигон не создаёт его копию.',
       ),
     );
     const open = document.createElement('button');
@@ -169,12 +188,45 @@ export class CombatLabGameEditorCatalogue {
     this.listeners.push([open, listener]);
     empty.append(open);
     body.append(empty);
-
     stage.replaceChildren(header, body);
   }
 
+  private async mountEmbedded(
+    selected: CombatLabGameEditorCatalogueItem,
+    host: HTMLElement,
+  ): Promise<void> {
+    if (selected.activation !== 'embedded' || !selected.definition.mount) return;
+    const generation = ++this.mountGeneration;
+    try {
+      const installation = await selected.definition.mount({
+        host,
+        surface: 'combat-lab',
+        request: { editorId: selected.definition.id },
+        requestClose: () => {},
+      });
+      if (this.destroyed || generation !== this.mountGeneration || selected.definition.id !== this.selectedEditorId) {
+        installation.destroy();
+        return;
+      }
+      this.installation = installation;
+    } catch (error) {
+      if (this.destroyed || generation !== this.mountGeneration) return;
+      host.replaceChildren(node(
+        'div',
+        'combat-lab-game-editor-stage-error',
+        `Редактор не открылся: ${error instanceof Error ? error.message : String(error)}`,
+      ));
+    }
+  }
+
+  private disposeInstallation(): void {
+    this.mountGeneration += 1;
+    this.installation?.destroy();
+    this.installation = null;
+  }
+
   private removeListeners(): void {
-    for (const [button, listener] of this.listeners) button.removeEventListener('click', listener);
+    for (const [control, listener] of this.listeners) control.removeEventListener('click', listener);
     this.listeners.length = 0;
   }
 }
