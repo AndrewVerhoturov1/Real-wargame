@@ -1,0 +1,475 @@
+/* Accepted Interface Linkage v1 presentation for the Map/Unit editor first
+   screen. Product-owned editor hosts stay mounted in .polygon-editor-legacy-details. */
+
+body.app-shell-mode-combat-lab .polygon-shell-editor-parity-host {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: #292c26;
+  background: rgba(247, 246, 240, .94);
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editor-parity-host[hidden] {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-parity {
+  box-sizing: border-box;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10px;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-toolbar {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 29px 29px 29px minmax(0, 1fr) 77px;
+  gap: 5px;
+  align-items: center;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-editor-parity-button,
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-unit-editor-details-button,
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-unit-editor-posture {
+  min-height: 29px;
+  box-sizing: border-box;
+  border: 1px solid #b9bbb1;
+  border-radius: 4px;
+  color: #45483f;
+  background: #fff;
+  padding: 4px 7px;
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 1;
+  box-shadow: none;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-editor-parity-button:disabled {
+  opacity: 1;
+  color: #51544b;
+  background: #fff;
+  cursor: default;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-editor-parity-button.is-primary:disabled,
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-editor-parity-button.is-bake:disabled {
+  border-color: #c2a329;
+  color: #27230e;
+  background: #e0bc38;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-editor-parity-button.is-danger:disabled {
+  border-color: #e0aaa2;
+  color: #9c4e44;
+  background: #fff1ee;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-editor-parity-button.is-wide {
+  width: 100%;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-status-pill {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #676a61;
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-status-pill i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #cda92d;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-subtabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-editor-subtabs .polygon-editor-parity-button {
+  min-width: 0;
+  padding-inline: 4px;
+  font-size: 7.6px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-editor-subtabs .polygon-editor-parity-button.is-active:disabled {
+  border-color: var(--polygon-top);
+  color: #fff;
+  background: var(--polygon-top);
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-summary-card {
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 7px;
+  border: 1px solid #c8cabd;
+  border-radius: 6px;
+  background: #eef2e6;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-summary-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #9ba18f;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 15px;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-summary-main {
+  min-width: 0;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-summary-main strong,
+body.app-shell-mode-combat-lab .polygon-editor-summary-main small {
+  display: block;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-summary-main strong {
+  color: #3b3f36;
+  font-size: 10px;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-summary-main small {
+  margin-top: 2px;
+  color: #7d8077;
+  font-size: 7.5px;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-summary-value {
+  color: #4d5147;
+  font-size: 9px;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-parity-section {
+  overflow: hidden;
+  border: 1px solid #d0cfc6;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .96);
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-parity-section-title {
+  padding: 7px 8px;
+  border-bottom: 1px solid #d0cfc6;
+  color: #34372f;
+  background: #eeede6;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: .035em;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-form-grid,
+body.app-shell-mode-combat-lab .polygon-editor-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  padding: 7px;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-action-grid {
+  padding-bottom: 5px;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-parity-field {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  color: #696c63;
+  font-size: 7.5px;
+  font-weight: 800;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-parity-field input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 29px;
+  min-height: 29px;
+  border: 1px solid #b9bbb2;
+  border-radius: 4px;
+  color: #33362f;
+  background: #fff;
+  padding: 4px 6px;
+  font: 9px Arial, Helvetica, sans-serif;
+  box-shadow: none;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-parity-section > .polygon-editor-parity-button.is-wide {
+  width: calc(100% - 14px);
+  margin: 0 7px 7px;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-parity-note {
+  margin: 0 7px 7px;
+  padding: 7px;
+  border-radius: 3px;
+  color: #8a7d50;
+  background: #f8f1d4;
+  font-size: 7.5px;
+  line-height: 1.35;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-parity-note.is-status {
+  color: #53614c;
+  background: #eef4e9;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-slider-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 1px 7px 5px;
+  color: #71746b;
+  font-size: 7.5px;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-fake-slider {
+  height: 5px;
+  margin: 0 10px 9px;
+  border-radius: 4px;
+  background: #dddcd4;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-fake-slider-fill {
+  display: block;
+  width: 55%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--polygon-top);
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-legacy-details {
+  margin-top: 2px;
+  border: 1px solid #d0cfc6;
+  border-radius: 5px;
+  background: #f7f6ef;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-legacy-details > summary {
+  padding: 8px;
+  cursor: pointer;
+  color: #65685f;
+  background: #eeede6;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-legacy-details:not([open]) > .polygon-shell-editor-tab-host {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-legacy-details[open] > .polygon-shell-editor-tab-host {
+  display: block !important;
+  height: auto;
+  max-height: 520px;
+  padding: 7px;
+  border-top: 1px solid #d0cfc6;
+  overflow: auto;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-toolbar {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-count {
+  color: #565950;
+  font-size: 8px;
+  letter-spacing: .05em;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-unit-editor-details-button {
+  min-width: 62px;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-identity {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 35px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px;
+  border: 1px solid #d0cfc6;
+  border-radius: 5px;
+  background: #fff;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-symbol {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #285970;
+  border-radius: 4px;
+  color: #285970;
+  background: #eef5f7;
+  font-size: 16px;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-symbol.is-crouched {
+  border-radius: 5px;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-symbol.is-prone {
+  height: 20px;
+  margin-block: 6px;
+  border-radius: 8px;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-identity-main strong,
+body.app-shell-mode-combat-lab .polygon-unit-editor-identity-main small {
+  display: block;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-identity-main strong {
+  color: #2d302a;
+  font-size: 10px;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-identity-main small {
+  margin-top: 2px;
+  color: #777a72;
+  font-size: 7.5px;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-mini-tools {
+  display: flex;
+  gap: 3px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-unit-editor-mini-tools .polygon-editor-parity-button {
+  width: 27px;
+  min-width: 27px;
+  padding: 0;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-posture-label {
+  padding: 0 7px 4px;
+  color: #6d7067;
+  font-size: 7.5px;
+  font-weight: 800;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-postures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  padding: 0 7px 7px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-unit-editor-posture {
+  height: 38px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-unit-editor-posture:hover,
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-unit-editor-posture.is-active {
+  border-color: var(--polygon-top);
+  color: #fff;
+  background: var(--polygon-top);
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-tactical-preview {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 7px;
+  border-bottom: 1px solid #e1e0d8;
+  background: #faf9f4;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-tactical-icon {
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed #8a8d84;
+  color: #315b6f;
+  background: #f4f7f5;
+  font-size: 20px;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-tactical-copy strong,
+body.app-shell-mode-combat-lab .polygon-unit-editor-tactical-copy small {
+  display: block;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-tactical-copy strong {
+  font-size: 10px;
+}
+
+body.app-shell-mode-combat-lab .polygon-unit-editor-tactical-copy small {
+  margin-top: 3px;
+  color: #777a72;
+  font-size: 8px;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-empty {
+  padding: 18px 10px;
+  border: 1px solid #d0cfc6;
+  border-radius: 5px;
+  color: #6c6f66;
+  background: #fff;
+  text-align: center;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-empty strong {
+  color: #34372f;
+}
+
+body.app-shell-mode-combat-lab .polygon-editor-empty p {
+  margin: 5px 0 0;
+  font-size: 8.5px;
+}
+
+/* A real embedded registry editor becomes the main work area. If the product
+   editor itself exposes a list + canvas/form, this creates the accepted third
+   column instead of a placeholder card. */
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-stage-body.is-editor-mounted {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  background: #f8f7f1;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-mounted-host {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  color: #2f322b;
+  background: #f8f7f1;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-stage-error {
+  margin: 18px;
+  padding: 12px;
+  border: 1px solid #d5aaa2;
+  border-radius: 5px;
+  color: #8b4c43;
+  background: #fff2ef;
+  font-size: 10px;
+}
