@@ -10,5 +10,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: npm ci
       - name: Verify six-X integration wiring
         run: node scripts/polygon_six_x_integration_smoke.mjs
+      - name: Verify map contracts
+        run: npm run map-revision:smoke && npm run map-grid-lod:smoke
+      - name: Verify unit token contract
+        run: node scripts/unit_map_token_smoke.mjs
+      - name: Verify LIVE Unit contract
+        run: node scripts/combat_lab_live_unit_ui_contract_smoke.mjs
+      - name: Verify editor integration contract
+        run: npm run combat-lab-game-editors:smoke
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
