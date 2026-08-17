@@ -1,0 +1,459 @@
+body.app-shell-mode-combat-lab .polygon-live-unit-host {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  color: var(--polygon-ink);
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit-host .inspector-unit-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--polygon-line);
+  background: #f1f0e9;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit-host .inspector-unit-avatar {
+  width: 31px;
+  height: 31px;
+  flex: 0 0 31px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #486979;
+  border-radius: 50%;
+  background: #d9e4e8;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit-host .inspector-unit-name {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit-host .inspector-unit-meta {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--polygon-muted);
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit {
+  display: grid;
+  gap: 6px;
+  padding: 7px 8px 10px;
+  font-size: 11px;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-compact-top {
+  min-height: 31px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border: 1px solid var(--polygon-line);
+  border-radius: 4px;
+  background: #f6f5ef;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-tab__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid #bcc8a7;
+  border-radius: 99px;
+  background: #edf1e5;
+  color: #334126;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 16px;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-tab__status::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .75;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-tab__status.is-warn {
+  border-color: #cfb86e;
+  background: #f5edd2;
+  color: #6a5518;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-tab__status.is-danger {
+  border-color: #c99184;
+  background: #f3dfd9;
+  color: #7c3025;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-compact-meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--polygon-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-compact-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--polygon-line);
+  border-radius: 4px;
+  background: var(--polygon-line);
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-compact-stat {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 5px 6px;
+  background: #fff;
+  text-align: center;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-compact-stat span {
+  overflow: hidden;
+  color: var(--polygon-muted);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-compact-stat strong {
+  font: 900 11.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-compact-stat.is-alert strong {
+  color: #874b38;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-compact-row {
+  min-height: 33px;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 4px 7px;
+  border: 1px solid var(--polygon-line);
+  border-radius: 4px;
+  background: #fff;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-compact-row > label {
+  color: var(--polygon-muted);
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-compact-value {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-compact-value strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-compact-value span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--polygon-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-compact-value em {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: #5e6558;
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-pose-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-live-unit .unit-pose-button {
+  height: 28px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 5px;
+  border: 1px solid var(--polygon-line-strong);
+  border-radius: 3px;
+  background: #f8f7f2;
+  color: #464940;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-live-unit .unit-pose-button:hover:not(:disabled) {
+  border-color: #777c6e;
+  background: #fff;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-live-unit .unit-pose-button.is-active {
+  border-color: var(--polygon-top);
+  background: var(--polygon-top);
+  color: #fff;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-pose-button__icon {
+  font-size: 10px;
+  line-height: 1;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-live-unit .unit-pose-button:disabled {
+  cursor: default;
+  opacity: .72;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-compact-ammo {
+  color: #333 !important;
+  font: 900 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-task-block {
+  padding: 7px 8px;
+  border: 1px solid var(--polygon-line);
+  border-left-width: 3px;
+  border-radius: 4px;
+  background: #fff;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-command-block {
+  border-left-color: #9a8434;
+  background: #fbf8ea;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-action-block {
+  border-left-color: #607d68;
+  background: #f4f7f3;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-task-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  margin-bottom: 4px;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-task-head span:first-child {
+  color: #62655d;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-task-state {
+  color: var(--polygon-muted);
+  font-size: 9.5px;
+  font-weight: 800;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-task-main {
+  display: block;
+  color: var(--polygon-ink);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.28;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .unit-task-detail {
+  display: block;
+  margin-top: 3px;
+  color: var(--polygon-muted);
+  font-size: 10px;
+  line-height: 1.32;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit details {
+  border: 1px solid var(--polygon-line);
+  border-radius: 4px;
+  background: #f8f7f2;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 7px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit summary::-webkit-details-marker {
+  display: none;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit summary::after {
+  content: '＋';
+  color: var(--polygon-muted);
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit details[open] summary::after {
+  content: '−';
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit details .data-list {
+  margin: 0;
+  padding: 0 7px 5px;
+  border-top: 1px solid var(--polygon-line);
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .data-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--polygon-line);
+  font-size: 10px;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .data-row:last-child {
+  border-bottom: 0;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .data-row dt {
+  color: var(--polygon-muted);
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit .data-row dd {
+  max-width: 190px;
+  margin: 0;
+  overflow: hidden;
+  font-weight: 800;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit__command-result {
+  padding: 5px 7px;
+  border-left: 2px solid #607d68;
+  background: #f4f7f3;
+  color: #4f5d51;
+  font-size: 9.5px;
+  line-height: 1.3;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit__command-result.is-rejected {
+  border-left-color: #9b3d36;
+  background: #f6e5e1;
+  color: #74352e;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit__profiles {
+  display: grid;
+  gap: 3px;
+  padding: 5px 7px 7px;
+  border-top: 1px solid var(--polygon-line);
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit__profiles-title {
+  color: #62655d;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-live-unit__profile-link {
+  min-height: 25px;
+  padding: 4px 6px;
+  overflow: hidden;
+  border: 1px solid var(--polygon-line);
+  border-radius: 3px;
+  background: #fff;
+  color: #526242;
+  font-size: 9px;
+  font-weight: 900;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-live-unit__profile-link:hover:not(:disabled) {
+  border-color: #8d9185;
+  background: #f7f5e9;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-live-unit__profile-link:disabled {
+  color: var(--polygon-muted);
+  cursor: default;
+  opacity: .65;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit__profiles-empty {
+  color: var(--polygon-muted);
+  font-size: 9px;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit-empty {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--polygon-muted);
+  text-align: center;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit-empty .empty-state__icon {
+  margin-bottom: 6px;
+  font-size: 24px;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit-empty strong {
+  display: block;
+  color: var(--polygon-ink);
+  font-size: 12px;
+}
+
+body.app-shell-mode-combat-lab .polygon-live-unit-empty p {
+  max-width: 250px;
+  margin: 5px 0 0;
+  font-size: 10px;
+  line-height: 1.4;
+}
