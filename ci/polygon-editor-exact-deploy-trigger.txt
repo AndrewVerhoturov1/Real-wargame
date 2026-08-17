@@ -1,2 +1,2 @@
-Temporary CI-only trigger for exact deployment of feature/20260817-polygon-editor-inner-parity @ 0792cae6ba353c781847d3e2f7f588cdf7047329.
+Temporary CI-only trigger for exact deployment of feat/20260817-polygon-editors-visual-parity @ 13a70b76bd5087b87c0767970eb378ba192a1b49.
 Do not merge.
