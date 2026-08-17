@@ -1,55 +1,54 @@
 /* Polygon map-surface integration.
    The tactical board already exists in GameApplication -> PixiTacticalBoardApp ->
-   PixiMapRenderer. This layer only exposes that product-owned canvas through the
-   accepted Polygon shell; it does not create a second renderer or map state. */
+   PixiMapRenderer. This layer only presents that product-owned canvas through
+   the accepted Polygon shell; it does not create a second renderer or map state. */
 
-/* Interface Linkage v1 is one continuous light map surface below the top chrome.
-   The live finite product map is fitted inside it, while the canvas outside the
-   finite map stays transparent so this prototype grid remains visible instead
-   of the legacy black letterbox. */
+body.app-shell-mode-combat-lab {
+  --polygon-map-frame-left-gap: 66px;
+  --polygon-map-frame-right-gap: 64px;
+}
+
 body.app-shell-mode-combat-lab #combat-lab-extension-root .combat-lab-workspace.polygon-shell {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 
+/* Interface Linkage v1 has a continuous technical grid below the chrome. The
+   finite tactical camera is a separate central frame between the two floating
+   panels. This background is presentation only. */
 body.app-shell-mode-combat-lab .polygon-shell-viewport {
-  background: transparent !important;
+  background-color: var(--polygon-map) !important;
+  background-image:
+    linear-gradient(rgba(61, 69, 46, .13) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(61, 69, 46, .13) 1px, transparent 1px),
+    linear-gradient(rgba(61, 69, 46, .065) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(61, 69, 46, .065) 1px, transparent 1px) !important;
+  background-size: 80px 80px, 80px 80px, 20px 20px, 20px 20px !important;
 }
 
 body.app-shell-mode-combat-lab .polygon-shell-map-placeholder {
   display: none !important;
 }
 
+/* At the canonical 1600×900 viewport these formulas reproduce the accepted
+   map frame at roughly x452..1186 and y128..861. The canvas itself is the frame:
+   there is no black square around another smaller map. */
 body.app-shell-mode-combat-lab #app,
 body.app-shell-mode-combat-lab.workspace-simulation #app,
 body.app-shell-mode-combat-lab.workspace-editor #app {
-  top: var(--polygon-chrome-h) !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  left: 0 !important;
+  top: calc(var(--polygon-chrome-h) + 40px) !important;
+  left: calc(var(--polygon-panel-gap) + var(--polygon-left-w) + var(--polygon-map-frame-left-gap)) !important;
+  right: calc(var(--polygon-panel-gap) + var(--polygon-right-w) + var(--polygon-map-frame-right-gap)) !important;
+  bottom: 39px !important;
   width: auto !important;
   height: auto !important;
   margin: 0;
   box-sizing: border-box;
   overflow: hidden;
   transform: none;
-  border: 0;
+  border: 1px solid rgba(48, 54, 42, .66);
   border-radius: 0;
-  background-color: var(--polygon-map);
-  background-image:
-    radial-gradient(circle at 78% 20%, rgba(255, 255, 255, .42), transparent 26%),
-    linear-gradient(135deg, rgba(255, 255, 255, .18), transparent 35%),
-    linear-gradient(rgba(61, 69, 46, .16) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(61, 69, 46, .16) 1px, transparent 1px),
-    linear-gradient(rgba(61, 69, 46, .08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(61, 69, 46, .08) 1px, transparent 1px);
-  background-size:
-    auto,
-    auto,
-    80px 80px,
-    80px 80px,
-    20px 20px,
-    20px 20px;
+  background: var(--polygon-map);
   box-shadow: none;
 }
 
@@ -60,9 +59,7 @@ body.app-shell-mode-combat-lab #app canvas {
   background: transparent !important;
 }
 
-/* HtmlOverlayRenderer projects labels into root-local canvas coordinates. Its
-   shared full-screen CSS uses position: fixed, which is correct for the legacy
-   full-viewport board but would detach labels after the Polygon chrome offset. */
+/* HtmlOverlayRenderer projects labels into root-local canvas coordinates. */
 body.app-shell-mode-combat-lab #app .html-map-overlay {
   position: absolute;
   inset: 0;
@@ -71,7 +68,31 @@ body.app-shell-mode-combat-lab #app .html-map-overlay {
   overflow: hidden;
 }
 
-/* The old fixed debug scale label belongs to the previous full-screen HUD. */
 body.app-shell-mode-combat-lab #app .map-scale-fixed-label {
   display: none !important;
+}
+
+@media (max-width: 1180px) {
+  body.app-shell-mode-combat-lab {
+    --polygon-map-frame-left-gap: 28px;
+    --polygon-map-frame-right-gap: 28px;
+  }
+
+  body.app-shell-mode-combat-lab #app,
+  body.app-shell-mode-combat-lab.workspace-simulation #app,
+  body.app-shell-mode-combat-lab.workspace-editor #app {
+    top: calc(var(--polygon-chrome-h) + 28px) !important;
+    bottom: 28px !important;
+  }
+}
+
+@media (max-width: 760px) {
+  body.app-shell-mode-combat-lab #app,
+  body.app-shell-mode-combat-lab.workspace-simulation #app,
+  body.app-shell-mode-combat-lab.workspace-editor #app {
+    top: calc(var(--polygon-chrome-h) + 18px) !important;
+    left: 18px !important;
+    right: 18px !important;
+    bottom: 18px !important;
+  }
 }
