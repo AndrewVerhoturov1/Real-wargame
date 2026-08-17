@@ -45,6 +45,7 @@ export function listCombatLabGameEditorGroups(
 export class CombatLabGameEditorCatalogue {
   private readonly root = document.createElement('section');
   private readonly listeners: Array<readonly [HTMLButtonElement, EventListener]> = [];
+  private selectedEditorId: string | null = null;
   private destroyed = false;
 
   private constructor(private readonly options: CombatLabGameEditorCatalogueOptions) {
@@ -61,16 +62,32 @@ export class CombatLabGameEditorCatalogue {
   refresh(): void {
     if (this.destroyed) return;
     this.removeListeners();
-    const introduction = node(
-      'p',
-      'combat-lab-game-editor-catalogue-intro',
-      'Здесь открываются общие авторитетные редакторы игры. Изменения сохраняются в их собственных реестрах, а не в черновике эксперимента.',
-    );
+
     const groups = listCombatLabGameEditorGroups(this.options.registry);
-    const content = groups.length > 0
-      ? groups.map((group) => this.renderGroup(group))
-      : [node('div', 'combat-lab-empty-tab', 'Для испытательного полигона пока нет доступных общих редакторов.')];
-    this.root.replaceChildren(introduction, ...content);
+    const allItems = groups.flatMap((group) => [...group.items]);
+    if (!allItems.some((item) => item.definition.id === this.selectedEditorId)) {
+      this.selectedEditorId = allItems[0]?.definition.id ?? null;
+    }
+
+    if (allItems.length === 0) {
+      this.root.replaceChildren(node(
+        'div',
+        'combat-lab-empty-tab',
+        'Для испытательного полигона пока нет доступных общих редакторов.',
+      ));
+      return;
+    }
+
+    const workspace = node('div', 'combat-lab-game-editor-workspace');
+    const navigation = node('nav', 'combat-lab-game-editor-nav');
+    navigation.setAttribute('aria-label', 'Общие редакторы');
+    for (const group of groups) navigation.append(this.renderNavigationGroup(group));
+
+    const stage = node('section', 'combat-lab-game-editor-stage');
+    stage.setAttribute('aria-live', 'polite');
+    this.renderStage(stage, allItems);
+    workspace.append(navigation, stage);
+    this.root.replaceChildren(workspace);
   }
 
   destroy(): void {
@@ -80,33 +97,80 @@ export class CombatLabGameEditorCatalogue {
     this.options.host.replaceChildren();
   }
 
-  private renderGroup(group: CombatLabGameEditorCatalogueGroup): HTMLElement {
-    const section = node('section', 'combat-lab-game-editor-group');
+  private renderNavigationGroup(group: CombatLabGameEditorCatalogueGroup): HTMLElement {
+    const section = node('section', 'combat-lab-game-editor-nav-group');
     section.dataset.gameEditorGroup = group.group;
-    section.append(node('h3', 'combat-lab-game-editor-group-title', group.labelRu));
-    const list = node('div', 'combat-lab-game-editor-list');
-    for (const item of group.items) list.append(this.renderItem(item));
-    section.append(list);
+    section.append(node('div', 'combat-lab-game-editor-nav-group-title', group.labelRu));
+    for (const item of group.items) section.append(this.renderNavigationItem(item));
     return section;
   }
 
-  private renderItem(item: CombatLabGameEditorCatalogueItem): HTMLElement {
+  private renderNavigationItem(item: CombatLabGameEditorCatalogueItem): HTMLButtonElement {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'combat-lab-game-editor-item';
     button.dataset.gameEditorId = item.definition.id;
     button.dataset.gameEditorActivation = item.activation;
-    const label = node('strong', 'combat-lab-game-editor-item-label', item.definition.labelRu);
-    const mode = node(
-      'span',
-      'combat-lab-game-editor-item-mode',
-      item.activation === 'route' ? 'Откроется в полноэкранном редакторе' : 'Откроется поверх карты',
+    button.classList.toggle('is-active', item.definition.id === this.selectedEditorId);
+    button.setAttribute('aria-pressed', String(item.definition.id === this.selectedEditorId));
+    button.append(
+      node('strong', 'combat-lab-game-editor-item-label', item.definition.labelRu),
+      node(
+        'span',
+        'combat-lab-game-editor-item-mode',
+        item.activation === 'route' ? 'Полноэкранный редактор' : 'Редактор поверх карты',
+      ),
     );
-    button.append(label, mode);
-    const listener: EventListener = () => this.options.onOpen(item.definition, button);
+    const listener: EventListener = () => {
+      this.selectedEditorId = item.definition.id;
+      this.refresh();
+    };
     button.addEventListener('click', listener);
     this.listeners.push([button, listener]);
     return button;
+  }
+
+  private renderStage(
+    stage: HTMLElement,
+    allItems: readonly CombatLabGameEditorCatalogueItem[],
+  ): void {
+    const selected = allItems.find((item) => item.definition.id === this.selectedEditorId) ?? allItems[0];
+    if (!selected) return;
+
+    const header = node('header', 'combat-lab-game-editor-stage-head');
+    const titleWrap = node('div', 'combat-lab-game-editor-stage-title-wrap');
+    titleWrap.append(
+      node('span', 'combat-lab-game-editor-stage-kicker', 'ОБЩИЕ ИГРОВЫЕ ДАННЫЕ'),
+      node('h2', 'combat-lab-game-editor-stage-title', selected.definition.labelRu),
+    );
+    header.append(titleWrap, node(
+      'span',
+      'combat-lab-game-editor-stage-mode',
+      selected.activation === 'route' ? 'ПОЛНОЭКРАННЫЙ' : 'ПОВЕРХ КАРТЫ',
+    ));
+
+    const body = node('div', 'combat-lab-game-editor-stage-body');
+    const empty = node('div', 'combat-lab-game-editor-stage-empty');
+    empty.append(
+      node('div', 'combat-lab-game-editor-stage-empty-mark', '↗'),
+      node('strong', '', selected.definition.labelRu),
+      node(
+        'p',
+        '',
+        'Редактор остаётся авторитетным продуктовым инструментом. Полигон показывает его через единый реестр без копии данных или отдельного состояния.',
+      ),
+    );
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'combat-lab-game-editor-stage-open';
+    open.textContent = 'ОТКРЫТЬ РЕДАКТОР';
+    const listener: EventListener = () => this.options.onOpen(selected.definition, open);
+    open.addEventListener('click', listener);
+    this.listeners.push([open, listener]);
+    empty.append(open);
+    body.append(empty);
+
+    stage.replaceChildren(header, body);
   }
 
   private removeListeners(): void {
