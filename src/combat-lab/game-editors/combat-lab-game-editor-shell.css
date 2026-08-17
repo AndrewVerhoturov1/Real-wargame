@@ -1,0 +1,273 @@
+/* Polygon editor presentation only. Domain logic and editor ownership stay in
+   GameEditorRegistry / CombatLabGameEditors and the existing map/unit owners. */
+
+body.app-shell-mode-combat-lab .polygon-shell-editor-tab-host {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 10px;
+  color: var(--polygon-ink);
+  background: rgba(250, 249, 244, .72);
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editor-tab-host[hidden] {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-presented-editor-panel {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  height: auto;
+  color: var(--polygon-ink);
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editor-tab-host .combat-lab-workspace-host,
+body.app-shell-mode-combat-lab .polygon-shell-editor-tab-host .combat-lab-stage10-scene-host,
+body.app-shell-mode-combat-lab .polygon-shell-editor-tab-host .combat-lab-selected-unit-parameters-host {
+  min-width: 0;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editor-tab-host .combat-lab-panel,
+body.app-shell-mode-combat-lab .polygon-shell-editor-tab-host .combat-lab-details,
+body.app-shell-mode-combat-lab .polygon-shell-editor-tab-host .combat-lab-source-profile-links {
+  border-color: var(--polygon-line);
+  border-radius: 5px;
+  color: var(--polygon-ink);
+  background: rgba(255, 255, 255, .82);
+  box-shadow: none;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editor-tab-host .combat-lab-section-title,
+body.app-shell-mode-combat-lab .polygon-shell-editor-tab-host .combat-lab-workspace-subheading {
+  color: var(--polygon-ink);
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal {
+  position: absolute;
+  top: calc(var(--polygon-chrome-h) + var(--polygon-panel-gap));
+  bottom: var(--polygon-panel-gap);
+  left: calc(var(--polygon-panel-gap) * 2 + var(--polygon-left-w));
+  right: calc(var(--polygon-panel-gap) * 2 + var(--polygon-right-w));
+  z-index: 72;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgba(34, 39, 28, .32);
+  border-radius: var(--polygon-radius);
+  color: var(--polygon-ink);
+  background: var(--polygon-panel-solid);
+  box-shadow: var(--polygon-shadow);
+  pointer-events: auto;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal[hidden] {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal-header {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px 9px 16px;
+  border-bottom: 1px solid var(--polygon-line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .76), rgba(235, 234, 226, .82));
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal-heading {
+  min-width: 0;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal-title {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--polygon-ink);
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-return {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--polygon-line-strong);
+  border-radius: 4px;
+  color: #373a33;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-return:hover,
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-return:focus-visible {
+  border-color: #9e8b3f;
+  background: var(--polygon-accent-soft);
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal-body {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  background: #efeee7;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal-body > .polygon-shell-presented-editor-panel {
+  height: 100%;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-catalogue {
+  gap: 16px;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-catalogue-intro {
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--polygon-line);
+  color: var(--polygon-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-group {
+  gap: 8px;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-group-title {
+  color: #565a50;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-list {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 7px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-item {
+  min-height: 66px;
+  padding: 11px 12px;
+  border: 1px solid var(--polygon-line);
+  border-radius: 5px;
+  color: var(--polygon-ink);
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(22, 26, 17, .06);
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-item:hover,
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-item:focus-visible {
+  border-color: #9e8b3f;
+  background: #f8f0c9;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-item-label {
+  color: var(--polygon-ink);
+  font-size: 13px;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-item-mode {
+  color: var(--polygon-muted);
+  font-size: 10px;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-top-button--editors[aria-pressed="true"] {
+  color: #191a11;
+  border-color: var(--polygon-accent);
+  background: var(--polygon-accent);
+}
+
+/* The embedded editor still uses the shared overlay coordinator. This pass only
+   aligns its workbench chrome with the accepted Polygon shell palette. */
+body.app-shell-mode-combat-lab .app-modal-dialog:has(.combat-lab-game-editor-workbench) {
+  border: 1px solid rgba(34, 39, 28, .34);
+  border-radius: var(--polygon-radius);
+  color: var(--polygon-ink);
+  background: var(--polygon-panel-solid);
+  box-shadow: 0 24px 80px rgba(22, 26, 17, .34);
+}
+
+body.app-shell-mode-combat-lab .combat-lab-game-editor-workbench-header {
+  border-bottom-color: var(--polygon-line);
+  color: var(--polygon-ink);
+  background: linear-gradient(180deg, #fdfcf7, #e9e8df);
+}
+
+body.app-shell-mode-combat-lab .combat-lab-game-editor-workbench-title {
+  color: var(--polygon-ink);
+  font-size: 18px;
+}
+
+body.app-shell-mode-combat-lab .combat-lab-game-editor-workbench-message {
+  color: var(--polygon-muted);
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .combat-lab-game-editor-workbench-close {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--polygon-line-strong);
+  border-radius: 4px;
+  color: #373a33;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .combat-lab-game-editor-workbench-close:hover,
+body.app-shell-mode-combat-lab #combat-lab-extension-root .combat-lab-game-editor-workbench-close:focus-visible {
+  border-color: #9e8b3f;
+  background: var(--polygon-accent-soft);
+}
+
+body.app-shell-mode-combat-lab .combat-lab-game-editor-workbench-content {
+  color: var(--polygon-ink);
+  background: #f8f7f1;
+}
+
+@media (max-width: 1180px) {
+  body.app-shell-mode-combat-lab .polygon-shell-editors-portal {
+    top: calc(var(--polygon-chrome-h) + 10px);
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    z-index: 88;
+  }
+}
+
+@media (max-width: 760px) {
+  body.app-shell-mode-combat-lab .polygon-shell-editor-tab-host {
+    padding: 8px;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-editors-portal {
+    top: calc(var(--polygon-chrome-h) + 8px);
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-editors-portal-header {
+    min-height: 50px;
+    padding: 7px 8px 7px 11px;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-editors-portal-title {
+    font-size: 16px;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-editors-portal-body {
+    padding: 10px;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-list {
+    grid-template-columns: 1fr;
+  }
+}

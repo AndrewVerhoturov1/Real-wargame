@@ -11,6 +11,7 @@ import './polygon-shell-exact.css';
 import './ui/combat-lab-experiment-run.css';
 import './ui/combat-lab-batch-results.css';
 import './game-editors/combat-lab-game-editors.css';
+import './game-editors/combat-lab-game-editor-shell.css';
 import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
 import { collectGameApplicationElements, GameApplication } from '../game/GameApplication';
 import type { GameApplicationContext, GamePauseController } from '../game/GameApplicationTypes';
@@ -18,6 +19,7 @@ import { createDefaultGameEditorRegistry } from '../game-editors/createDefaultGa
 import { installAppShellMenu } from '../shared/AppShellMenu';
 import { getAppOverlayCoordinator } from '../shared/app-overlay/AppOverlayCoordinator';
 import { CombatLabExtension } from './CombatLabExtension';
+import { CombatLabEditorShellBridge } from './game-editors/CombatLabEditorShellBridge';
 import { CombatLabGameEditors } from './game-editors/CombatLabGameEditors';
 import {
   installCombatLabQuickParameters,
@@ -32,6 +34,7 @@ import {
 let application: GameApplication | null = null;
 let quickParametersInstallation: CombatLabQuickParametersInstallationV1 | null = null;
 let gameEditorsInstallation: CombatLabGameEditors | null = null;
+let editorShellBridge: CombatLabEditorShellBridge | null = null;
 
 const shellMenuInstallation = installAppShellMenu({ mode: 'combat-lab' });
 void startCombatLab();
@@ -65,10 +68,16 @@ async function startCombatLab(): Promise<void> {
       registry: createDefaultGameEditorRegistry(),
       overlayCoordinator: getAppOverlayCoordinator(document),
     });
+    editorShellBridge = CombatLabEditorShellBridge.create({
+      root: workspaceRoot,
+      eventTarget: extensionRoot,
+    });
     quickParametersInstallation = installCombatLabQuickParameters(extensionRoot, session);
   } catch (error) {
     quickParametersInstallation?.destroy();
     quickParametersInstallation = null;
+    editorShellBridge?.destroy();
+    editorShellBridge = null;
     gameEditorsInstallation?.destroy();
     gameEditorsInstallation = null;
     application?.destroy();
@@ -85,6 +94,8 @@ async function startCombatLab(): Promise<void> {
 window.addEventListener('beforeunload', () => {
   quickParametersInstallation?.destroy();
   quickParametersInstallation = null;
+  editorShellBridge?.destroy();
+  editorShellBridge = null;
   gameEditorsInstallation?.destroy();
   gameEditorsInstallation = null;
   application?.destroy();
