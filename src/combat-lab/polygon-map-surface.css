@@ -3,9 +3,10 @@
    PixiMapRenderer. This layer only exposes that product-owned canvas through the
    accepted Polygon shell; it does not create a second renderer or map state. */
 
-/* The accepted Interface Linkage map is one continuous surface below the top
-   chrome. Left/right panels float over that surface; they do not carve a square
-   frame out of the live renderer. */
+/* Interface Linkage v1 is one continuous light map surface below the top chrome.
+   The live finite product map is fitted inside it, while the canvas outside the
+   finite map stays transparent so this prototype grid remains visible instead
+   of the legacy black letterbox. */
 body.app-shell-mode-combat-lab #combat-lab-extension-root .combat-lab-workspace.polygon-shell {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -34,10 +35,21 @@ body.app-shell-mode-combat-lab.workspace-editor #app {
   transform: none;
   border: 0;
   border-radius: 0;
-  background:
-    radial-gradient(circle at 78% 20%, rgba(255, 255, 255, .34), transparent 27%),
-    linear-gradient(135deg, rgba(255, 255, 255, .12), transparent 36%),
-    var(--polygon-map);
+  background-color: var(--polygon-map);
+  background-image:
+    radial-gradient(circle at 78% 20%, rgba(255, 255, 255, .42), transparent 26%),
+    linear-gradient(135deg, rgba(255, 255, 255, .18), transparent 35%),
+    linear-gradient(rgba(61, 69, 46, .16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(61, 69, 46, .16) 1px, transparent 1px),
+    linear-gradient(rgba(61, 69, 46, .08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(61, 69, 46, .08) 1px, transparent 1px);
+  background-size:
+    auto,
+    auto,
+    80px 80px,
+    80px 80px,
+    20px 20px,
+    20px 20px;
   box-shadow: none;
 }
 
@@ -45,6 +57,7 @@ body.app-shell-mode-combat-lab #app canvas {
   visibility: visible !important;
   width: 100% !important;
   height: 100% !important;
+  background: transparent !important;
 }
 
 /* HtmlOverlayRenderer projects labels into root-local canvas coordinates. Its
