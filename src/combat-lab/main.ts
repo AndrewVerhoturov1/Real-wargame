@@ -16,6 +16,7 @@ import './game-editors/combat-lab-game-editor-shell.css';
 import './game-editors/polygon-editor-parity.css';
 import './game-editors/polygon-global-editor-parity.css';
 import './game-editors/polygon-global-editor-feature-grid.css';
+import './game-editors/polygon-global-editor-inner-parity.css';
 import './polygon-map-surface.css';
 import { selectUnit, setMouseGridPosition } from '../core/simulation/SimulationState';
 import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
@@ -101,185 +102,102 @@ async function startCombatLab(): Promise<void> {
     gameEditorsInstallation = null;
     application?.destroy();
     application = null;
-    console.error(error);
-    extensionRoot.replaceChildren();
-    const message = document.createElement('div');
-    message.className = 'combat-lab-startup-error';
-    message.textContent = `Испытательный полигон не запущен: ${error instanceof Error ? error.message : String(error)}`;
-    extensionRoot.append(message);
+    shellMenuInstallation.destroy();
+    throw error;
   }
 }
 
-window.addEventListener('beforeunload', () => {
-  quickParametersInstallation?.destroy();
-  quickParametersInstallation = null;
-  editorShellBridge?.destroy();
-  editorShellBridge = null;
-  gameEditorsInstallation?.destroy();
-  gameEditorsInstallation = null;
-  application?.destroy();
-  application = null;
-  shellMenuInstallation.destroy();
-});
+function createCombatLabRenderContext(context: GameApplicationContext): GameApplicationContext {
+  return {
+    ...context,
+    installExtension(extensionContext) {
+      return installCombatLabWithLiveUnit(
+        document.querySelector<HTMLElement>('#combat-lab-extension-root')!,
+        getCombatLabWorkspaceServices().session,
+        extensionContext,
+      );
+    },
+  };
+}
 
 function installCombatLabWithLiveUnit(
   extensionRoot: HTMLElement,
   session: CombatLabVisualSession,
   context: GameApplicationContext,
 ): GameApplicationExtension {
-  const extension = CombatLabExtension.create(extensionRoot, session, context);
-  const workspaceRoot = getOnlyCombatLabWorkspaceRoot();
-  const services = getCombatLabWorkspaceServices(workspaceRoot);
-  const rightPanel = getCombatLabRightPanelSeam(workspaceRoot, session.state);
-  const inspector = CombatLabLiveUnitInspector.create({
-    host: rightPanel.hosts.unit,
-    state: rightPanel.state,
+  const combatLab = new CombatLabExtension(extensionRoot, session, context);
+  const liveUnit = CombatLabLiveUnitInspector.create({
+    root: extensionRoot,
     session,
-    rightPanel,
-    editorEventRoot: extensionRoot,
-    getRoleLabelRu: (unitId) => {
-      const role = services.draft.get().roles.find((candidate) => candidate.unitId === unitId);
-      return role?.titleRu ?? null;
-    },
+  });
+  const rightPanel = getCombatLabRightPanelSeam(extensionRoot);
+  const initialInfoOwners = preparePolygonInfoLiveOwners({
+    map: session.state.map,
+    state: session.state,
+  });
+  const polygonRightPanel = PolygonRightPanelLiveView.create({
+    root: rightPanel.host,
+    state: session.state,
+    infoOwners: initialInfoOwners,
   });
 
-  let infoOwners = preparePolygonInfoLiveOwners(rightPanel.state);
-  const linzaView = new PolygonRightPanelLiveView({
-    hosts: {
-      info: rightPanel.hosts.info,
-      attention: rightPanel.hosts.attention,
-      memory: rightPanel.hosts.memory,
+  const unregisterContextMenuRoutes = registerEntityContextMenuRoutes({
+    selectUnit(unitId) {
+      selectUnit(session.state, unitId);
+      liveUnit.reconcile();
     },
-    getAttentionContext: () => ({
-      state: rightPanel.state,
-      unitId: rightPanel.state.selectedUnitId,
-    }),
-  });
-
-  const selectContextUnit = (unitId: string): void => {
-    selectUnit(rightPanel.state, unitId);
-    rightPanel.selection.reconcileFromState();
-    inspector.refresh(true);
-    editorShellBridge?.refresh();
-  };
-
-  const refreshLinza = (): void => {
-    const state = rightPanel.state;
-    if (rightPanel.isTabActive('info')) {
-      if (infoOwners.map !== state.map) infoOwners = preparePolygonInfoLiveOwners(state);
-      const point = state.mouseGridPosition
-        ? { x: state.mouseGridPosition.x, y: state.mouseGridPosition.y, pinned: false }
-        : null;
-      linzaView.renderInfo(state, point, infoOwners);
-      rightPanel.setHeader({ kickerRu: 'ТОЧКА КАРТЫ', titleRu: point ? 'Инфо' : 'Точка не выбрана' });
-      return;
-    }
-    if (rightPanel.isTabActive('attention')) {
-      linzaView.renderAttention(state, state.selectedUnitId);
-      const selected = state.units.find((unit) => unit.id === state.selectedUnitId);
-      rightPanel.setHeader({ kickerRu: 'ВНИМАНИЕ', titleRu: selected?.labels.ru ?? 'Юнит не выбран' });
-      return;
-    }
-    if (rightPanel.isTabActive('memory')) {
-      linzaView.renderMemory(state, state.selectedUnitId);
-      const selected = state.units.find((unit) => unit.id === state.selectedUnitId);
-      rightPanel.setHeader({ kickerRu: 'ПАМЯТЬ', titleRu: selected?.labels.ru ?? 'Юнит не выбран' });
-    }
-  };
-
-  const unregisterContextRoutes = registerEntityContextMenuRoutes({
-    openPanel: (target, view) => {
-      if (target.kind === 'unit') selectContextUnit(target.id);
-      if (view === 'info') setMouseGridPosition(rightPanel.state, target.anchorGrid);
-      rightPanel.activateTab(view);
-      linzaView.invalidate();
-      inspector.refresh(true);
-      editorShellBridge?.refresh();
-      refreshLinza();
-    },
-    openEditor: (target) => {
-      if (target.kind === 'unit') {
-        selectContextUnit(target.id);
-        requestCombatLabGameEditorOpen(extensionRoot, {
-          editorId: 'soldierData',
-          selectedUnitId: target.id,
-          returnTo: 'combat-lab:right-panel:unit',
-        });
-        return;
+    openPanel(view, target) {
+      if (view === 'unit' && target.kind === 'unit') {
+        selectUnit(session.state, target.id);
+        liveUnit.reconcile();
       }
-      setMouseGridPosition(rightPanel.state, target.anchorGrid);
-      extensionRoot.dispatchEvent(new CustomEvent('combat-lab:activate-tab', {
-        bubbles: true,
-        detail: 'scene',
-      }));
+      if (view === 'info') {
+        setMouseGridPosition(session.state, target.anchorGridX, target.anchorGridY);
+      }
+      rightPanel.activateTab(view);
+    },
+    openEditor(editorId, target) {
+      const selectedUnitId = target.kind === 'unit' ? target.id : undefined;
+      const requestedEditor = target.kind === 'unit' ? 'soldierData' : 'environmentProfiles';
+      requestCombatLabGameEditorOpen(extensionRoot, {
+        editorId: editorId === 'unit' ? requestedEditor : editorId,
+        selectedUnitId,
+      });
     },
   });
-
-  const removeTickerListener = context.addTickerListener(() => {
-    inspector.refresh();
-    editorShellBridge?.refresh();
-    refreshLinza();
-  });
-  const removeSelectionListener = rightPanel.selection.subscribe(() => {
-    inspector.refresh(true);
-    editorShellBridge?.refresh();
-    linzaView.invalidate();
-    refreshLinza();
-  });
-  const removeDraftListener = services.draft.subscribe(() => {
-    inspector.refresh(true);
-    editorShellBridge?.refresh();
-  });
-
-  refreshLinza();
 
   return {
     destroy(): void {
-      removeDraftListener();
-      removeSelectionListener();
-      removeTickerListener();
-      unregisterContextRoutes();
-      linzaView.destroy();
-      inspector.destroy();
-      extension.destroy();
-    },
-  };
-}
-
-function installLaboratoryPlaceholder(host: HTMLElement): void {
-  const message = document.createElement('div');
-  message.className = 'polygon-shell-empty-state';
-  message.textContent = 'Лаборатория пока не подключена к продуктовым параметрам. Каркас не создаёт временные значения или отдельное состояние эксперимента.';
-  host.replaceChildren(message);
-}
-
-function createCombatLabRenderContext(context: GameApplicationContext): GameApplicationContext {
-  return {
-    ...context,
-    forceRender: () => {},
-  };
-}
-
-function createSessionPauseController(
-  session: CombatLabVisualSession,
-  extensionRoot: HTMLElement,
-): GamePauseController {
-  const extensionActive = () => extensionRoot.dataset.combatLabExtension === 'active';
-  return {
-    isPaused: () => session.isPaused(),
-    toggle: () => {
-      if (extensionActive()) extensionRoot.dispatchEvent(new CustomEvent('combat-lab:toggle-pause'));
-      else session.togglePaused();
-      keepProductionTickerPaused(session);
-    },
-    setPaused: (value) => {
-      if (extensionActive()) extensionRoot.dispatchEvent(new CustomEvent('combat-lab:set-paused', { detail: value }));
-      else session.setPaused(value);
-      keepProductionTickerPaused(session);
+      unregisterContextMenuRoutes();
+      polygonRightPanel.destroy();
+      liveUnit.destroy();
+      combatLab.destroy();
     },
   };
 }
 
 function keepProductionTickerPaused(session: CombatLabVisualSession): void {
-  (session.state as typeof session.state & { paused?: boolean }).paused = true;
+  session.pause();
+}
+
+function createSessionPauseController(session: CombatLabVisualSession): GamePauseController {
+  return {
+    get isPaused(): boolean {
+      return session.isPaused;
+    },
+    pause(): void {
+      session.pause();
+    },
+    resume(): void {
+      session.resume();
+    },
+    toggle(): void {
+      if (session.isPaused) session.resume();
+      else session.pause();
+    },
+  };
+}
+
+function installLaboratoryPlaceholder(host: HTMLElement): void {
+  host.replaceChildren();
 }
