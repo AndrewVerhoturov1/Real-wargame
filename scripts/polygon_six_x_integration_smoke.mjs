@@ -37,6 +37,7 @@ for (const file of [
   'src/combat-lab/right-panel/PolygonRightPanelLive.ts',
   'src/combat-lab/right-panel/PolygonRightPanelLiveView.ts',
   'src/combat-lab/game-editors/CombatLabEditorShellBridge.ts',
+  'src/combat-lab/game-editors/polygon-global-editor-feature-grid.css',
   'src/input/TacticalOrderRadialInput.ts',
   'src/ui/EntityContextMenu.ts',
   'src/ui/EntityContextMenuRouteRegistry.ts',
@@ -60,6 +61,7 @@ expectIncludes('src/combat-lab/main.ts', [
   'registerEntityContextMenuRoutes',
   'requestCombatLabGameEditorOpen',
   'rightPanel.activateTab(view)',
+  'polygon-global-editor-feature-grid.css',
 ]);
 expectIncludes('src/ui/EntityContextMenu.ts', [
   'getRegisteredEntityContextMenuRoutes',
@@ -103,6 +105,7 @@ expectIncludes('src/combat-lab/game-editors/CombatLabEditorShellBridge.ts', [
   "session.executeInteractive({ kind: 'posture'",
   'Основа карты',
   'ТАКТИЧЕСКИЙ ЗНАК',
+  "if (type === 'infantry_squad') return 'Пехотное отделение';",
 ]);
 
 expectIncludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
