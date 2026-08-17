@@ -1,5 +1,6 @@
 import '../entity-context-menu.css';
 import type { EntityContextTarget } from '../input/EntityContextTarget';
+import { getRegisteredEntityContextMenuRoutes } from './EntityContextMenuRouteRegistry';
 
 export type EntityContextPanelView = 'unit' | 'info' | 'attention' | 'memory';
 
@@ -87,19 +88,24 @@ export class EntityContextMenu {
   }
 
   private buildActions(target: EntityContextTarget): readonly EntityContextMenuAction[] {
+    const routes: EntityContextMenuRoutes = {
+      ...getRegisteredEntityContextMenuRoutes(),
+      ...this.routes,
+    };
+
     if (target.kind === 'unit') {
       return [
-        this.action('select', 'Выбрать', 'pulse.selection', Boolean(this.routes.selectUnit), () => this.routes.selectUnit?.(target.id)),
-        this.action('unit', 'Юнит', 'pulse.right-panel.unit', Boolean(this.routes.openPanel), () => this.routes.openPanel?.(target, 'unit')),
-        this.action('attention', 'Внимание', 'linza.right-panel.attention', Boolean(this.routes.openPanel), () => this.routes.openPanel?.(target, 'attention')),
-        this.action('memory', 'Память', 'linza.right-panel.memory', Boolean(this.routes.openPanel), () => this.routes.openPanel?.(target, 'memory')),
-        this.action('edit', 'Редактировать', 'editors.open', Boolean(this.routes.openEditor), () => this.routes.openEditor?.(target)),
+        this.action('select', 'Выбрать', 'pulse.selection', Boolean(routes.selectUnit), () => routes.selectUnit?.(target.id)),
+        this.action('unit', 'Юнит', 'pulse.right-panel.unit', Boolean(routes.openPanel), () => routes.openPanel?.(target, 'unit')),
+        this.action('attention', 'Внимание', 'linza.right-panel.attention', Boolean(routes.openPanel), () => routes.openPanel?.(target, 'attention')),
+        this.action('memory', 'Память', 'linza.right-panel.memory', Boolean(routes.openPanel), () => routes.openPanel?.(target, 'memory')),
+        this.action('edit', 'Редактировать', 'editors.open', Boolean(routes.openEditor), () => routes.openEditor?.(target)),
       ];
     }
 
     return [
-      this.action('info', 'Инфо', 'linza.right-panel.info', Boolean(this.routes.openPanel), () => this.routes.openPanel?.(target, 'info')),
-      this.action('edit', 'Редактировать', 'editors.open', Boolean(this.routes.openEditor), () => this.routes.openEditor?.(target)),
+      this.action('info', 'Инфо', 'linza.right-panel.info', Boolean(routes.openPanel), () => routes.openPanel?.(target, 'info')),
+      this.action('edit', 'Редактировать', 'editors.open', Boolean(routes.openEditor), () => routes.openEditor?.(target)),
     ];
   }
 
