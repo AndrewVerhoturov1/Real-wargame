@@ -11,6 +11,7 @@ import './polygon-shell-exact.css';
 import './ui/combat-lab-experiment-run.css';
 import './ui/combat-lab-batch-results.css';
 import './game-editors/combat-lab-game-editors.css';
+import './polygon-map-surface.css';
 import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
 import { collectGameApplicationElements, GameApplication } from '../game/GameApplication';
 import type { GameApplicationContext, GamePauseController } from '../game/GameApplicationTypes';
