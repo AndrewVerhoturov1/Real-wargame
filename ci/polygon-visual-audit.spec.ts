@@ -103,12 +103,15 @@ test('capture deployed Polygon states for prototype comparison', async ({ page }
       await capture(page, file);
     }
 
+    const viewControl = page.locator('.polygon-shell-top-button--view').first();
+    const viewVisible = await viewControl.isVisible().catch(() => false);
+    const viewEnabled = viewVisible ? await viewControl.isEnabled().catch(() => false) : false;
     const viewClicked = await clickFirst(page, [
       '.polygon-shell-top-button--view',
       'button:has-text("ВИД")',
     ]);
     await page.waitForTimeout(350);
-    stages.push({ stage: 'view-control', clicked: viewClicked });
+    stages.push({ stage: 'view-control', visible: viewVisible, enabled: viewEnabled, clicked: viewClicked });
     await capture(page, '09-view-control.png');
     await page.keyboard.press('Escape');
 
@@ -121,7 +124,7 @@ test('capture deployed Polygon states for prototype comparison', async ({ page }
         { button: 'right' },
       );
       await page.waitForTimeout(400);
-      contextOpened = await page.locator('.entity-context-menu, [role="menu"]').filter({ visible: true } as never).count().catch(() => 0) > 0;
+      contextOpened = await page.locator('.entity-context-menu:visible, [role="menu"]:visible').count().catch(() => 0) > 0;
     }
     stages.push({ stage: 'map-context', attempted: Boolean(mapBox), contextOpened });
     await capture(page, '10-map-context.png');
@@ -173,10 +176,11 @@ async function clickAndCapture(
 async function clickFirst(page: Page, selectors: string[]): Promise<boolean> {
   for (const selector of selectors) {
     const locator = page.locator(selector).first();
-    if (await locator.count() && await locator.isVisible().catch(() => false)) {
-      await locator.click({ timeout: 5_000 });
-      return true;
-    }
+    if (!await locator.count()) continue;
+    if (!await locator.isVisible().catch(() => false)) continue;
+    if (!await locator.isEnabled().catch(() => false)) continue;
+    await locator.click({ timeout: 5_000 });
+    return true;
   }
   return false;
 }
