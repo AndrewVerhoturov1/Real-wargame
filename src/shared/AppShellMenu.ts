@@ -100,7 +100,7 @@ class AppShellMenuController implements AppShellMenuInstallation {
     this.root = document.createElement('div');
     this.root.className = 'app-shell-menu';
     this.root.dataset.appShellMenuRoot = 'true';
-    this.root.innerHTML = '<button class="app-shell-menu-trigger" type="button" data-shell-action="open-menu" aria-haspopup="dialog">Меню</button>';
+    this.root.innerHTML = '<button class="app-shell-menu-trigger" type="button" data-shell-action="open-menu" aria-haspopup="dialog"><span class="app-shell-menu-trigger__label">Меню</span><svg class="app-shell-menu-trigger__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>';
     const trigger = this.root.querySelector<HTMLButtonElement>('.app-shell-menu-trigger');
     if (!trigger) throw new Error('Не удалось создать кнопку общего меню.');
     this.trigger = trigger;

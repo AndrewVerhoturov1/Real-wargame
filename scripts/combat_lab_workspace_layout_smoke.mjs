@@ -10,18 +10,12 @@ const visualSession = readFileSync('src/combat-lab/runtime/CombatLabVisualSessio
 const aiTestRuntime = readFileSync('src/core/testing/AiTestLabRuntime.ts', 'utf8');
 const layoutEnhancements = readFileSync('src/ui/TacticalWorkspaceLayoutEnhancements.ts', 'utf8');
 const unitBarPresentation = readFileSync('src/ui/UnitBarPresentation.ts', 'utf8');
-const uiBoundary = `${extension}\n${workspaceTabs}\n${workspaceHosts}\n${shell}\n${renderer}\n${layoutEnhancements}\n${unitBarPresentation}`;
 const labMain = readFileSync('src/combat-lab/main.ts', 'utf8');
-const labCss = readFileSync('src/combat-lab/combat-lab.css', 'utf8');
-const workspaceCss = readFileSync('src/combat-lab/combat-lab-workspace.css', 'utf8');
-const labPolishCss = readFileSync('src/combat-lab/combat-lab-ui-polish.css', 'utf8');
-const labHeaderCss = readFileSync('src/combat-lab/combat-lab-header-final.css', 'utf8');
-const refinedCss = readFileSync('src/tactical-workspace-refined.css', 'utf8');
-const productionCss = readFileSync('src/tactical-workspace-production.css', 'utf8');
-const finalFixesCss = readFileSync('src/tactical-workspace-final-fixes.css', 'utf8');
+const shellCss = readFileSync('src/combat-lab/polygon-shell.css', 'utf8');
+const compatCss = readFileSync('src/combat-lab/polygon-shell-compat.css', 'utf8');
 const workspaceBase = readFileSync('src/ui/TacticalWorkspaceBaseLegacy.ts', 'utf8');
 const metricLabels = readFileSync('src/combat-lab/ui/CombatLabMetricLabels.ts', 'utf8');
-const css = `${labCss}\n${workspaceCss}\n${labPolishCss}\n${labHeaderCss}\n${refinedCss}\n${productionCss}\n${finalFixesCss}`;
+const uiBoundary = `${extension}\n${workspaceTabs}\n${workspaceHosts}\n${shell}\n${renderer}\n${layoutEnhancements}\n${unitBarPresentation}`;
 
 for (const token of [
   'CombatLabWorkspaceTabs.create',
@@ -30,23 +24,35 @@ for (const token of [
 ]) {
   assert.ok(extension.includes(token), `Combat Lab extension must contain ${token}`);
 }
+
 for (const token of [
-  'combat-lab-dock',
+  'polygon-shell',
+  'polygon-shell-topbar',
+  'polygon-shell-left',
+  'polygon-shell-left-tabs',
+  'polygon-shell-right',
+  'polygon-shell-right-tabs',
+  'polygon-shell-hidden-hosts',
   'dataset.combatLabTab',
   'dataset.combatLabTabPanel',
-  'role',
   'tablist',
   'tabpanel',
 ]) {
-  assert.ok(workspaceTabs.includes(token), `Combat Lab workspace tabs must contain ${token}`);
+  assert.ok(workspaceTabs.includes(token), `Polygon workspace shell must contain ${token}`);
 }
-for (const tabId of ['scene', 'program', 'batch', 'parameters', 'settings', 'metrics', 'journal']) {
-  assert.ok(workspaceHosts.includes(`tabId: '${tabId}'`), `Combat Lab must declare workspace tab ${tabId}`);
+for (const removed of ['polygon-shell-header', 'polygon-shell-primary-tabs', 'polygon-shell-center', 'polygon-shell-timeline', 'polygon-shell-auxiliary-tabs']) {
+  assert.ok(!workspaceTabs.includes(removed), `Obsolete reconstructed shell element must be removed: ${removed}`);
 }
-assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 7, 'Combat Lab must expose six Stage 10 tabs plus game settings.');
+
+for (const tabId of ['scene', 'program', 'laboratory', 'metrics', 'journal', 'batch', 'parameters', 'settings']) {
+  assert.ok(workspaceHosts.includes(`tabId: '${tabId}'`), `Combat Lab must retain product host ${tabId}`);
+}
+assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 8, 'The compatibility layer retains eight existing product hosts.');
 
 assert.doesNotMatch(extension, /adoptSimulationSidebar/, 'Combat Lab must not reparent the production right inspector.');
-assert.doesNotMatch(extension, /['"]fighter['"]/, 'Combat Lab must not duplicate the fighter tab inside the laboratory dock.');
+assert.doesNotMatch(extension, /['"]fighter['"]/, 'Combat Lab must not duplicate selected-unit state inside the shell.');
+assert.doesNotMatch(workspaceTabs, /new\s+CombatLabVisualSession|new\s+(?:PIXI\.)?Application\s*\(/,
+  'Polygon shell must not create another runtime or Pixi application.');
 
 for (const token of [
   'combat-lab-run-toolbar',
@@ -54,39 +60,41 @@ for (const token of [
   'combat-lab-metrics-panel',
   'combat-lab-authoring-log',
   'combat-lab-runtime-journal',
-  'workspace-resize-handle-left',
-  'workspace-resize-handle-right',
-  'workspace-time-controls',
   'installStableViewportResize',
-  '__combatLabLayoutDiagnostics',
   'worldScaleX',
   'worldScaleY',
 ]) {
-  assert.ok(uiBoundary.includes(token), `Combat Lab UI boundary must contain ${token}`);
+  assert.ok(uiBoundary.includes(token), `Combat Lab UI boundary must retain ${token}`);
 }
 
 for (const token of [
-  '--combat-lab-dock-width: 370px',
-  '--workspace-sidebar: 370px',
-  'body.app-shell-mode-combat-lab.workspace-simulation #app',
-  'body.app-shell-mode-combat-lab.workspace-editor #app',
-  'left: calc(var(--combat-lab-dock-width)',
-  'body.app-shell-mode-combat-lab .simulation-unit-bar',
-  '.combat-lab-tab-list',
-  'grid-template-columns: repeat(3, minmax(0, 1fr))',
-  '.combat-lab-tab-panel',
-  'overflow-x: hidden',
-  'body.app-shell-mode-combat-lab.workspace-simulation.sidebar-collapsed #app',
-  'right: 58px !important',
-  'grid-template-areas:',
-  '"profile stats"',
-  '"posture controls"',
-  '.unit-bar-weapon',
-  '.workspace-time-controls',
-  'grid-template-columns: repeat(6, minmax(0, 1fr))',
+  '--polygon-topbar-h: 58px',
+  '--polygon-left-w: 372px',
+  '--polygon-right-w: 336px',
+  '--polygon-panel-gap: 14px',
+  '--polygon-top: #344321',
+  '--polygon-top-2: #273318',
+  '--polygon-accent: #d8b941',
+  '--polygon-panel-solid: #f6f5ee',
+  '.polygon-shell-topbar',
+  'grid-template-columns: auto minmax(0, 1fr) auto',
+  '.polygon-shell-side-panel',
+  '.polygon-shell-left-tabs',
+  '.polygon-shell-right-tabs',
+  'flex-wrap: wrap',
+  '.polygon-shell-hidden-hosts',
+  'combat-lab-dock-collapsed',
+  'polygon-shell-right-collapsed',
+  '@media (max-width: 1120px)',
 ]) {
-  assert.ok(css.includes(token), `Combat Lab responsive layout CSS must contain ${token}`);
+  assert.ok(shellCss.includes(token), `Prototype Polygon responsive CSS must contain ${token}`);
 }
+assert.doesNotMatch(shellCss, /\.polygon-shell-primary-tabs|\.polygon-shell-timeline/,
+  'The previous global tabs and fake timeline must not return.');
+assert.match(shellCss, /\.simulation-sidebar,[\s\S]*\.simulation-unit-bar,[\s\S]*display:\s*none\s*!important/,
+  'Legacy production sidebars must not compete visually with the Polygon shell.');
+assert.match(compatCss, /\.app-shell-menu-trigger[\s\S]*height:\s*34px/,
+  'The shared menu trigger must visually integrate into the 58px prototype top bar.');
 
 for (const token of [
   'buildUnitBarSnapshot(unit)',
@@ -100,41 +108,16 @@ for (const token of [
   'weaponSilhouette(snapshot.weaponVisualKind)',
   'Технический идентификатор:',
 ]) {
-  assert.ok(unitBarPresentation.includes(token), `Shared soldier panel must contain ${token}`);
+  assert.ok(unitBarPresentation.includes(token), `Shared soldier panel must retain ${token}`);
 }
 
 assert.match(visualSession, /COMBAT_LAB_VISUAL_SPEEDS\s*=\s*AI_TEST_TIME_SCALES/, 'Combat Lab must use the canonical shared speed list.');
 assert.match(aiTestRuntime, /AI_TEST_TIME_SCALES\s*=\s*\[0\.1, 0\.25, 0\.5, 1, 2, 4, 10\]/, 'The shared header and Combat Lab must retain the ×0.1 speed.');
-assert.match(labMain, /combat-lab-header-final\.css/, 'The readable dock header correction must load last.');
-assert.match(labHeaderCss, /grid-template-areas:\s*\n\s*"brand toggle"\s*\n\s*"status toggle"/s, 'The dock title must own a full readable row.');
-assert.match(finalFixesCss, /\.workspace-time-controls \.unit-bar-speed-group\s*\{[^}]*grid-column:\s*auto !important/s, 'Legacy lower-panel grid placement must not push speed buttons onto a second row.');
-assert.match(finalFixesCss, /\.workspace-resize-handle-right\s*\{[^}]*left:\s*0/s, 'The right resize handle must stay inside the clickable inspector edge.');
-assert.match(finalFixesCss, /\[data-action="clear-order"\]\s*\{[^}]*grid-column:\s*1 \/ -1/s, 'The cancel-order command must fill its grid lane.');
-
-assert.ok(!css.includes('right: calc(var(--combat-lab-dock-width)'), 'Laboratory dock width must not replace the production right-inspector offset.');
-assert.ok(!css.includes('width: min(760px'), 'Combat Lab must not restore the oversized floating drawer');
-assert.ok(!css.includes('.combat-lab-top {\n  display: flex'), 'Combat Lab toolbar must not restore the single-line horizontally scrolling control strip');
-assert.doesNotMatch(css, /\.workspace-time-controls\s+\.unit-bar-speed-group\s*\{[^}]*display:\s*none/s, 'Shared speed controls must remain visible in the header.');
-assert.match(productionCss, /\.tactical-workspace-bar\s*\{[^}]*grid-template-columns:[^}]*minmax\(0, 1fr\)/s, 'Header must allocate a shrinkable action lane.');
-assert.match(productionCss, /\.workspace-mode-switch,\s*\n\.workspace-time-controls,\s*\n\.workspace-top-actions\s*\{\s*min-width:\s*0/s, 'Header groups must be allowed to shrink without overlap.');
-assert.match(labPolishCss, /#combat-lab-extension-root select,[\s\S]*min-height:\s*28px/, 'Combat Lab field controls must be compact.');
-
-const toolbarRule = labCss.match(/\.combat-lab-run-toolbar\s*\{([^}]*)\}/s)?.[1] ?? '';
-assert.doesNotMatch(toolbarRule, /position:\s*sticky/, 'Combat Lab run controls must scroll instead of covering lower fields.');
-assert.match(workspaceBase, /WORKSPACE_LAYOUT_TRANSITION_MILLISECONDS\s*=\s*150/, 'Workspace must name the 150 ms layout transition.');
+assert.match(labMain, /combat-lab-header-final\.css[\s\S]*polygon-shell\.css[\s\S]*polygon-shell-compat\.css/,
+  'Prototype shell compatibility overrides must load after legacy Combat Lab layout styles.');
+assert.match(workspaceBase, /WORKSPACE_LAYOUT_TRANSITION_MILLISECONDS\s*=\s*150/, 'Workspace must retain the 150 ms layout transition.');
 assert.match(workspaceBase, /scheduleWorkspaceViewportResize\(\)/, 'Workspace mode changes must schedule stable viewport resize.');
 assert.match(metricLabels, /shotsCommitted:\s*'Выстрелы'/, 'Combat Lab metrics need explicit Russian labels.');
 assert.ok(extension.includes('combatLabMetricLabelRu(key)'), 'Metric cards must render Russian metric labels.');
 
-assert.doesNotMatch(
-  workspaceCss,
-  /\.simulation-unit-bar\s*\{[^}]*(?:grid-template-columns|grid-template-areas|min-height|max-height)/s,
-  'Combat Lab must not replace the production lower soldier panel layout.',
-);
-assert.doesNotMatch(
-  workspaceCss,
-  /--workspace-bottom\s*:/,
-  'Combat Lab must use the same lower-panel height rules as the ordinary game.',
-);
-
-console.log('Combat Lab 1440x900 dual-sidebar workspace layout contract passed.');
+console.log('Combat Lab Polygon workspace layout contract passed.');

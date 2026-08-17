@@ -7,30 +7,41 @@ const [hosts, tabs, extension] = await Promise.all([
   readFile('src/combat-lab/CombatLabExtension.ts', 'utf8'),
 ]);
 
-const expected = [
-  ['scene', 'Сцена', 'Начальная сцена'],
+const productHosts = [
+  ['scene', 'Карта', 'Карта эксперимента'],
   ['program', 'Программа', 'Программа эксперимента'],
-  ['batch', 'Серия', 'Серия прогонов'],
-  ['parameters', 'Параметры', 'Параметры бойцов'],
-  ['settings', 'Настройка игры', 'Настройка игры'],
+  ['laboratory', 'Лаборатория', 'Лаборатория'],
   ['metrics', 'Метрики', 'Метрики текущего прогона'],
   ['journal', 'Журнал', 'Журнал'],
+  ['batch', 'Серия', 'Серия прогонов'],
 ];
-for (const [id, label, title] of expected) {
+for (const [id, label, title] of productHosts) {
   assert.match(hosts, new RegExp(`'${id}'`));
   assert.match(hosts, new RegExp(`'${label}'`));
   assert.match(hosts, new RegExp(`'${title}'`));
 }
-assert.equal((hosts.match(/tabId:/g) ?? []).length, 7, 'Integrated workspace requires six Stage 10 tabs plus game settings.');
-assert.doesNotMatch(hosts, /tabId:\s*'stand'|labelRu:\s*'Стенд'/);
-assert.match(tabs, /dock\.append\(header, toolbarHost, tabList, panelHost\)/, 'Run toolbar must sit outside switchable panels.');
+assert.equal((hosts.match(/tabId:/g) ?? []).length, 8, 'Product compatibility layer retains eight existing workspace hosts.');
+assert.match(hosts, /tabId:\s*'parameters'[^\n]*labelRu:\s*'Параметры'/);
+assert.match(hosts, /tabId:\s*'settings'[^\n]*labelRu:\s*'Общие редакторы'/);
+
+for (const label of ['Программа', 'Лаборатория', 'Редактор карты', 'Редактор юнита', 'Серия', 'Метрики', 'Журнал']) {
+  assert.match(tabs, new RegExp(`labelRu:\\s*'${label}'`));
+}
+assert.match(tabs, /shell\.append\(topbar, historyStrip, viewport, hiddenHosts\)/,
+  'Workspace must publish the prototype top bar, honest history strip, floating panels, and hidden compatibility hosts.');
+assert.match(tabs, /polygon-shell-history-strip/);
+assert.match(tabs, /polygon-shell-history-status/);
+assert.match(tabs, /polygon-shell-hidden-hosts/);
+assert.doesNotMatch(tabs, /polygon-shell-primary-tabs|polygon-shell-timeline|polygon-shell-auxiliary-tabs/);
+assert.doesNotMatch(tabs, /44\s*\/\s*54|событий\s*·\s*◆|Демонстрационная replay/i,
+  'History chrome must not copy standalone demo event counts or replay state.');
 assert.match(
   tabs,
   /for\s*\(const\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s+of\s+this\.panels\)\s*\2\.hidden\s*=\s*\1\s*!==\s*normalized/,
-  'Tab activation must keep only the normalized panel visible regardless of local variable names.',
+  'Tab activation must keep one logical compatibility host active regardless of local variable names.',
 );
 const activateBody = tabs.match(/activate\(tabId:[\s\S]*?\n  getActiveTab\(\)/)?.[0] ?? '';
-assert.doesNotMatch(activateBody, /replaceChildren\(/, 'Tab switching must not recreate workspace hosts.');
+assert.doesNotMatch(activateBody, /replaceChildren\(/, 'Tab switching must not recreate product workspace hosts.');
 assert.match(extension, /CombatLabWorkspaceTabs\.create/);
 assert.match(extension, /hosts\.scene/);
 assert.match(extension, /hosts\.program/);

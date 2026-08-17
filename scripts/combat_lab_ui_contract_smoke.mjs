@@ -20,6 +20,7 @@ await import('./combat_lab_quick_parameter_preferences_smoke.mjs');
 await import('./combat_lab_quick_parameters_panel_behavior_smoke.mjs');
 await import('./combat_lab_quick_parameters_rerun_behavior_smoke.mjs');
 await import('./combat_lab_tuning_ab_behavior_smoke.mjs');
+await import('./combat_lab_polygon_shell_contract_smoke.mjs');
 
 const [
   shell,
@@ -107,9 +108,11 @@ assert.match(extension, /CombatLabWorkspaceTabs\.create/);
 assert.match(workspaceTabs, /combat-lab-drawer/);
 assert.match(workspaceTabs, /combat-lab-drawer-toggle/);
 assert.match(workspaceTabs, /aria-expanded/);
-assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 7, 'Combat Lab must publish exactly seven workspace tabs.');
-assert.match(workspaceHosts, /tabId:\s*'settings',[^\n]*labelRu:\s*'Настройка игры'/);
+assert.equal((workspaceHosts.match(/tabId:/g) ?? []).length, 8, 'Polygon shell must publish six primary workspace tabs plus two preserved product utility tabs.');
+assert.match(workspaceHosts, /tabId:\s*'laboratory',[^\n]*labelRu:\s*'Лаборатория'/);
+assert.match(workspaceHosts, /tabId:\s*'settings',[^\n]*labelRu:\s*'Общие редакторы'/);
 assert.match(workspaceHosts, /readonly settings:\s*HTMLElement/);
+assert.match(workspaceHosts, /readonly laboratory:\s*HTMLElement/);
 assert.doesNotMatch(workspaceHosts, /labelRu:\s*'Стенд'/, 'The removed Stand tab must not return.');
 assert.match(extension, /installSharedSimulationControls/);
 assert.match(extension, /data-action="fire-contact"/);
@@ -154,6 +157,7 @@ assert.match(labMain, /GameApplication\.create\(/);
 assert.match(labMain, /installAppShellMenu\(\{ mode: 'combat-lab' \}\)/);
 assert.match(labMain, /CombatLabGameEditors\.create\(/);
 assert.match(labMain, /workspaceHosts\.settings/);
+assert.match(labMain, /workspaceHosts\.laboratory/);
 assert.match(labMain, /installCombatLabQuickParameters\(extensionRoot, session\)/);
 assert.match(quickParametersInstaller, /getOnlyCombatLabWorkspaceRoot\(\)/);
 assert.match(quickParametersInstaller, /getCombatLabWorkspaceHosts\(workspaceRoot\)/);

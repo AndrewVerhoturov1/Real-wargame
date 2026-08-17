@@ -32,9 +32,9 @@ Generated from canonical repository and subproject metadata.
 ## Active subproject: Полигон — редактор эксперимента
 
 - **ID:** `polygon-prototype`
-- **Updated:** 2026-08-14
-- **Current focus:** Пользователем принята Laboratory v1 — новая вкладка временных экспериментальных overrides, построенная непосредственно на Global Editors v1. Laboratory v1 является единственной текущей канонической базой следующих UI-итераций автономного Полигона. Приняты также Редактор юнита, Редактор карты, Программа, Metrics v18, Journal v4 и Global Editors v1. Следующая незавершённая крупная продуктовая вкладка — Серия; production telemetry/replay/registry/Laboratory wiring остаётся отдельной runtime-задачей.
-- **Next step:** Следующую крупную UI-итерацию начинать только от Laboratory v1. Ближайшая продуктовая вкладка — Серия. Production descriptor/adapter layer и resolution chain Laboratory overrides проектировать отдельно, сохраняя simulation и существующие registry/config sources единственными authoritative источниками игровых данных.
+- **Updated:** 2026-08-17
+- **Current focus:** Пользователем принята Interface Linkage v1 поверх актуальной Right Panel v1 / memory-tab-v3. Итерация сохраняет новую правую панель Юнит, Инфо, Внимание и Память и добавляет сквозную связность существующих разделов: Роль отдельно от Архетипа, linked-entity переходы и Используется, provenance Laboratory, двустороннюю связь Программа↔Журнал, единые Метрики для Серии, контекст исторического прогона и полный UX-контракт Сохранить эксперимент. Канонический внешний артефакт для ручной загрузки — polygon-interface-linkage-v1.html, 2 292 772 байта, SHA-256 4f33f19578698947cd629a88c6963c325895995fdd78a5380966ae1ef2fa1cfd; ACCEPTED_INTERFACE_LINKAGE_V1.md фиксирует контракт.
+- **Next step:** Пользователь вручную загружает polygon-interface-linkage-v1.html в docs/subprojects/polygon-prototype/prototypes/ и сверяет размер/SHA-256. После этого все следующие UI-итерации Полигона начинать только от Interface Linkage v1. Следующие вкладки правого инспектора и production wiring проектировать отдельно, не откатывая принятую связность интерфейса и Right Panel v1.
 - **Last verified commit:** `2549055956adff3e29c0b1f5ef9adb71d3146b66`
 - **Status:** [generated status](../subprojects/polygon-prototype/STATUS.md)
 
