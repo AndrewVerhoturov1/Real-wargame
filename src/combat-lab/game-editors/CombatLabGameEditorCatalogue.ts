@@ -321,10 +321,17 @@ function decorateRouteProfileEditor(host: HTMLElement): void {
 
   const primary = node('section', 'polygon-route-profile-primary');
   primary.append(node('header', '', 'Основное ограничение'));
-  const maximumInput = host.querySelector<HTMLInputElement>('[data-profile-number="maximumDetourRatio"]');
-  const maximumField = maximumInput?.closest<HTMLElement>('label');
+  const maximumInput = host.querySelector<HTMLInputElement>('input[type="number"][data-profile-number="maximumDetourRatio"]');
+  const maximumField = maximumInput?.closest<HTMLElement>('.navigation-profile-field');
   if (maximumField) primary.append(maximumField);
   else primary.append(node('p', '', 'Параметр максимального обхода недоступен.'));
+
+  const featureGrid = node('section', 'polygon-route-profile-feature-grid');
+  featureGrid.append(
+    profileFeature(host, 'Опасность', 'dangerWeight'),
+    profileFeature(host, 'Укрытия', 'coverWeight'),
+    profileFeature(host, 'Цена дороги', 'terrainCosts.road'),
+  );
 
   const metadata = node('section', 'polygon-route-profile-metadata');
   metadata.append(
@@ -337,7 +344,7 @@ function decorateRouteProfileEditor(host: HTMLElement): void {
 
   const groups = [...form.querySelectorAll<HTMLElement>('.navigation-profile-group')];
   if (nameCard) form.append(nameCard);
-  formHeading.after(tabs, summary, primary, metadata);
+  formHeading.after(tabs, summary, primary, featureGrid, metadata);
 
   const views = [
     { id: 'main', label: 'Основное', groups: [] as HTMLElement[], showName: false },
@@ -350,6 +357,7 @@ function decorateRouteProfileEditor(host: HTMLElement): void {
     const main = id === 'main';
     summary.hidden = !main;
     primary.hidden = !main;
+    featureGrid.hidden = !main;
     metadata.hidden = !main;
     groups.forEach((group) => { group.hidden = true; });
     if (nameCard) nameCard.hidden = true;
@@ -372,6 +380,20 @@ function decorateRouteProfileEditor(host: HTMLElement): void {
     tabs.append(control);
   }
   activate('main');
+}
+
+function profileFeature(host: HTMLElement, label: string, path: string): HTMLElement {
+  const card = node('article', 'polygon-route-profile-feature');
+  const value = node('strong', '');
+  const input = host.querySelector<HTMLInputElement>(`input[type="number"][data-profile-number="${path}"]`);
+  const render = (): void => {
+    const raw = input?.value.trim() ?? '';
+    value.textContent = raw || '—';
+  };
+  input?.addEventListener('input', render);
+  card.append(node('span', '', label), value);
+  render();
+  return card;
 }
 
 function metaRow(label: string, value: string): HTMLElement {
