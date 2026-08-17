@@ -79,6 +79,36 @@ Handoff оркестратору:
 
 `docs/subprojects/polygon-html-to-product/ORCHESTRATOR_HANDOFF_20260817.md`
 
+## РЕДАКТОРЫ — результат текущей волны
+
+Route X `XROUTE-20260817-POLYGON-EDITORS-NEW-DESIGN-001` реализовал shell integration существующей продуктовой системы редакторов.
+
+```text
+branch: feature/20260817-polygon-editors-new-design-x
+implementation commit: 5739a5aedd31cb1bbe75e54fefb4216f80cc4afb
+PR: #284
+status: BLOCKED FOR ACCEPT — требуется browser/screenshot QA
+```
+
+Что уже сделано в коде:
+
+- верхняя кнопка **«РЕДАКТОРЫ»** открывает реальный существующий каталог общих редакторов;
+- используется прежний `GameEditorRegistry`, второй registry не создан;
+- существующие `scene` (Редактор карты) и `parameters` (Unit/Parameters) hosts показываются внутри нового shell без копирования владельцев и состояния;
+- embedded editors продолжают использовать существующий `CombatLabGameEditorOverlay` / `GameEditorWorkspace`;
+- route editors сохраняют существующую навигацию;
+- возврат `?tab=settings` снова открывает каталог редакторов;
+- сохранён общий API открытия связанного редактора для будущей интеграции КОНТЕКСТА;
+- добавлен presentation-слой редакторов под новый Polygon shell.
+
+TypeScript и production build в CI прошли. Общий `PR Risk CI` красный из-за исторического `git diff --check` по pre-existing файлам вне diff РЕДАКТОРОВ; эти чужие файлы в Route X не исправлялись.
+
+Не выполнена обязательная browser/screenshot проверка exact implementation SHA, поэтому visual ACCEPT не заявляется.
+
+Подробный отчёт, список функций, проверки, ограничения и чек-лист последующей приёмки:
+
+`docs/subprojects/polygon-html-to-product/EDITORS_IMPLEMENTATION_REPORT.md`
+
 ## Основные зависимости новой волны
 
 ```text
