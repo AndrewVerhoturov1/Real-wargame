@@ -97,6 +97,36 @@ Handoff оркестратору:
 
 ПУЛЬС владеет минимальным generic right-panel/selection seam. ЛИНЗА не создаёт второй selection и может параллельно подготовить свои installer/views, подключив их к общему seam отдельным маленьким integration commit после принятия ПУЛЬСА.
 
+## КОНТЕКСТ — реализованный кандидат новой волны
+
+На feature-ветке:
+
+`feature/20260817-polygon-entity-context-menu-x`
+
+открыт draft PR:
+
+`#288 — КОНТЕКСТ: единое меню сущности без поломки RMB`.
+
+Это **ещё не принятый результат** и он не входит в текущую accepted preview baseline.
+
+В кандидате реализовано:
+
+- единое контекстное меню для настоящего `UnitModel` и настоящего `map-object`;
+- короткий RMB по сущности открывает entity menu и не выдаёт move в ту же точку;
+- RMB drag по сущности при выбранных юнитах сохраняет существующий quick move/right-drag facing;
+- RMB hold сохраняет существующее radial tactical order menu;
+- пустая земля сохраняет прежний tactical/BoardInput flow;
+- editor mode, AI Lab и turn tool сохраняют существующий приоритет;
+- действие `Выбрать` использует штатный `selectUnit`, отдельный selection store не создаётся;
+- переходы `Юнит / Инфо / Внимание / Память / Редактировать` подготовлены как явные integration callbacks к ПУЛЬСУ, ЛИНЗЕ и РЕДАКТОРАМ; fake fallback не создаётся;
+- entity hit-test выполняется на дискретном RMB pointerdown и не добавляет постоянного polling/ticker пути.
+
+Подробный implementation handoff:
+
+`docs/subprojects/polygon-html-to-product/CONTEXT_IMPLEMENTATION_HANDOFF.md`
+
+Перед ACCEPT кандидату всё ещё нужны полный repository typecheck/build, browser/Playwright regression и screenshot comparison exact final SHA; в исходной Route X-среде эти проверки не были доступны и не заявлены как пройденные.
+
 ## Что отложено, но не отменено
 
 После этой волны остаются:

@@ -5,12 +5,18 @@ import {
   issueTacticalOrderToSelectedUnits,
 } from '../core/orders/RoutedMoveOrders';
 import { facingRadiansFromPoints } from '../core/orders/UnitFacingCommands';
-import type { SimulationState } from '../core/simulation/SimulationState';
+import { selectUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { getAiLabRuntime } from '../core/testing/AiLabRuntime';
 import { getUnitCommandToolState, setRouteFacingDraft } from '../core/ui/RuntimeUiState';
 import type { PixiTacticalBoardApp } from '../rendering/PixiApp';
 import { installTacticalOrderVisualQaHarness } from '../testing/TacticalOrderVisualQaHarness';
+import { EntityContextMenu, type EntityContextMenuRoutes } from '../ui/EntityContextMenu';
 import { TacticalOrderStatusCard } from '../ui/TacticalOrderStatusCard';
+import {
+  entityContextDragExceeded,
+  resolveEntityContextPendingRelease,
+} from './EntityContextGesture';
+import { resolveEntityContextTarget, type EntityContextTarget } from './EntityContextTarget';
 import { sharedMapInputOwnership, type MapInputLease } from './MapInputOwnership';
 import {
   beginTacticalOrderGesture,
@@ -26,7 +32,7 @@ import {
 import { TacticalOrderRadialMenu, tacticalOrderPresetFromKeyboard } from './TacticalOrderRadialMenu';
 
 const QUICK_MOVE_FACING_THRESHOLD_CELLS = 0.35;
-const CAMERA_KEYS = new Set(['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd']);
+const CAMERA_KEYS = new Set(['arrowup', 'arrowleft', 'arrowright', 'arrowdown', 'w', 'a', 's', 'd']);
 const STATUS_CARD_UPDATE_INTERVAL_MS = 250;
 
 interface BoardInternals {
@@ -36,10 +42,17 @@ interface BoardInternals {
   };
 }
 
+interface EntityContextCandidate {
+  readonly target: EntityContextTarget;
+  readonly anchorScreen: ScreenPoint;
+  dragged: boolean;
+}
+
 export function installTacticalOrderRadialInput(
   board: PixiTacticalBoardApp,
   state: SimulationState,
   onChanged: () => void,
+  contextRoutes: EntityContextMenuRoutes = {},
 ): () => void {
   const internals = board as unknown as BoardInternals;
   const canvas = internals.app?.canvas ?? document.querySelector<HTMLCanvasElement>('canvas');
@@ -51,6 +64,7 @@ export function installTacticalOrderRadialInput(
   const statusInterval = window.setInterval(() => statusCard.update(), STATUS_CARD_UPDATE_INTERVAL_MS);
   let pointerId: number | null = null;
   let gesture: TacticalOrderGestureState | null = null;
+  let contextCandidate: EntityContextCandidate | null = null;
   let currentScreen: ScreenPoint | null = null;
   let currentGrid: GridPosition | null = null;
   let holdTimer: number | null = null;
@@ -63,6 +77,14 @@ export function installTacticalOrderRadialInput(
     statusCard.update(true);
     onChanged();
   };
+
+  const entityMenu = new EntityContextMenu({
+    ...contextRoutes,
+    selectUnit: contextRoutes.selectUnit ?? ((unitId) => {
+      selectUnit(state, unitId);
+      notifyChanged();
+    }),
+  });
   const destroyVisualQaHarness = installTacticalOrderVisualQaHarness(state, notifyChanged);
 
   const eventGrid = (event: { clientX: number; clientY: number }): GridPosition => {
@@ -86,6 +108,7 @@ export function installTacticalOrderRadialInput(
     if (closingGesture && reason) cancelTacticalOrderGesture(closingGesture, reason);
     pointerId = null;
     gesture = null;
+    contextCandidate = null;
     currentScreen = null;
     currentGrid = null;
     keyboardConfirmed = false;
@@ -113,13 +136,14 @@ export function installTacticalOrderRadialInput(
       menu.hide();
       return;
     }
+    contextCandidate = null;
     menu.updateHighlighted(gesture.highlightedPresetId);
     setRouteFacingDraft(state, null);
     notifyChanged();
   };
 
   const handleContextMenu = (event: MouseEvent): void => {
-    if (!gesture || destroyed) return;
+    if (pointerId === null || destroyed) return;
     event.preventDefault();
     event.stopImmediatePropagation();
   };
@@ -128,19 +152,35 @@ export function installTacticalOrderRadialInput(
     if (destroyed || event.button !== 2) return;
     if (state.editor.enabled || getAiLabRuntime(state).open) return;
     if (getUnitCommandToolState(state).turnToolActive) return;
-    if (state.selectedUnitIds.length === 0) return;
+
+    const targetGrid = eventGrid(event);
+    const target = resolveEntityContextTarget(state, targetGrid);
+    const hasTacticalSelection = state.selectedUnitIds.length > 0;
+    if (!target && !hasTacticalSelection) return;
 
     const lease = sharedMapInputOwnership.acquire('tactical-orders');
     if (!lease) return;
     inputLease = lease;
+    entityMenu.hide();
     event.preventDefault();
     event.stopImmediatePropagation();
     clearTimer();
     pointerId = event.pointerId;
     currentScreen = { x: event.clientX, y: event.clientY };
-    currentGrid = eventGrid(event);
-    gesture = beginTacticalOrderGesture(currentScreen, currentGrid, performance.now());
+    currentGrid = targetGrid;
+    contextCandidate = target
+      ? { target, anchorScreen: { ...currentScreen }, dragged: false }
+      : null;
+    gesture = hasTacticalSelection
+      ? beginTacticalOrderGesture(currentScreen, currentGrid, performance.now())
+      : null;
     canvas.setPointerCapture(pointerId);
+
+    if (!gesture) {
+      setRouteFacingDraft(state, null);
+      return;
+    }
+
     setRouteFacingDraft(state, {
       target: currentGrid,
       pointer: currentGrid,
@@ -150,11 +190,20 @@ export function installTacticalOrderRadialInput(
   };
 
   const handlePointerMove = (event: PointerEvent): void => {
-    if (destroyed || pointerId !== event.pointerId || !gesture) return;
+    if (destroyed || pointerId !== event.pointerId || (!gesture && !contextCandidate)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     currentScreen = { x: event.clientX, y: event.clientY };
     currentGrid = eventGrid(event);
+
+    if (contextCandidate && !contextCandidate.dragged) {
+      contextCandidate.dragged = entityContextDragExceeded(contextCandidate.anchorScreen, currentScreen);
+    }
+
+    if (!gesture) {
+      if (contextCandidate?.dragged) close('pointer_cancel');
+      return;
+    }
     if (keyboardConfirmed) return;
 
     if (gesture.phase === 'pending' && performance.now() - gesture.startedAtMs >= TACTICAL_ORDER_HOLD_DELAY_MS) {
@@ -181,9 +230,18 @@ export function installTacticalOrderRadialInput(
   };
 
   const handlePointerUp = (event: PointerEvent): void => {
-    if (destroyed || pointerId !== event.pointerId || !gesture) return;
+    if (destroyed || pointerId !== event.pointerId || (!gesture && !contextCandidate)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+
+    if (!gesture) {
+      const candidate = contextCandidate;
+      const shouldOpenContext = Boolean(candidate && !candidate.dragged);
+      const anchor = { x: event.clientX, y: event.clientY };
+      close();
+      if (shouldOpenContext && candidate) entityMenu.show(candidate.target, anchor);
+      return;
+    }
 
     if (keyboardConfirmed) {
       close();
@@ -194,6 +252,18 @@ export function installTacticalOrderRadialInput(
       openMenu();
     }
     if (!gesture) return;
+
+    if (
+      gesture.phase === 'pending'
+      && resolveEntityContextPendingRelease(Boolean(contextCandidate), contextCandidate?.dragged ?? false) === 'context-menu'
+      && contextCandidate
+    ) {
+      const target = contextCandidate.target;
+      const anchor = { x: event.clientX, y: event.clientY };
+      close('pointer_cancel');
+      entityMenu.show(target, anchor);
+      return;
+    }
 
     const point = { x: event.clientX, y: event.clientY };
     const release = releaseTacticalOrderGesture(gesture, point, performance.now());
@@ -211,7 +281,7 @@ export function installTacticalOrderRadialInput(
   };
 
   const cancelFromPointer = (event: PointerEvent, reason: TacticalOrderGestureCancelReason): void => {
-    if (destroyed || pointerId !== event.pointerId || !gesture) return;
+    if (destroyed || pointerId !== event.pointerId || (!gesture && !contextCandidate)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     close(reason);
@@ -280,5 +350,6 @@ export function installTacticalOrderRadialInput(
     window.removeEventListener('keydown', handleKeyDown, true);
     statusCard.destroy();
     menu.destroy();
+    entityMenu.destroy();
   };
 }
