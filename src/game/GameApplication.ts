@@ -190,7 +190,12 @@ export class GameApplication {
     pushDestroyer(this.destroyers, installWorkspaceTooltipGuard());
 
     this.board.start();
-    pushDestroyer(this.destroyers, installTacticalOrderRadialInput(this.board, this.state, refreshTacticalOrderUi));
+    pushDestroyer(this.destroyers, installTacticalOrderRadialInput(
+      this.board,
+      this.state,
+      refreshTacticalOrderUi,
+      this.options.entityContextMenuRoutes,
+    ));
 
     const scheduleNativeMapQuality = () => {
       window.requestAnimationFrame(() => {
