@@ -1,6 +1,7 @@
 import type { Container, Ticker } from 'pixi.js';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import type { PixiTacticalBoardApp } from '../rendering/PixiApp';
+import type { EntityContextMenuRoutes } from '../ui/EntityContextMenu';
 
 export type GameApplicationMode = 'game' | 'combat-lab';
 
@@ -39,6 +40,7 @@ export interface GameApplicationOptions {
   readonly state: SimulationState;
   readonly elements: GameApplicationElements;
   readonly pauseController?: GamePauseController;
+  readonly entityContextMenuRoutes?: EntityContextMenuRoutes;
   readonly installExtension?: (
     context: GameApplicationContext,
   ) => GameApplicationExtension | Promise<GameApplicationExtension>;
