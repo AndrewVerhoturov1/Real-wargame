@@ -38,6 +38,9 @@ for (const file of [
   'src/combat-lab/right-panel/PolygonRightPanelLiveView.ts',
   'src/combat-lab/game-editors/CombatLabEditorShellBridge.ts',
   'src/combat-lab/game-editors/polygon-global-editor-feature-grid.css',
+  'src/combat-lab/game-editors/PolygonGlobalEditorNavigation.ts',
+  'src/combat-lab/game-editors/PolygonGlobalEditorParity.ts',
+  'src/combat-lab/game-editors/polygon-global-editor-inner-parity.css',
   'src/input/TacticalOrderRadialInput.ts',
   'src/ui/EntityContextMenu.ts',
   'src/ui/EntityContextMenuRouteRegistry.ts',
@@ -62,6 +65,7 @@ expectIncludes('src/combat-lab/main.ts', [
   'requestCombatLabGameEditorOpen',
   'rightPanel.activateTab(view)',
   'polygon-global-editor-feature-grid.css',
+  'polygon-global-editor-inner-parity.css',
 ]);
 expectIncludes('src/ui/EntityContextMenu.ts', [
   'getRegisteredEntityContextMenuRoutes',
@@ -115,11 +119,59 @@ expectIncludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
   "selected.activation === 'embedded'",
   'selected.definition.mount',
   'GameEditorInstallation',
-  'polygon-route-profile-feature-grid',
-  'polygon-route-profile-feature',
-  "profileFeature(host, 'Опасность', 'dangerWeight')",
-  "profileFeature(host, 'Укрытия', 'coverWeight')",
-  "profileFeature(host, 'Цена дороги', 'terrainCosts.road')",
+  'listCombatLabGameEditorGroups',
+  'listPolygonCombatLabGameEditorGroups',
+  'POLYGON_GLOBAL_EDITOR_GROUPS',
+  'installPolygonGlobalEditorParity',
+  "'surfaceTypes'",
+]);
+
+expectIncludes('src/combat-lab/game-editors/PolygonGlobalEditorNavigation.ts', [
+  'POLYGON_GLOBAL_EDITOR_GROUPS',
+  "'routeProfiles'",
+  "'tacticalPositions'",
+  "'soldierArchetypes'",
+  "'attentionProfiles'",
+  "'perceptionProfiles'",
+  "'movementProfiles'",
+  "'weapons'",
+  "'conditionProfiles'",
+  "'surfaceTypes'",
+  "'environmentProfiles'",
+  "'directionalTerrain'",
+]);
+
+expectIncludes('src/combat-lab/game-editors/PolygonGlobalEditorParity.ts', [
+  'PolygonGlobalEditorId',
+  'installPolygonGlobalEditorParity',
+  "'routeProfiles'",
+  "'tacticalPositions'",
+  "'soldierArchetypes'",
+  "'attentionProfiles'",
+  "'perceptionProfiles'",
+  "'movementProfiles'",
+  "'weapons'",
+  "'conditionProfiles'",
+  "'environmentProfiles'",
+  "'directionalTerrain'",
+  'MutationObserver',
+  'decorateRouteProfileEditor',
+]);
+
+expectIncludes('src/game-editors/createDefaultGameEditorRegistry.ts', [
+  'mountNavigationProfileEditor',
+  'mountTacticalPositionProfileEditor',
+  'mountSoldierArchetypeEditor',
+  'mountAttentionProfileEditor',
+  'mountPerceptionProfileEditor',
+  'mountMovementProfileEditor',
+  'mountCombatCatalogEditor',
+  'mountConditionProfileEditor',
+  'mountEnvironmentProfileEditor',
+  'mountDirectionalTerrainProfileEditor',
+]);
+expectExcludes('src/game-editors/createDefaultGameEditorRegistry.ts', [
+  "id: 'surfaceTypes'",
 ]);
 
 expectIncludes('src/combat-lab/right-panel/polygon-right-panel-live.css', [

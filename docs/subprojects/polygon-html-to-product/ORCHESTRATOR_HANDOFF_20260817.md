@@ -1,10 +1,31 @@
 # Handoff оркестратору — приоритетная волна Полигона 2026-08-17
 
-## Что изменилось
+## ВАЖНО: checkpoint и смена подхода после этой волны
+
+Текущая six-X интеграция и последующая попытка приблизить редакторы к HTML-прототипу сохраняются в `real-wargame-preview` как **технический checkpoint**, но пользователь **не принимает текущий визуальный результат как финальный**.
+
+Новая установка для следующего оркестратора:
+
+1. не продолжать автоматически стратегию pixel-perfect полировки текущих presentation-слоёв;
+2. не считать перенос checkpoint в preview пользовательской визуальной приёмкой;
+3. сначала получить и зафиксировать новый подход пользователя;
+4. сохранить полезные live/product contracts текущей интеграции, если новый подход не требует их изменения;
+5. current presentation adapters можно переделывать или удалять — они не считаются новой обязательной дизайн-системой;
+6. новую работу начинать от актуального `real-wargame-preview` HEAD в отдельной feature-ветке.
+
+Канонический документ нового статуса:
+
+`docs/subprojects/polygon-html-to-product/CHECKPOINT_20260817_APPROACH_RESET.md`
+
+Ниже сохранён **исторический handoff исходной six-X волны**, чтобы не потерять причины и границы уже выполненной работы.
+
+---
+
+## Что изменилось на старте six-X волны
 
 После объединения АРКИ, ПУЛЬСА, ЛИНЗЫ и ХРОНИСТА пользователь изменил ближайший приоритет: сначала сделать новый Полигон цельной игровой поверхностью, а не уходить глубже в Metrics/Series/replay.
 
-Подготовлена новая параллельная волна из шести исполнителей:
+Была подготовлена параллельная волна из шести исполнителей:
 
 1. **КАРТА** — живая product map вместо ARKA placeholder, visual presentation ближе к принятому прототипу.
 2. **ПУЛЬС** — selection → UnitModel → `Юнит` LIVE → posture command → readback.
@@ -13,7 +34,7 @@
 5. **КОНТЕКСТ** — entity context menu с сохранением существующих right-button tactical orders.
 6. **ПЕШКА** — принятая система тактических знаков в `PixiUnitRenderer` + near/medium/far LOD.
 
-Полный coordination contract:
+Полный historical coordination contract:
 
 `docs/subprojects/polygon-html-to-product/IMPLEMENTATION_WAVE_20260817.md`
 
@@ -28,7 +49,7 @@ docs/subprojects/polygon-html-to-product/prompts/05_ENTITY_CONTEXT_MENU.md
 docs/subprojects/polygon-html-to-product/prompts/06_UNIT_MAP_TOKEN.md
 ```
 
-## База запуска
+## Историческая база запуска
 
 Planning anchor:
 
@@ -36,23 +57,25 @@ Planning anchor:
 real-wargame-preview @ 26e5f7f3681a4cf03e58ae7137cfe67387a1e015
 ```
 
-Перед запуском **каждой** feature-ветки повторно получить current exact preview HEAD по orchestration skill. Если запускаешь все шесть одновременно и HEAD ещё `26e5f7f...`, используй его как общий base для всех шести.
+Позже общая planning/documentation база дошла до `8292bf25bf241712901090fcb565dded939e7a08`, от которой стартовали шесть X-исполнителей.
 
-## Что важно при раздаче
+## Что было важно при раздаче
 
 - Не смешивать зоны между исполнителями.
 - КАРТА не меняет unit renderer/selection.
 - ПЕШКА не меняет map terrain/selection.
 - ПУЛЬС владеет selection и минимальным generic right-panel seam.
-- ЛИНЗА не создаёт второй selection; её views/adapters должны принимать hosts/state извне. Final shell hook можно сделать после ПУЛЬСА отдельным integration commit.
+- ЛИНЗА не создаёт второй selection; её views/adapters принимают hosts/state извне.
 - РЕДАКТОРЫ сохраняют стабильный editor-open API.
-- КОНТЕКСТ обязан сохранить quick move/right-drag/hold radial tactical orders; его задача — arbitration, а не замена tactical order system.
+- КОНТЕКСТ сохраняет quick move/right-drag/hold radial tactical orders; его задача — arbitration, а не замена tactical order system.
 
-## Что не запускать в первой очереди
+Эти ownership-инварианты остаются полезными техническими знаниями и после смены визуального подхода.
 
-Не отменять ХРОНИСТ/Metrics/Series/replay/Save/Open, но пока не ставить их выше этой волны. Вернуться к ним после получения цельной map→unit→right-panel→editors сцены.
+## Что не запускалось в первой очереди
 
-## Рекомендуемый integration order
+ХРОНИСТ/Metrics/Series/replay/Save/Open не отменялись, но не ставились выше six-X волны. Они по-прежнему отдельные незавершённые направления.
+
+## Исторический integration order
 
 ```text
 КАРТА
@@ -63,7 +86,7 @@ real-wargame-preview @ 26e5f7f3681a4cf03e58ae7137cfe67387a1e015
 → КОНТЕКСТ
 ```
 
-Разработка идёт параллельно; этот порядок только для transfer/review и уменьшения конфликтов.
+Фактическая six-X сборка уже выполнена в integration lineage; следующий исполнитель не должен повторять этот merge-процесс с нуля.
 
 ## Старые ветки, которые можно исследовать, но нельзя вливать вслепую
 
@@ -76,15 +99,15 @@ feature/20260805-map-diorama-prototype
 
 Причины:
 
-- live-unit ветка может содержать полезную реализацию, но построена до новой общей базы;
+- live-unit ветка построена до новой общей базы;
 - soldier branches сильно разошлись с текущим preview;
-- global-editors уже в истории продукта и повторный merge не нужен;
+- global-editors уже присутствуют в истории продукта;
 - map-diorama — старый standalone визуальный ориентир, не product base.
 
-## Приёмка
+## Приёмка следующей итерации
 
-Каждого исполнителя принимать по exact `base...current` diff и `docs/orchestration/RESULT_TEMPLATE.md`.
+Новый подход пользователя должен получить собственный scope и собственные acceptance criteria. Нельзя автоматически переиспользовать формулировку «pixel-perfect как HTML» как текущую задачу без нового подтверждения.
 
-Визуальные задачи КАРТА / РЕДАКТОРЫ / КОНТЕКСТ / ПЕШКА и финальный ПУЛЬС/ЛИНЗА UI должны использовать screenshot skill и свежие PNG exact SHA. Runtime/render задачи должны выполнять performance design review и risk-selected checks.
+Для визуальных задач по-прежнему использовать repository screenshot skill и свежие PNG exact SHA. Runtime/render задачи проверять по performance/risk-based правилам.
 
-Не transfer/deploy без отдельного пользовательского GO.
+`main` не transfer/merge без отдельного пользовательского GO.

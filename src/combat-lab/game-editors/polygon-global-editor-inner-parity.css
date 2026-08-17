@@ -1,0 +1,858 @@
+/* Polygon global editor inner parity.
+   The mounted product editor remains authoritative; these rules only present
+   its live DOM in the accepted HTML prototype's three-column light workspace. */
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-workspace {
+  grid-template-columns: 214px minmax(0, 1fr) !important;
+  gap: 0 !important;
+  background: #f8f7f1 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-nav {
+  padding: 10px 8px 12px !important;
+  border-right: 1px solid var(--polygon-line) !important;
+  background: #e6e5de !important;
+  overflow: auto;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-nav-group {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-nav-group + .combat-lab-game-editor-nav-group {
+  margin-top: 10px !important;
+  padding-top: 9px !important;
+  border-top: 1px solid #cecdc5;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-nav-group-title {
+  padding: 2px 8px 5px !important;
+  color: #7a7d74 !important;
+  font-size: 8px !important;
+  font-weight: 950 !important;
+  line-height: 1 !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-item {
+  width: 100%;
+  min-height: 34px !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  margin: 1px 0 !important;
+  padding: 6px 8px !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  color: #3f433a !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-align: left !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-item:hover:not(:disabled) {
+  background: #d9d8cf !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-item.is-active {
+  color: #fff !important;
+  background: var(--polygon-top) !important;
+  box-shadow: inset 3px 0 0 var(--polygon-accent) !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-item-label {
+  color: inherit !important;
+  font-size: 9.5px !important;
+  font-weight: 850 !important;
+  line-height: 1.22 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-item-mode {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-item.is-unavailable {
+  opacity: .58;
+  cursor: not-allowed !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-item-unavailable {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+  border: 1px solid #b9b9b0;
+  border-radius: 8px;
+  color: #777a71;
+  background: #eeede7;
+  font-size: 6px;
+  font-weight: 950;
+  letter-spacing: .06em;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-stage:has(.polygon-global-editor-host) {
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) !important;
+  overflow: hidden;
+  background: #f8f7f1 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-stage:has(.polygon-global-editor-host) > .combat-lab-game-editor-stage-head {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-stage-body.is-editor-mounted,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-mounted-host,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #f8f7f1 !important;
+  box-shadow: none !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host * {
+  box-sizing: border-box;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host {
+  color: #30332c !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 9px !important;
+}
+
+/* Shared second/third column geometry. */
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-profile-editor-layout,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .navigation-profile-layout,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .tactical-position-profile-layout,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .gameplay-tuning-editor {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: 238px minmax(0, 1fr) !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #f8f7f1 !important;
+  box-shadow: none !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-profile-column,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .navigation-profile-list-panel,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .tactical-position-profile-list,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .gameplay-tuning-editor-list-panel,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .combat-catalog-list-panel {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-right: 1px solid var(--polygon-line) !important;
+  border-radius: 0 !important;
+  color: #363a32 !important;
+  background: #efeee7 !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .navigation-profile-list-panel,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .tactical-position-profile-list,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .gameplay-tuning-editor-list-panel {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .navigation-profile-list-heading,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .tactical-position-profile-heading,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .gameplay-tuning-editor-list-heading,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .combat-catalog-list-heading {
+  min-height: 58px !important;
+  position: relative;
+  display: block !important;
+  padding: 10px 42px 8px 11px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--polygon-line) !important;
+  color: #30332c !important;
+  background: #efeee7 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .navigation-profile-list-heading::before,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .tactical-position-profile-heading::before,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .gameplay-tuning-editor-list-heading::before,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .combat-catalog-list-heading::before {
+  content: 'ПРОФИЛИ';
+  display: block;
+  margin-bottom: 4px;
+  color: #85887f;
+  font-size: 7px;
+  font-weight: 950;
+  letter-spacing: .11em;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-list-heading,.tactical-position-profile-heading,.gameplay-tuning-editor-list-heading,.combat-catalog-list-heading) h2,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-list-heading,.tactical-position-profile-heading,.gameplay-tuning-editor-list-heading,.combat-catalog-list-heading) h3 {
+  margin: 0 !important;
+  color: #292c26 !important;
+  font-size: 11.5px !important;
+  line-height: 1.15 !important;
+  font-weight: 900 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-list-heading,.tactical-position-profile-heading,.gameplay-tuning-editor-list-heading,.combat-catalog-list-heading) p {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-list-heading,.tactical-position-profile-heading,.gameplay-tuning-editor-list-heading,.combat-catalog-list-heading) > span {
+  position: absolute;
+  top: 18px;
+  right: 9px;
+  max-width: 65px;
+  padding: 3px 5px;
+  overflow: hidden;
+  border: 1px solid #c9c8bf;
+  border-radius: 9px;
+  color: #6d7067 !important;
+  background: #fff !important;
+  font-size: 7px !important;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-list,.tactical-position-profile-items,.gameplay-tuning-editor-list,.combat-catalog-entry-list) {
+  min-height: 0 !important;
+  display: grid !important;
+  align-content: start !important;
+  gap: 1px !important;
+  padding: 6px 7px !important;
+  overflow: auto !important;
+  background: #efeee7 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-list,.tactical-position-profile-items,.gameplay-tuning-editor-list,.combat-catalog-entry-list) > button {
+  width: 100% !important;
+  min-height: 42px !important;
+  display: grid !important;
+  gap: 2px !important;
+  margin: 0 !important;
+  padding: 6px 8px !important;
+  border: 1px solid transparent !important;
+  border-radius: 4px !important;
+  color: #41443d !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-align: left !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-list,.tactical-position-profile-items,.gameplay-tuning-editor-list,.combat-catalog-entry-list) > button:hover {
+  background: #e4e3db !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-list,.tactical-position-profile-items,.gameplay-tuning-editor-list,.combat-catalog-entry-list) > button:is(.active,[aria-selected='true']) {
+  border-color: #d0bd60 !important;
+  color: #3f3b25 !important;
+  background: #fff7cf !important;
+  box-shadow: inset 3px 0 0 #d0ae24 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-list,.tactical-position-profile-items,.gameplay-tuning-editor-list,.combat-catalog-entry-list) > button strong {
+  font-size: 9px !important;
+  line-height: 1.15 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-list,.tactical-position-profile-items,.gameplay-tuning-editor-list,.combat-catalog-entry-list) > button :is(span,small) {
+  color: #85887f !important;
+  font-size: 7px !important;
+  line-height: 1.2 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-list-actions,.tactical-position-profile-list-actions,.gameplay-tuning-editor-list-actions) {
+  min-height: 70px;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 4px !important;
+  padding: 7px !important;
+  border: 0 !important;
+  border-top: 1px solid var(--polygon-line) !important;
+  background: #e9e8e0 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-list-actions,.tactical-position-profile-list-actions,.gameplay-tuning-editor-list-actions) > button {
+  min-height: 28px !important;
+  padding: 4px 5px !important;
+  border: 1px solid #c0c1b8 !important;
+  border-radius: 4px !important;
+  color: #50534b !important;
+  background: #f9f8f3 !important;
+  box-shadow: none !important;
+  font-size: 7.5px !important;
+  font-weight: 850 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-list-actions,.tactical-position-profile-list-actions,.gameplay-tuning-editor-list-actions) > button:first-of-type {
+  color: #fff !important;
+  border-color: var(--polygon-top) !important;
+  background: var(--polygon-top) !important;
+}
+
+/* Main editor header and tabs. */
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-main,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-form-panel,.tactical-position-profile-form,.gameplay-tuning-editor-form-panel,.combat-catalog-form-panel) {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: #30332c !important;
+  background: #f8f7f1 !important;
+  box-shadow: none !important;
+  overflow: auto !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-main-header,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-form-heading,.tactical-position-profile-form-header,.gameplay-tuning-editor-form-heading,.combat-catalog-form-header) {
+  min-height: 86px !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  margin: 0 !important;
+  padding: 11px 14px 9px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--polygon-line) !important;
+  color: #30332c !important;
+  background: #fbfaf5 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-breadcrumb {
+  margin-bottom: 4px;
+  color: #83867d !important;
+  font-size: 7.5px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-main-header h1,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-main-header h2 {
+  margin: 0 !important;
+  color: #252820 !important;
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  line-height: 1.05 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-main-header p {
+  max-width: 760px;
+  margin: 5px 0 0 !important;
+  color: #5f6359 !important;
+  font-size: 8.5px !important;
+  line-height: 1.4 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-main-header :is(.navigation-profile-kicker,.gameplay-tuning-editor-kicker) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 19px;
+  margin-top: 3px;
+  padding: 2px 6px;
+  border: 1px solid #c9c8bf;
+  border-radius: 9px;
+  color: #65695f !important;
+  background: #eeede7 !important;
+  font-size: 7px !important;
+  font-weight: 850 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-tabs,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .combat-catalog-subtabs {
+  width: 100%;
+  min-height: 42px !important;
+  display: flex !important;
+  align-items: end !important;
+  gap: 2px !important;
+  margin: 0 !important;
+  padding: 6px 12px 0 !important;
+  overflow-x: auto;
+  border: 0 !important;
+  border-bottom: 1px solid var(--polygon-line) !important;
+  color: #4f534a !important;
+  background: #ecebe3 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-tabs > button,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .combat-catalog-subtabs > button {
+  min-height: 30px !important;
+  flex: 0 0 auto;
+  padding: 5px 11px !important;
+  border: 1px solid transparent !important;
+  border-radius: 4px 4px 0 0 !important;
+  color: #55594f !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 8.5px !important;
+  font-weight: 900 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-tabs > button:hover,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .combat-catalog-subtabs > button:hover {
+  background: #e1e0d8 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-tabs > button:is(.is-active,.active,[aria-selected='true']),
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .combat-catalog-subtabs > button:is(.is-active,.active,[aria-selected='true']) {
+  border-color: var(--polygon-line) !important;
+  border-bottom-color: #f8f7f1 !important;
+  color: #2f3429 !important;
+  background: #f8f7f1 !important;
+}
+
+/* Main summary, field cards and sections. */
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-summary {
+  margin: 12px 14px 0 !important;
+  padding: 11px 12px !important;
+  border: 1px solid #d7c56b !important;
+  border-radius: 5px !important;
+  color: #39351f !important;
+  background: #fff8d9 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-summary-kicker,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-route-profile-summary-kicker {
+  display: block;
+  color: #8a7a3a !important;
+  font-size: 7px !important;
+  font-weight: 950 !important;
+  letter-spacing: .08em !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-summary > strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-summary > p {
+  margin: 4px 0 0;
+  color: #6b6542;
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-summary-grid,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-route-profile-feature-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+  margin: 10px 14px 0 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-summary .polygon-editor-summary-grid {
+  margin: 9px 0 0 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.polygon-editor-summary-card,.polygon-route-profile-feature) {
+  min-width: 0;
+  padding: 8px 9px !important;
+  border: 1px solid #d0cfc6 !important;
+  border-radius: 5px !important;
+  background: #fff !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.polygon-editor-summary-card,.polygon-route-profile-feature) span {
+  display: block;
+  color: #7b7e75 !important;
+  font-size: 7px !important;
+  font-weight: 850 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.polygon-editor-summary-card,.polygon-route-profile-feature) strong {
+  display: block;
+  margin-top: 4px;
+  color: #2f332b !important;
+  font-size: 12px !important;
+  line-height: 1.1 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-group,.tactical-position-profile-group,.polygon-editor-section,.combat-catalog-group) {
+  margin: 11px 14px 0 !important;
+  padding: 0 !important;
+  border: 1px solid #d0cfc6 !important;
+  border-radius: 5px !important;
+  color: #30332c !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-group,.tactical-position-profile-group,.polygon-editor-section,.combat-catalog-group) > h3,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .combat-catalog-group-heading {
+  margin: 0 !important;
+  padding: 8px 10px !important;
+  border-bottom: 1px solid #d0cfc6 !important;
+  color: #55584f !important;
+  background: #eeede6 !important;
+  font-size: 8.5px !important;
+  font-weight: 950 !important;
+  line-height: 1.2 !important;
+  text-transform: uppercase;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-field-grid,.tactical-position-profile-field-grid,.polygon-editor-field-grid,.combat-catalog-field-grid,.gameplay-tuning-editor-fields) {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+  padding: 9px !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-field,.tactical-position-profile-field,.gameplay-tuning-editor-field,.combat-catalog-field) {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 5px !important;
+  margin: 0 !important;
+  padding: 8px !important;
+  border: 1px solid #d5d4cb !important;
+  border-radius: 4px !important;
+  color: #3c4038 !important;
+  background: #fbfaf6 !important;
+  box-shadow: none !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-field,.tactical-position-profile-field,.gameplay-tuning-editor-field,.combat-catalog-field) :is(strong,.gameplay-tuning-editor-field-label) {
+  color: #3b3f37 !important;
+  font-size: 8.5px !important;
+  font-weight: 900 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-field,.tactical-position-profile-field,.gameplay-tuning-editor-field,.combat-catalog-field) :is(p,small) {
+  margin: 0 !important;
+  color: #777b71 !important;
+  font-size: 7px !important;
+  line-height: 1.35 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(input[type='text'],input[type='number'],select,textarea) {
+  min-height: 29px !important;
+  padding: 4px 6px !important;
+  border: 1px solid #bfc0b6 !important;
+  border-radius: 4px !important;
+  color: #33362f !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  font: 8.5px Arial, Helvetica, sans-serif !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host textarea {
+  min-height: 62px !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host input[type='range'] {
+  accent-color: #69754d;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(button,input,select,textarea):disabled {
+  opacity: .46 !important;
+  cursor: default !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-name-card,.tactical-position-profile-identity) {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+  margin: 11px 14px 0 !important;
+  padding: 9px !important;
+  border: 1px solid #d0cfc6 !important;
+  border-radius: 5px !important;
+  background: #fff !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-name-card,.tactical-position-profile-identity) > label {
+  display: grid !important;
+  gap: 4px !important;
+  color: #5b5f56 !important;
+  font-size: 8px !important;
+  font-weight: 800 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-savebar,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .gameplay-tuning-editor-save-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  min-height: 50px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  margin-top: 12px !important;
+  padding: 8px 12px !important;
+  border: 0 !important;
+  border-top: 1px solid var(--polygon-line) !important;
+  color: #696c64 !important;
+  background: #ecebe4 !important;
+  font-size: 8px !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-savebar > :is(.navigation-profile-form-actions,.tactical-position-profile-actions),
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .gameplay-tuning-editor-save-bar {
+  flex: 0 0 auto;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-savebar button,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .gameplay-tuning-editor-save-bar button,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .combat-catalog-form-actions button,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .combat-catalog-global-actions button {
+  min-height: 30px !important;
+  padding: 4px 9px !important;
+  border: 1px solid #b9b9af !important;
+  border-radius: 4px !important;
+  color: #44473f !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  font-size: 8px !important;
+  font-weight: 900 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-editor-savebar button:is(.primary,[data-tactical-profile-action='save'],[data-attention-action='save'],[data-movement-action='save'],[data-directional-action='save']),
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .gameplay-tuning-editor-save-bar button:last-child,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .combat-catalog-form-actions button.primary {
+  color: #fff !important;
+  border-color: var(--polygon-top) !important;
+  background: var(--polygon-top) !important;
+}
+
+/* Attention / perception / directional presentation-only visuals sourced from live owners. */
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-perception-flow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 12px 14px 0;
+  padding: 10px;
+  border: 1px solid #d0cfc6;
+  border-radius: 5px;
+  color: #62665c;
+  background: #fff;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-perception-flow b {
+  color: #9a8b47;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-directional-visuals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 14px 0;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-directional-visual {
+  min-height: 112px;
+  padding: 10px;
+  border: 1px solid #d0cfc6;
+  border-radius: 5px;
+  background: #fff;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-directional-visual > strong {
+  font-size: 9px;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.polygon-directional-slope,.polygon-directional-compass) {
+  margin: 9px 0;
+  padding: 8px;
+  border: 1px dashed #c7c7bd;
+  border-radius: 4px;
+  color: #69754d;
+  background: #f3f2eb;
+  text-align: center;
+  font: 850 8px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-directional-visual p {
+  margin: 0;
+  color: #777a71;
+  font-size: 7.5px;
+  line-height: 1.35;
+}
+
+/* Combat catalogue: preserve the real owner but align its toolbar/list/form. */
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-combat-catalogue {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-rows: auto auto minmax(0, 1fr) !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  color: #30332c !important;
+  background: #f8f7f1 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-combat-catalogue .combat-catalog-toolbar {
+  min-height: 86px !important;
+  padding: 11px 14px 9px !important;
+  border-bottom: 1px solid var(--polygon-line) !important;
+  background: #fbfaf5 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-combat-catalogue .combat-catalog-toolbar h1 {
+  margin: 0 !important;
+  color: #252820 !important;
+  font-size: 18px !important;
+  line-height: 1.05 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-combat-catalogue .combat-catalog-toolbar p {
+  margin: 5px 0 0 !important;
+  color: #5f6359 !important;
+  font-size: 8.5px !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-combat-layout {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: 238px minmax(0, 1fr) !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-combat-layout .combat-catalog-form-panel {
+  overflow: auto !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .combat-catalog-new-button {
+  margin: 7px !important;
+  min-height: 31px !important;
+  border: 1px solid var(--polygon-top) !important;
+  border-radius: 4px !important;
+  color: #fff !important;
+  background: var(--polygon-top) !important;
+  font-size: 8px !important;
+  font-weight: 900 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .combat-catalog-alert {
+  margin: 8px 12px !important;
+  border-radius: 4px !important;
+  font-size: 8px !important;
+}
+
+/* Environment owner has profile/material controls inside its list column. */
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor--environmentProfiles .navigation-profile-list-panel {
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr) !important;
+  overflow: hidden !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor--environmentProfiles .navigation-profile-mode-select {
+  display: grid !important;
+  gap: 4px !important;
+  padding: 7px !important;
+  border-bottom: 1px solid var(--polygon-line) !important;
+  color: #696d63 !important;
+  background: #e9e8e0 !important;
+  font-size: 7px !important;
+  font-weight: 850 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor--environmentProfiles .environment-material-groups {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px !important;
+  padding: 6px 7px !important;
+  border-bottom: 1px solid var(--polygon-line) !important;
+  background: #e9e8e0 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor--environmentProfiles .environment-material-groups button {
+  min-height: 27px !important;
+  border: 1px solid #c0c1b8 !important;
+  border-radius: 4px !important;
+  color: #55594f !important;
+  background: #f8f7f1 !important;
+  box-shadow: none !important;
+  font-size: 7.5px !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor--environmentProfiles .environment-material-groups button.active {
+  color: #fff !important;
+  border-color: var(--polygon-top) !important;
+  background: var(--polygon-top) !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor--environmentProfiles .environment-revision-badges {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor--environmentProfiles .environment-revision-badges span {
+  padding: 2px 5px;
+  border: 1px solid #c9c8bf;
+  border-radius: 8px;
+  color: #65695f !important;
+  background: #eeede7 !important;
+  font-size: 6.5px !important;
+}
+
+/* Tactical owner-specific class aliases. */
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor--tacticalPositions .tactical-position-profile-items {
+  min-height: 0 !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor--tacticalPositions .tactical-position-profile-list-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+/* Existing route parity remains live, but the inner-parity pass owns final geometry. */
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-layout {
+  grid-template-columns: 238px minmax(0, 1fr) !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .polygon-route-profile-primary,
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .polygon-route-profile-metadata {
+  margin-left: 14px !important;
+  margin-right: 14px !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .polygon-route-profile-feature-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+@media (max-width: 1220px) {
+  body.app-shell-mode-combat-lab .polygon-shell-editors-portal .combat-lab-game-editor-workspace {
+    grid-template-columns: 188px minmax(0, 1fr) !important;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-profile-editor-layout,
+  body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .navigation-profile-layout,
+  body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .tactical-position-profile-layout,
+  body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .gameplay-tuning-editor,
+  body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host .polygon-combat-layout {
+    grid-template-columns: 210px minmax(0, 1fr) !important;
+  }
+
+  body.app-shell-mode-combat-lab .polygon-shell-editors-portal .polygon-global-editor-host :is(.navigation-profile-field-grid,.tactical-position-profile-field-grid,.polygon-editor-field-grid,.combat-catalog-field-grid,.gameplay-tuning-editor-fields) {
+    grid-template-columns: 1fr !important;
+  }
+}
