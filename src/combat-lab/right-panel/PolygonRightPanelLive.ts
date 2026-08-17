@@ -192,7 +192,9 @@ export function readPolygonAttentionLive(state: SimulationState, unitId: string 
   const settings = unit.attentionSettings;
   const profile = settings.profiles[runtime.mode];
   const profileId = unit.playerAttentionProfileId;
-  const profileNameRu = profileId && registry.hasProfile(profileId) ? registry.getProfile(profileId).nameRu : null;
+  const profileNameRu = profileId && registry.hasProfile(profileId)
+    ? registry.getProfile(profileId).nameRu ?? null
+    : null;
 
   return {
     availability: 'available',
