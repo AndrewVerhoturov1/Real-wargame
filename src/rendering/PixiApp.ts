@@ -48,6 +48,7 @@ export class PixiTacticalBoardApp {
   private readonly htmlOverlayRenderer: HtmlOverlayRenderer;
   private readonly fixedScaleLabel = document.createElement('div');
   private readonly performanceMonitor = new PerformanceMonitor();
+  private readonly resizeObserver: ResizeObserver;
   private locale: Locale = 'en';
   private showGrid = false;
   private showViewCones = false;
@@ -55,6 +56,7 @@ export class PixiTacticalBoardApp {
   private lastMapRenderKey = '';
   private mapRenderInvalidated = true;
   private lastDebugPanelUpdateMs = 0;
+  private lastViewportFitKey = '';
   private started = false;
   private destroyed = false;
 
@@ -106,6 +108,7 @@ export class PixiTacticalBoardApp {
         y: world.y * this.worldContainer.scale.y + this.worldContainer.y,
       }),
     });
+    this.resizeObserver = new ResizeObserver(() => this.fitMapToViewport());
   }
 
   static async create(
@@ -149,6 +152,7 @@ export class PixiTacticalBoardApp {
   start(): void {
     if (this.started || this.destroyed) return;
     this.renderEditableMapLayerIfNeeded(true);
+    this.fitMapToViewport(true);
     this.viewConeRenderer.clear();
     this.updateStaticText();
     this.updateDebugPanelIfNeeded(true);
@@ -158,6 +162,7 @@ export class PixiTacticalBoardApp {
     this.heightToggle.addEventListener('click', this.handleHeightToggle);
     this.camera.attach();
     this.boardInput.attach();
+    if (this.isPolygonCombatLabViewport()) this.resizeObserver.observe(this.root);
 
     this.app.ticker.add(this.tick);
     this.started = true;
@@ -181,6 +186,7 @@ export class PixiTacticalBoardApp {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.resizeObserver.disconnect();
     this.app.ticker.remove(this.tick);
     this.app.stop();
     this.started = false;
@@ -297,7 +303,37 @@ export class PixiTacticalBoardApp {
       this.state.editor.selectedObjectId,
       this.state.editor.layers.objects,
     );
+    this.fitMapToViewport();
+  }
 
+  /**
+   * Interface Linkage v1 uses the map as the complete surface below the top
+   * chrome. Combat Lab therefore uses a cover-style initial camera transform
+   * instead of letterboxing the authoritative Pixi map inside a square frame.
+   * Normal game mode keeps its existing camera startup behavior.
+   */
+  private fitMapToViewport(force = false): void {
+    if (!this.isPolygonCombatLabViewport()) return;
+
+    const viewportWidth = this.root.clientWidth;
+    const viewportHeight = this.root.clientHeight;
+    const mapWidth = this.state.map.width * this.state.map.cellSize;
+    const mapHeight = this.state.map.height * this.state.map.cellSize;
+    if (viewportWidth <= 0 || viewportHeight <= 0 || mapWidth <= 0 || mapHeight <= 0) return;
+
+    const fitKey = `${viewportWidth}x${viewportHeight}:${mapWidth}x${mapHeight}`;
+    if (!force && fitKey === this.lastViewportFitKey) return;
+    this.lastViewportFitKey = fitKey;
+
+    const scale = Math.max(viewportWidth / mapWidth, viewportHeight / mapHeight);
+    const x = Math.round((viewportWidth - mapWidth * scale) / 2);
+    const y = Math.round((viewportHeight - mapHeight * scale) / 2);
+    this.worldContainer.scale.set(scale);
+    this.worldContainer.position.set(x, y);
+  }
+
+  private isPolygonCombatLabViewport(): boolean {
+    return document.body.classList.contains('app-shell-mode-combat-lab');
   }
 
   private getMapRenderKey(): string {
