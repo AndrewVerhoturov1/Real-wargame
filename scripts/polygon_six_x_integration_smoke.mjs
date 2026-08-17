@@ -68,9 +68,6 @@ expectIncludes('src/input/TacticalOrderRadialInput.ts', [
   'contextRoutes: EntityContextMenuRoutes = {}',
 ]);
 
-// Interface Linkage v1 has a continuous map surface and a central tactical map
-// frame between the two floating panels. The real Pixi canvas itself occupies
-// that frame; no black outer container or inner letterboxed board is allowed.
 expectExcludes('src/combat-lab/polygon-map-surface.css', [
   '--polygon-map-size: min(',
   'top: var(--polygon-chrome-h) !important;',
@@ -99,19 +96,15 @@ expectExcludes('src/rendering/PixiApp.ts', [
   'const scale = Math.min(viewportWidth / mapWidth, viewportHeight / mapHeight);',
 ]);
 
-// Map and Unit tabs must present the accepted prototype structures first, while
-// retaining the existing product-owned editors underneath as an advanced layer.
 expectIncludes('src/combat-lab/game-editors/CombatLabEditorShellBridge.ts', [
   'polygon-map-editor-parity',
   'polygon-unit-editor-parity',
   'polygon-editor-legacy-details',
   "session.executeInteractive({ kind: 'posture'",
   'Основа карты',
-  'Тактический знак',
+  'ТАКТИЧЕСКИЙ ЗНАК',
 ]);
 
-// Shared Editors must mount real embedded registry editors in the prototype
-// workspace instead of leaving the main stage as a placeholder card.
 expectIncludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
   'combat-lab-game-editor-workspace',
   'combat-lab-game-editor-nav',
@@ -121,8 +114,6 @@ expectIncludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
   'GameEditorInstallation',
 ]);
 
-// LINZA still supplies real Info values; these markers are presentation-only
-// hooks used to enforce the accepted compact light inspector language.
 expectIncludes('src/combat-lab/right-panel/polygon-right-panel-live.css', [
   'polygon-info-parity',
   'polygon-info-kv-row',
