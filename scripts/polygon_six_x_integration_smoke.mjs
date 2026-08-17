@@ -33,7 +33,12 @@ for (const file of [
 
 expectIncludes('src/combat-lab/ui/CombatLabRightPanelSeam.ts', [
   'activateTab(tabId: CombatLabRightPanelTab): void',
-  'button.click()',
+  'COMBAT_LAB_ACTIVATE_RIGHT_PANEL_EVENT',
+  'workspaceRoot.dispatchEvent(new CustomEvent<CombatLabRightPanelTab>',
+]);
+expectIncludes('src/combat-lab/ui/CombatLabWorkspaceTabs.ts', [
+  "COMBAT_LAB_ACTIVATE_RIGHT_PANEL_EVENT = 'combat-lab:activate-right-panel'",
+  'if (isPolygonRightPanelTab(requested)) this.activateRightPanel(requested)',
 ]);
 expectIncludes('src/combat-lab/main.ts', [
   'CombatLabEditorShellBridge.create',
@@ -41,7 +46,7 @@ expectIncludes('src/combat-lab/main.ts', [
   'preparePolygonInfoLiveOwners',
   'registerEntityContextMenuRoutes',
   'requestCombatLabGameEditorOpen',
-  "rightPanel.activateTab(view)",
+  'rightPanel.activateTab(view)',
 ]);
 expectIncludes('src/ui/EntityContextMenu.ts', [
   'getRegisteredEntityContextMenuRoutes',
