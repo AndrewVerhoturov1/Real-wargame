@@ -53,6 +53,8 @@ expectIncludes('src/combat-lab/ui/CombatLabWorkspaceTabs.ts', [
 ]);
 expectIncludes('src/combat-lab/main.ts', [
   'CombatLabEditorShellBridge.create',
+  'state: session.state',
+  'session,',
   'PolygonRightPanelLiveView',
   'preparePolygonInfoLiveOwners',
   'registerEntityContextMenuRoutes',
@@ -66,40 +68,57 @@ expectIncludes('src/input/TacticalOrderRadialInput.ts', [
   'contextRoutes: EntityContextMenuRoutes = {}',
 ]);
 
-// Accepted Interface Linkage v1 presents one continuous light map surface below
-// the top chrome. The product must not frame the existing Pixi board into a
-// centred black square, and it must keep the complete live map visible instead
-// of cover-cropping real units/targets out of the initial viewport.
+// Interface Linkage v1 has a continuous map surface and a central tactical map
+// frame between the two floating panels. The real Pixi canvas itself occupies
+// that frame; no black outer container or inner letterboxed board is allowed.
 expectExcludes('src/combat-lab/polygon-map-surface.css', [
   '--polygon-map-size: min(',
-  'width: var(--polygon-map-size)',
-  'height: var(--polygon-map-size)',
-]);
-expectIncludes('src/combat-lab/polygon-map-surface.css', [
   'top: var(--polygon-chrome-h) !important;',
   'right: 0 !important;',
   'bottom: 0 !important;',
   'left: 0 !important;',
-  '80px 80px,',
-  '20px 20px;'
+]);
+expectIncludes('src/combat-lab/polygon-map-surface.css', [
+  '--polygon-map-frame-left-gap: 66px;',
+  '--polygon-map-frame-right-gap: 64px;',
+  'top: calc(var(--polygon-chrome-h) + 40px) !important;',
+  'left: calc(var(--polygon-panel-gap) + var(--polygon-left-w) + var(--polygon-map-frame-left-gap)) !important;',
+  'right: calc(var(--polygon-panel-gap) + var(--polygon-right-w) + var(--polygon-map-frame-right-gap)) !important;',
+  'bottom: 39px !important;',
 ]);
 expectIncludes('src/rendering/PixiApp.ts', [
   'fitMapToViewport',
-  'const polygonSurface = document.body.classList.contains(\'app-shell-mode-combat-lab\');',
+  "const polygonSurface = document.body.classList.contains('app-shell-mode-combat-lab');",
   'backgroundAlpha: polygonSurface ? 0 : 1,',
-  'const scale = Math.min(viewportWidth / mapWidth, viewportHeight / mapHeight);',
+  'const scale = Math.max(viewportWidth / mapWidth, viewportHeight / mapHeight);',
+  'const focusUnit = getSelectedUnit(this.state);',
+  'const targetX = viewportWidth * 0.46;',
+  'const targetY = viewportHeight * 0.63;',
 ]);
 expectExcludes('src/rendering/PixiApp.ts', [
-  'const scale = Math.max(viewportWidth / mapWidth, viewportHeight / mapHeight);',
+  'const scale = Math.min(viewportWidth / mapWidth, viewportHeight / mapHeight);',
 ]);
 
-// Existing authoritative game editors remain the owners, but their Combat Lab
-// catalogue must be presented as the prototype editor workspace rather than a
-// grid of dark/independent cards.
+// Map and Unit tabs must present the accepted prototype structures first, while
+// retaining the existing product-owned editors underneath as an advanced layer.
+expectIncludes('src/combat-lab/game-editors/CombatLabEditorShellBridge.ts', [
+  'polygon-map-editor-parity',
+  'polygon-unit-editor-parity',
+  'polygon-editor-legacy-details',
+  "session.executeInteractive({ kind: 'posture'",
+  'Основа карты',
+  'Тактический знак',
+]);
+
+// Shared Editors must mount real embedded registry editors in the prototype
+// workspace instead of leaving the main stage as a placeholder card.
 expectIncludes('src/combat-lab/game-editors/CombatLabGameEditorCatalogue.ts', [
   'combat-lab-game-editor-workspace',
   'combat-lab-game-editor-nav',
   'combat-lab-game-editor-stage',
+  "selected.activation === 'embedded'",
+  'selected.definition.mount',
+  'GameEditorInstallation',
 ]);
 
 // LINZA still supplies real Info values; these markers are presentation-only
