@@ -29,9 +29,7 @@ import { registerEntityContextMenuRoutes } from '../ui/EntityContextMenuRouteReg
 import { CombatLabExtension } from './CombatLabExtension';
 import { getCombatLabWorkspaceServices } from './CombatLabWorkspaceServices';
 import { CombatLabEditorShellBridge } from './game-editors/CombatLabEditorShellBridge';
-import {
-  requestCombatLabGameEditorOpen,
-} from './game-editors/CombatLabGameEditorLinks';
+import { requestCombatLabGameEditorOpen } from './game-editors/CombatLabGameEditorLinks';
 import { CombatLabGameEditors } from './game-editors/CombatLabGameEditors';
 import {
   installCombatLabQuickParameters,
@@ -87,6 +85,8 @@ async function startCombatLab(): Promise<void> {
     editorShellBridge = CombatLabEditorShellBridge.create({
       root: workspaceRoot,
       eventTarget: extensionRoot,
+      state: session.state,
+      session,
     });
     quickParametersInstallation = installCombatLabQuickParameters(extensionRoot, session);
   } catch (error) {
@@ -157,6 +157,7 @@ function installCombatLabWithLiveUnit(
     selectUnit(rightPanel.state, unitId);
     rightPanel.selection.reconcileFromState();
     inspector.refresh(true);
+    editorShellBridge?.refresh();
   };
 
   const refreshLinza = (): void => {
@@ -186,12 +187,11 @@ function installCombatLabWithLiveUnit(
   const unregisterContextRoutes = registerEntityContextMenuRoutes({
     openPanel: (target, view) => {
       if (target.kind === 'unit') selectContextUnit(target.id);
-      if (view === 'info') {
-        setMouseGridPosition(rightPanel.state, target.anchorGrid);
-      }
+      if (view === 'info') setMouseGridPosition(rightPanel.state, target.anchorGrid);
       rightPanel.activateTab(view);
       linzaView.invalidate();
       inspector.refresh(true);
+      editorShellBridge?.refresh();
       refreshLinza();
     },
     openEditor: (target) => {
@@ -214,14 +214,19 @@ function installCombatLabWithLiveUnit(
 
   const removeTickerListener = context.addTickerListener(() => {
     inspector.refresh();
+    editorShellBridge?.refresh();
     refreshLinza();
   });
   const removeSelectionListener = rightPanel.selection.subscribe(() => {
     inspector.refresh(true);
+    editorShellBridge?.refresh();
     linzaView.invalidate();
     refreshLinza();
   });
-  const removeDraftListener = services.draft.subscribe(() => inspector.refresh(true));
+  const removeDraftListener = services.draft.subscribe(() => {
+    inspector.refresh(true);
+    editorShellBridge?.refresh();
+  });
 
   refreshLinza();
 
