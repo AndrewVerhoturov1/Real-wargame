@@ -7,6 +7,7 @@ import {
 
 const ACTIVE_TAB_STORAGE_KEY = 'real-wargame.combat-lab.workspace-tab.v2';
 const RIGHT_PANEL_STORAGE_KEY = 'real-wargame.combat-lab.right-panel-tab.v1';
+export const COMBAT_LAB_ACTIVATE_RIGHT_PANEL_EVENT = 'combat-lab:activate-right-panel';
 const workspaceHostsByRoot = new WeakMap<HTMLElement, CombatLabWorkspaceHosts>();
 const registeredWorkspaceRoots = new Set<HTMLElement>();
 
@@ -31,7 +32,7 @@ const POLYGON_RIGHT_PANEL_DEFINITIONS = Object.freeze([
   { tabId: 'memory', labelRu: 'Память' },
 ] as const);
 
-type PolygonRightPanelTab = typeof POLYGON_RIGHT_PANEL_DEFINITIONS[number]['tabId'];
+export type PolygonRightPanelTab = typeof POLYGON_RIGHT_PANEL_DEFINITIONS[number]['tabId'];
 
 export interface CombatLabWorkspaceTabsOptions {
   readonly host: HTMLElement;
@@ -217,6 +218,10 @@ export class CombatLabWorkspaceTabs {
 
     this.listen(this.toggle, 'click', () => this.setCollapsed(!this.collapsed));
     this.listen(this.rightToggle, 'click', () => this.setRightCollapsed(!this.rightCollapsed));
+    this.listen(this.root, COMBAT_LAB_ACTIVATE_RIGHT_PANEL_EVENT, (event) => {
+      const requested = (event as CustomEvent<unknown>).detail;
+      if (isPolygonRightPanelTab(requested)) this.activateRightPanel(requested);
+    });
 
     const storedTab = readStoredTab(this.storage);
     this.activeTab = normalizeVisibleWorkspaceTab(storedTab);
@@ -307,8 +312,8 @@ export class CombatLabWorkspaceTabs {
     if (persist) writeStoredRightTab(this.storage, tabId);
   }
 
-  private listen(target: EventTarget, type: string, callback: () => void): void {
-    const listener: EventListener = () => callback();
+  private listen(target: EventTarget, type: string, callback: (event: Event) => void): void {
+    const listener: EventListener = (event) => callback(event);
     target.addEventListener(type, listener);
     this.listeners.push([target, type, listener]);
   }
@@ -375,11 +380,13 @@ function normalizeVisibleWorkspaceTab(value: unknown): CombatLabWorkspaceTab {
     : 'program';
 }
 
-function normalizeRightPanelTab(value: unknown): PolygonRightPanelTab {
+function isPolygonRightPanelTab(value: unknown): value is PolygonRightPanelTab {
   return typeof value === 'string'
-    && POLYGON_RIGHT_PANEL_DEFINITIONS.some((definition) => definition.tabId === value)
-    ? value as PolygonRightPanelTab
-    : 'unit';
+    && POLYGON_RIGHT_PANEL_DEFINITIONS.some((definition) => definition.tabId === value);
+}
+
+function normalizeRightPanelTab(value: unknown): PolygonRightPanelTab {
+  return isPolygonRightPanelTab(value) ? value : 'unit';
 }
 
 function leftWorkspaceTitle(tabId: CombatLabWorkspaceTab): string {
