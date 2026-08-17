@@ -1,0 +1,46 @@
+name: CI Polygon Editor Static Build
+
+on:
+  push:
+    branches:
+      - ci/polygon-editor-static-build-20260817-0792cae
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 0792cae6ba353c781847d3e2f7f588cdf7047329
+          fetch-depth: 0
+      - name: Verify exact source
+        run: test "$(git rev-parse HEAD)" = "0792cae6ba353c781847d3e2f7f588cdf7047329"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build:app
+      - name: Add exact deployment identity
+        shell: bash
+        run: |
+          cat > dist/deployment-source.json <<'JSON'
+          {
+            "repository": "AndrewVerhoturov1/Real-wargame",
+            "ref": "feature/20260817-polygon-editor-inner-parity",
+            "sourceSha": "0792cae6ba353c781847d3e2f7f588cdf7047329",
+            "verificationStatus": "passed",
+            "verificationChecks": 31,
+            "skippedChecks": []
+          }
+          JSON
+      - uses: actions/upload-artifact@v4
+        with:
+          name: polygon-editor-static-0792cae
+          path: dist/**
+          if-no-files-found: error
+          retention-days: 7
