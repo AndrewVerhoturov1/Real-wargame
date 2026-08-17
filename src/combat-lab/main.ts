@@ -14,6 +14,7 @@ import './ui/combat-lab-live-unit.css';
 import './game-editors/combat-lab-game-editors.css';
 import './game-editors/combat-lab-game-editor-shell.css';
 import './game-editors/polygon-editor-parity.css';
+import './game-editors/polygon-global-editor-parity.css';
 import './polygon-map-surface.css';
 import { selectUnit, setMouseGridPosition } from '../core/simulation/SimulationState';
 import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
@@ -254,10 +255,6 @@ function installLaboratoryPlaceholder(host: HTMLElement): void {
 function createCombatLabRenderContext(context: GameApplicationContext): GameApplicationContext {
   return {
     ...context,
-    // The Pixi ticker already renders every frame. Combat Lab callers only need
-    // to mutate renderer state; the next automatic frame publishes it. Keeping
-    // forceRender as a no-op prevents duplicate renderFrame passes and preserves
-    // the revision-owned static map cache.
     forceRender: () => {},
   };
 }
