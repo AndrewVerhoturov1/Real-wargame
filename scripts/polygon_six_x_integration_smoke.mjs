@@ -28,27 +28,23 @@ for (const file of [
   'src/combat-lab/game-editors/CombatLabEditorShellBridge.ts',
   'src/input/TacticalOrderRadialInput.ts',
   'src/ui/EntityContextMenu.ts',
+  'src/ui/EntityContextMenuRouteRegistry.ts',
 ]) expectFile(file);
 
-expectIncludes('src/combat-lab/ui/CombatLabWorkspaceTabs.ts', [
-  'activateCombatLabRightPanel',
-]);
 expectIncludes('src/combat-lab/ui/CombatLabRightPanelSeam.ts', [
   'activateTab(tabId: CombatLabRightPanelTab): void',
-  'activateCombatLabRightPanel',
+  'button.click()',
 ]);
 expectIncludes('src/combat-lab/main.ts', [
   'CombatLabEditorShellBridge.create',
   'PolygonRightPanelLiveView',
   'preparePolygonInfoLiveOwners',
-  'entityContextMenuRoutes:',
-  "requestCombatLabGameEditorOpen",
+  'registerEntityContextMenuRoutes',
+  'requestCombatLabGameEditorOpen',
+  "rightPanel.activateTab(view)",
 ]);
-expectIncludes('src/game/GameApplicationTypes.ts', [
-  'entityContextMenuRoutes?: EntityContextMenuRoutes',
-]);
-expectIncludes('src/game/GameApplication.ts', [
-  'this.options.entityContextMenuRoutes',
+expectIncludes('src/ui/EntityContextMenu.ts', [
+  'getRegisteredEntityContextMenuRoutes',
 ]);
 expectIncludes('src/input/TacticalOrderRadialInput.ts', [
   'contextRoutes: EntityContextMenuRoutes = {}',
