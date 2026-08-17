@@ -1,36 +1,35 @@
-/* Final visual polish for the shared Editors workspace. No data is invented:
-   metric values are populated from the mounted authoritative route profile. */
+/* Final visual polish for the accepted Polygon shared Editors surface.
+   Presentation only: no data, commands, ownership, or product contracts change. */
 
+/* Route summary values are populated from the mounted authoritative route profile. */
 body.app-shell-mode-combat-lab .polygon-route-profile-feature-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
-  margin: 10px 12px 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 10px 12px 9px;
 }
 
 body.app-shell-mode-combat-lab .polygon-route-profile-feature {
   min-width: 0;
-  min-height: 58px;
   box-sizing: border-box;
-  display: grid;
-  align-content: center;
-  gap: 5px;
   padding: 8px 9px;
-  border: 1px solid #d0cfc6;
+  border: 1px solid var(--polygon-line);
   border-radius: 5px;
   background: #fff;
 }
 
 body.app-shell-mode-combat-lab .polygon-route-profile-feature span {
+  display: block;
   overflow: hidden;
-  color: #777a71;
-  font-size: 7.5px;
-  font-weight: 850;
+  color: var(--polygon-muted);
+  font-size: 7px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 body.app-shell-mode-combat-lab .polygon-route-profile-feature strong {
+  display: block;
+  margin-top: 3px;
   overflow: hidden;
   color: #34372f;
   font-size: 10px;
@@ -39,53 +38,272 @@ body.app-shell-mode-combat-lab .polygon-route-profile-feature strong {
   white-space: nowrap;
 }
 
-/* Prototype category rail uses small square pictograms beside each editor. */
-body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-item {
+/* Accepted HTML: min(1680px, 96vw) × min(900px, 92vh), centred. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal {
+  top: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: 50% !important;
+  width: min(1680px, 96vw) !important;
+  height: min(900px, 92vh) !important;
+  max-height: 92vh !important;
+  transform: translate(-50%, -50%);
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal-header {
   position: relative;
-  min-height: 42px;
-  padding-left: 42px;
+  min-height: 56px;
+  padding: 9px 12px 9px 16px;
+}
+
+/* The prototype carries this quiet header note between title and close control. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal-header::after {
+  content: 'Единое окно настроек проекта';
+  position: absolute;
+  top: 50%;
+  right: 56px;
+  margin-right: 4px;
+  transform: translateY(-50%);
+  color: #6f7268;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* The accepted navigation has text-only 34px rows: no decorative icon rail. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-nav {
+  padding: 8px !important;
+  background: #e5e4dc !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-nav-group + .combat-lab-game-editor-nav-group {
+  margin-top: 10px !important;
+  padding-top: 9px !important;
+  border-top-color: var(--polygon-line) !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-item {
+  min-height: 34px !important;
+  justify-content: flex-start !important;
+  gap: 5px !important;
+  padding: 6px 8px !important;
 }
 
 body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-item::before {
-  content: '□';
-  position: absolute;
-  top: 50%;
-  left: 8px;
-  width: 25px;
-  height: 25px;
-  display: grid;
-  place-items: center;
-  transform: translateY(-50%);
-  border: 1px solid #b8baaf;
-  border-radius: 4px;
-  color: #666a5f;
-  background: rgba(255, 255, 255, .72);
-  font-size: 12px;
-  font-weight: 900;
+  content: none !important;
+  display: none !important;
 }
 
-body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-item.is-active::before {
-  border-color: rgba(255, 255, 255, .34);
-  color: #fff;
-  background: rgba(255, 255, 255, .08);
+/* Route-profile column and controls mirror the accepted prototype measurements. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-layout {
+  grid-template-columns: 238px minmax(0, 1fr) !important;
 }
 
-body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="routeProfiles"]::before { content: '⇢'; }
-body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="behaviorProfiles"]::before { content: '◉'; }
-body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="soldierData"]::before { content: '♟'; }
-body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="weapons"]::before { content: '⌁'; }
-body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="projectiles"]::before { content: '↗'; }
-body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="injuries"]::before { content: '+'; }
-body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="maps"]::before { content: '▦'; }
-body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="terrain"]::before { content: '⌂'; }
-body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="environment"]::before { content: '☼'; }
-body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="structureMaterials"]::before { content: '▤'; }
-body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="visibility"]::before { content: '◎'; }
-body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="perception"]::before { content: '◌'; }
-body.app-shell-mode-combat-lab .combat-lab-game-editor-item[data-game-editor-id="ruleset"]::before { content: '⚙'; }
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-list-panel,
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-list-heading,
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-list {
+  background: #efeee7 !important;
+}
 
-@media (max-width: 980px) {
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-list-heading {
+  min-height: 58px !important;
+  padding: 9px 10px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-list-heading::before {
+  margin-bottom: 2px !important;
+  color: #6f7268 !important;
+  font-size: 7.5px !important;
+  letter-spacing: .1em !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-list-heading h2 {
+  font-size: 11.5px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-list-heading > span {
+  top: 18px !important;
+  right: 10px !important;
+  min-width: 24px !important;
+  padding: 3px 6px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  color: #5c6057 !important;
+  background: #dddcd4 !important;
+  font-size: 8px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-list {
+  gap: 0 !important;
+  padding: 7px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-list > button {
+  min-height: 43px !important;
+  gap: 2px !important;
+  margin: 2px 0 !important;
+  padding: 6px 7px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-list > button:is(.active,[aria-selected='true']) {
+  border-color: #9d8832 !important;
+  background: #fff9d9 !important;
+  box-shadow: inset 3px 0 0 var(--polygon-accent) !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-list-actions {
+  min-height: 0 !important;
+  grid-template-columns: 1fr !important;
+  gap: 5px !important;
+  padding: 8px !important;
+  background: #e9e8e0 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-form-heading {
+  min-height: 86px !important;
+  align-items: flex-start !important;
+  gap: 16px !important;
+  padding: 12px 15px 10px !important;
+  background: #fbfaf5 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-form-heading h2 {
+  font-size: 18px !important;
+  line-height: 1.05 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-form-heading p {
+  display: block !important;
+  max-width: 780px !important;
+  margin: 5px 0 0 !important;
+  color: #5e6258 !important;
+  font-size: 9px !important;
+  line-height: 1.4 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .polygon-route-profile-tabs {
+  height: auto !important;
+  min-height: 42px !important;
+  align-items: center !important;
+  gap: 2px !important;
+  padding: 6px 12px !important;
+  background: #ecebe3 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .polygon-route-profile-tabs button {
+  min-height: 30px !important;
+  padding: 5px 12px !important;
+  border: 1px solid transparent !important;
+  border-radius: 4px !important;
+  color: #4e5249 !important;
+  background: transparent !important;
+  font-size: 8.5px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .polygon-route-profile-tabs button:hover:not(:disabled) {
+  color: #4e5249 !important;
+  background: #e1e0d8 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .polygon-route-profile-tabs button.is-active {
+  border-color: var(--polygon-top) !important;
+  color: #fff !important;
+  background: var(--polygon-top) !important;
+}
+
+/* Style the live summary as the prototype's light explanatory intro card. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .polygon-route-profile-summary {
+  display: block !important;
+  margin: 10px 12px 8px !important;
+  padding: 9px 10px !important;
+  border: 1px solid rgba(69, 84, 48, .22) !important;
+  border-radius: 5px !important;
+  background: #eef1e7 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .polygon-route-profile-summary-kicker {
+  color: #68705f !important;
+  font-size: 7px !important;
+  letter-spacing: .1em !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .polygon-route-profile-summary strong {
+  margin-top: 2px !important;
+  color: #34372f !important;
+  font-size: 12px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .polygon-route-profile-summary p {
+  margin: 3px 0 0 !important;
+  color: #65695f !important;
+  font-size: 8px !important;
+  line-height: 1.4 !important;
+}
+
+@media (max-width: 1250px) {
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal {
+    width: 97vw !important;
+  }
+
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-workspace {
+    grid-template-columns: 184px minmax(0, 1fr) !important;
+  }
+
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor-host .polygon-profile-editor-layout,
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor-host .navigation-profile-layout,
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor-host .tactical-position-profile-layout,
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor-host .gameplay-tuning-editor,
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor-host .polygon-combat-layout {
+    grid-template-columns: 214px minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal {
+    width: 98vw !important;
+    height: 95vh !important;
+    max-height: 95vh !important;
+  }
+
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal-header::after {
+    display: none;
+  }
+
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-workspace {
+    grid-template-columns: 154px minmax(0, 1fr) !important;
+  }
+
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .combat-lab-game-editor-item-label {
+    font-size: 8.5px !important;
+  }
+
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor-host .polygon-profile-editor-layout,
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor-host .navigation-profile-layout,
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor-host .tactical-position-profile-layout,
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor-host .gameplay-tuning-editor,
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor-host .polygon-combat-layout {
+    grid-template-columns: 185px minmax(0, 1fr) !important;
+  }
+
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-form-heading {
+    padding: 10px !important;
+  }
+
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-form-heading h2 {
+    font-size: 15px !important;
+  }
+
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .navigation-profile-form-actions {
+    display: none !important;
+  }
+
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--routeProfiles .polygon-route-profile-tabs button {
+    padding: 5px 8px !important;
+  }
+
   body.app-shell-mode-combat-lab .polygon-route-profile-feature-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
