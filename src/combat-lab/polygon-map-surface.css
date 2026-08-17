@@ -6,6 +6,14 @@
 body.app-shell-mode-combat-lab {
   --polygon-map-frame-left-gap: 66px;
   --polygon-map-frame-right-gap: 64px;
+  background-color: var(--polygon-map);
+  background-image:
+    linear-gradient(rgba(61, 69, 46, .13) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(61, 69, 46, .13) 1px, transparent 1px),
+    linear-gradient(rgba(61, 69, 46, .065) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(61, 69, 46, .065) 1px, transparent 1px);
+  background-size: 80px 80px, 80px 80px, 20px 20px, 20px 20px;
+  background-position: 0 var(--polygon-chrome-h), 0 var(--polygon-chrome-h), 0 var(--polygon-chrome-h), 0 var(--polygon-chrome-h);
 }
 
 body.app-shell-mode-combat-lab #combat-lab-extension-root .combat-lab-workspace.polygon-shell {
@@ -13,17 +21,11 @@ body.app-shell-mode-combat-lab #combat-lab-extension-root .combat-lab-workspace.
   backdrop-filter: none;
 }
 
-/* Interface Linkage v1 has a continuous technical grid below the chrome. The
-   finite tactical camera is a separate central frame between the two floating
-   panels. This background is presentation only. */
+/* The shell viewport must remain transparent. An opaque grid here sits above
+   the product canvas because the Polygon shell is the presentation overlay;
+   the technical grid therefore lives on body, behind the real camera. */
 body.app-shell-mode-combat-lab .polygon-shell-viewport {
-  background-color: var(--polygon-map) !important;
-  background-image:
-    linear-gradient(rgba(61, 69, 46, .13) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(61, 69, 46, .13) 1px, transparent 1px),
-    linear-gradient(rgba(61, 69, 46, .065) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(61, 69, 46, .065) 1px, transparent 1px) !important;
-  background-size: 80px 80px, 80px 80px, 20px 20px, 20px 20px !important;
+  background: transparent !important;
 }
 
 body.app-shell-mode-combat-lab .polygon-shell-map-placeholder {
@@ -50,6 +52,29 @@ body.app-shell-mode-combat-lab.workspace-editor #app {
   border-radius: 0;
   background: var(--polygon-map);
   box-shadow: none;
+}
+
+/* Accepted prototype map badge. It is presentation-only and deliberately does
+   not claim an editor/runtime mode that has no product owner. */
+body.app-shell-mode-combat-lab #app::before {
+  content: 'Новый эксперимент';
+  position: absolute;
+  top: -29px;
+  left: 50%;
+  z-index: 8;
+  transform: translateX(-50%);
+  height: 29px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid rgba(44, 49, 39, .22);
+  border-bottom: 0;
+  border-radius: 5px 5px 0 0;
+  color: #34372f;
+  background: rgba(248, 247, 241, .95);
+  font: 800 11px/1 Arial, Helvetica, sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 body.app-shell-mode-combat-lab #app canvas {
