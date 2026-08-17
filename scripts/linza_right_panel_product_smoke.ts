@@ -1,17 +1,20 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { getActiveEnvironmentProfile } from '../src/core/map/EnvironmentProfileRuntime';
-import { getSurfaceMaterial, getVegetationMaterial } from '../src/core/map/EnvironmentMaterialProfile';
-import { getCell, type TacticalMapData } from '../src/core/map/MapModel';
-import { clearAttentionOverride, setAttentionMode, setSearchSector } from '../src/core/perception/AttentionController';
 import { advanceReportedContact, createEmptyPerceptionKnowledge, upsertPerceptionContact } from '../src/core/perception/PerceptionContact';
-import { applyAttentionProfileToUnit } from '../src/core/perception/AttentionProfiles';
-import { getAttentionProfileRegistry } from '../src/core/perception/AttentionProfileStorage';
 import { createInitialState } from '../src/core/simulation/SimulationState';
-import { getMapObjectSpatialIndex, getMapObjectSpatialIndexDiagnostics } from '../src/core/spatial/MapObjectSpatialIndex';
-import { getDirectionalTerrainStaticGrid } from '../src/core/terrain/DirectionalTerrainStaticGrid';
-import { sampleSmoothHeightLevel } from '../src/core/terrain/SmoothTerrain';
+import { getMapObjectSpatialIndexDiagnostics } from '../src/core/spatial/MapObjectSpatialIndex';
+import type { TacticalMapData } from '../src/core/map/MapModel';
 import type { UnitData } from '../src/core/units/UnitModel';
+import {
+  applyPolygonAttentionProfile,
+  clearPolygonAttentionOverride,
+  preparePolygonInfoLiveOwners,
+  readPolygonAttentionLive,
+  readPolygonInfoLive,
+  readPolygonMemoryLive,
+  setPolygonAttentionMode,
+  setPolygonSearchSector,
+} from '../src/combat-lab/right-panel/PolygonRightPanelLive';
 
 const mapData: TacticalMapData = {
   width: 24,
@@ -42,47 +45,48 @@ const observerData: UnitData = {
 const state = createInitialState(mapData, [observerData]);
 const observer = state.units[0]!;
 
-// Info: exercise the existing product owners rather than a LINZA-owned read store.
-const point = { x: 8.5, y: 8.5 };
-const cell = getCell(state.map, 8, 8);
-assert.ok(cell, 'canonical map owner must resolve the inspected cell');
-assert.equal(sampleSmoothHeightLevel(state.map, point.x, point.y), 0, 'height must come from SmoothTerrain');
-const directional = getDirectionalTerrainStaticGrid(state.map);
-const terrainIndex = 8 * state.map.width + 8;
-assert.ok(Number.isFinite(directional.slopeMagnitude[terrainIndex]), 'prepared terrain owner must publish a finite slope');
-const environment = getActiveEnvironmentProfile();
-const surface = getSurfaceMaterial(environment, cell.surfaceMaterialId);
-const vegetation = getVegetationMaterial(environment, cell.vegetationMaterialId);
-assert.equal(typeof surface.movement.passable, 'boolean');
-assert.ok(Number.isFinite(surface.movement.resistance));
-assert.ok(Number.isFinite(vegetation.visibility.targetConcealment));
+// Info: prepare heavy canonical owners before the pointer path, then perform one local query.
+const preparedInfo = preparePolygonInfoLiveOwners(state);
+const beforeQuery = getMapObjectSpatialIndexDiagnostics(state.map);
+const info = readPolygonInfoLive(state, { x: 8.5, y: 8.5, pinned: false }, preparedInfo);
+const afterQuery = getMapObjectSpatialIndexDiagnostics(state.map);
+assert.equal(info.availability, 'available');
+assert.equal(info.cellX, 8);
+assert.equal(info.cellY, 8);
+assert.equal(info.surfaceNameRu, 'Поле');
+assert.equal(info.passable, true);
+assert.equal(info.surfaceResistance, 1);
+assert.equal(info.vegetationResistance, 1);
+assert.equal(info.nearbyObjects.length, 1);
+assert.equal(info.nearbyObjects[0]!.id, 'near-tree');
+assert.equal(info.nearbyUnits.availability, 'unavailable', 'hover path must not scan every unit without a bounded owner');
+assert.equal(info.danger.availability, 'unavailable', 'missing danger contract must stay explicitly unavailable');
+assert.equal(afterQuery.queryCount, beforeQuery.queryCount + 1, 'Info must use one local prepared object query');
+assert.equal(afterQuery.lastCandidateCount, 1, 'local query must exclude the far object');
 
-const objectIndex = getMapObjectSpatialIndex(state.map);
-assert.deepEqual(objectIndex.queryCircle(point, 2).map((item) => item.id), ['near-tree']);
-const objectDiagnostics = getMapObjectSpatialIndexDiagnostics(state.map);
-assert.equal(objectDiagnostics.queryCount, 1, 'Info should be able to use one local prepared object query');
-assert.equal(objectDiagnostics.lastCandidateCount, 1, 'local query must not return the far object');
-
-// Attention: use existing production write functions and read back the same UnitModel.
-const registry = getAttentionProfileRegistry();
-assert.equal(registry.hasProfile('observer'), true);
-applyAttentionProfileToUnit(observer, registry.getProfile('observer'));
+// Attention: every write goes through the product functions wrapped by the thin adapter, then reads back UnitModel.
+let attention = readPolygonAttentionLive(state, observer.id);
+assert.equal(attention.availability, 'available');
+attention = applyPolygonAttentionProfile(state, observer.id, 'observer');
+assert.equal(attention.profileId, 'observer');
 assert.equal(observer.playerAttentionProfileId, 'observer');
 
-setAttentionMode(observer, 'march', 'player');
+attention = setPolygonAttentionMode(state, observer.id, 'march');
+assert.equal(attention.mode, 'march');
+assert.equal(attention.modeSource, 'player');
 assert.equal(observer.attentionRuntime.mode, 'march');
-assert.equal(observer.attentionRuntime.modeSource, 'player');
 
-setSearchSector(observer, Math.PI / 3, Math.PI / 2, 'player');
-assert.equal(observer.attentionRuntime.mode, 'search');
-assert.equal(observer.attentionRuntime.modeSource, 'player');
-assert.ok(Math.abs(observer.attentionRuntime.searchCenterRadians - Math.PI / 3) < 1e-9);
-assert.ok(Math.abs(observer.attentionRuntime.searchArcRadians - Math.PI / 2) < 1e-9);
+attention = setPolygonSearchSector(state, observer.id, 60, 90);
+assert.equal(attention.mode, 'search');
+assert.equal(attention.modeSource, 'player');
+assert.ok(Math.abs((attention.searchCenterDegrees ?? 0) - 60) < 1e-9);
+assert.ok(Math.abs((attention.searchArcDegrees ?? 0) - 90) < 1e-9);
 
-clearAttentionOverride(observer);
+attention = clearPolygonAttentionOverride(state, observer.id);
+assert.equal(attention.modeSource, 'automatic');
 assert.equal(observer.attentionRuntime.modeSource, 'automatic');
 
-// Memory: reported information stays inside the existing perception knowledge owner.
+// Memory: use only the selected soldier's canonical perception knowledge. Reported data remains intel provenance.
 observer.perceptionKnowledge = createEmptyPerceptionKnowledge();
 const reported = advanceReportedContact(null, {
   id: 'reported-contact',
@@ -95,12 +99,30 @@ const reported = advanceReportedContact(null, {
   source: 'reported',
   explanationRu: ['Положение получено из доклада.'],
 });
+const sound = advanceReportedContact(null, {
+  id: 'sound-contact',
+  stimulusId: 'sound:sound-contact',
+  labelRu: 'Источник звука',
+  position: { x: 6, y: 3 },
+  confidence: 30,
+  uncertaintyCells: 5,
+  nowSeconds: 6,
+  source: 'sound',
+  explanationRu: ['Слышен звук.'],
+});
 upsertPerceptionContact(observer.perceptionKnowledge, reported);
-assert.equal(observer.perceptionKnowledge.contacts.length, 1);
-assert.equal(observer.perceptionKnowledge.contacts[0]!.source, 'reported');
-assert.deepEqual(observer.perceptionKnowledge.contacts[0]!.lastKnownPosition, { x: 12, y: 10 });
+upsertPerceptionContact(observer.perceptionKnowledge, sound);
+state.simulationTimeSeconds = 8;
+const memory = readPolygonMemoryLive(state, observer.id);
+assert.equal(memory.availability, 'available');
+assert.equal(memory.intelCount, 1);
+assert.equal(memory.assumptionCount, 1);
+assert.equal(memory.contacts.find((item) => item.id === 'reported-contact')?.kind, 'intel');
+assert.equal(memory.contacts.find((item) => item.id === 'sound-contact')?.kind, 'assumption');
+assert.equal(memory.estimatedFront.availability, 'unavailable');
+assert.deepEqual(memory.contacts.find((item) => item.id === 'reported-contact')?.lastKnownPosition, { x: 12, y: 10 });
 
-// Revision boundary: LINZA must not own history, front semantics or recurring SimulationTick work.
+// Ownership boundary: no LINZA history/front/read-model/selection/runtime owner and no recurring UI loop.
 for (const forbiddenPath of [
   'src/core/knowledge/EstimatedFront.ts',
   'src/core/knowledge/UnitKnowledgeHistory.ts',
@@ -109,9 +131,21 @@ for (const forbiddenPath of [
   'src/core/perception/AttentionCommands.ts',
   'src/core/perception/AttentionReadModel.ts',
 ]) {
-  assert.equal(existsSync(forbiddenPath), false, `contract-only LINZA revision must not ship ${forbiddenPath}`);
+  assert.equal(existsSync(forbiddenPath), false, `LINZA must not ship ${forbiddenPath}`);
 }
 const simulationTickSource = readFileSync('src/core/simulation/SimulationTick.ts', 'utf8');
 assert.doesNotMatch(simulationTickSource, /UnitKnowledgeHistory|recordSimulationKnowledgeHistory/);
+const liveSource = readFileSync('src/combat-lab/right-panel/PolygonRightPanelLive.ts', 'utf8');
+assert.doesNotMatch(liveSource, /buildBlackboardForUnit|SimulationTick|selectedUnitId\s*=|new\s+MapObjectSpatialIndex/);
+assert.match(liveSource, /preparePolygonInfoLiveOwners/);
+assert.match(liveSource, /nearbyUnits:\s*\{\s*availability:\s*'unavailable'/);
+const viewSource = readFileSync('src/combat-lab/right-panel/PolygonRightPanelLiveView.ts', 'utf8');
+assert.doesNotMatch(viewSource, /setInterval|requestAnimationFrame|CombatLabSelectionController/);
+assert.match(viewSource, /getAttentionContext/);
+assert.match(viewSource, /applyPolygonAttentionProfile/);
+assert.match(viewSource, /setPolygonSearchSector/);
+const cssSource = readFileSync('src/combat-lab/right-panel/polygon-right-panel-live.css', 'utf8');
+assert.match(cssSource, /\.polygon-linza-card\s*\{[^}]*border-radius:\s*6px/s);
+assert.match(cssSource, /\.polygon-linza-memory-entry/);
 
-console.log('LINZA_RIGHT_PANEL_CONTRACT_SMOKE_OK: canonical Info/Attention/Memory owners exercised; no LINZA history/front/runtime owner remains.');
+console.log('LINZA_RIGHT_PANEL_LIVE_SMOKE_OK: bounded Info + canonical Attention write/readback + subjective Memory; no second owner/history/front.');
