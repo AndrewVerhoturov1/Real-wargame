@@ -1,0 +1,79 @@
+/* Polygon map-surface integration.
+   The tactical board already exists in GameApplication -> PixiTacticalBoardApp ->
+   PixiMapRenderer. This layer only exposes that product-owned canvas through the
+   accepted Polygon shell; it does not create a second renderer or map state. */
+
+body.app-shell-mode-combat-lab {
+  --polygon-map-left-edge: calc(var(--polygon-panel-gap) + var(--polygon-left-w) + var(--polygon-board-gap));
+  --polygon-map-right-edge: calc(var(--polygon-panel-gap) + var(--polygon-right-w) + var(--polygon-board-gap));
+}
+
+body.app-shell-mode-combat-lab.combat-lab-dock-collapsed {
+  --polygon-map-left-edge: calc(var(--polygon-panel-gap) + var(--polygon-collapsed-w) + var(--polygon-board-gap));
+}
+
+body.app-shell-mode-combat-lab.polygon-shell-right-collapsed {
+  --polygon-map-right-edge: calc(var(--polygon-panel-gap) + var(--polygon-collapsed-w) + var(--polygon-board-gap));
+}
+
+/* The accepted Polygon workspace intentionally keeps legacy combat-lab-dock
+   classes for compatibility. Their full-screen backdrop blur belongs to the
+   old drawer and would blur the live product canvas behind the new shell. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .combat-lab-workspace.polygon-shell {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-viewport {
+  background: transparent !important;
+}
+
+body.app-shell-mode-combat-lab .polygon-shell-map-placeholder {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab #app,
+body.app-shell-mode-combat-lab.workspace-simulation #app,
+body.app-shell-mode-combat-lab.workspace-editor #app {
+  --polygon-map-max-width: calc(100vw - var(--polygon-map-left-edge) - var(--polygon-map-right-edge));
+  --polygon-map-max-height: calc(100vh - var(--polygon-topbar-h) - var(--polygon-history-h) - var(--polygon-panel-gap) - var(--polygon-panel-gap));
+  --polygon-map-size: min(var(--polygon-map-max-width), var(--polygon-map-max-height));
+
+  top: calc(var(--polygon-topbar-h) + var(--polygon-history-h) + var(--polygon-panel-gap)) !important;
+  right: var(--polygon-map-right-edge) !important;
+  bottom: var(--polygon-panel-gap) !important;
+  left: var(--polygon-map-left-edge) !important;
+  width: var(--polygon-map-size) !important;
+  height: var(--polygon-map-size) !important;
+  margin: auto;
+  box-sizing: border-box;
+  overflow: hidden;
+  transform: none;
+  border: 1px solid rgba(69, 74, 58, .52);
+  border-radius: var(--polygon-radius);
+  background: var(--polygon-placeholder-board);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+
+body.app-shell-mode-combat-lab #app canvas {
+  visibility: visible !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* HtmlOverlayRenderer projects labels into root-local canvas coordinates. Its
+   shared full-screen CSS uses position: fixed, which is correct for the legacy
+   full-viewport board but would detach labels from a framed Polygon map. */
+body.app-shell-mode-combat-lab #app .html-map-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* The old fixed debug scale label belongs to the previous full-screen HUD and
+   would escape the clipped Polygon map frame after the root is repositioned. */
+body.app-shell-mode-combat-lab #app .map-scale-fixed-label {
+  display: none !important;
+}
