@@ -15,6 +15,7 @@ import './game-editors/combat-lab-game-editors.css';
 import './game-editors/combat-lab-game-editor-shell.css';
 import './game-editors/polygon-editor-parity.css';
 import './game-editors/polygon-global-editor-parity.css';
+import './game-editors/polygon-global-editor-feature-grid.css';
 import './polygon-map-surface.css';
 import { selectUnit, setMouseGridPosition } from '../core/simulation/SimulationState';
 import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
