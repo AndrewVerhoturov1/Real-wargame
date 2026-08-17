@@ -834,3 +834,67 @@ Deployment ID:
 6. канонический HTML-прототип.
 
 Далее визуально доводить текущий shell, **не начиная его заново и не меняя runtime architecture без отдельной причины**.
+
+---
+
+## 17. Принятое продолжение exact-shell: hover правой группы шапки
+
+Дата: 2026-08-17.
+
+Пользователь принял уточнение hover правой группы шапки exact-shell.
+
+### Что принято
+
+Пять controls правой группы шапки — `File`, `Editors`, `View`, `EN`, `Menu` — используют единый нейтральный prototype-ховер:
+
+- фон `rgba(255,255,255,.15)`;
+- рамка `rgba(255,255,255,.16)`.
+
+Изменение чисто визуальное.
+
+### Границы изменения
+
+Реализация ограничена CSS hover-оверрайдами в:
+
+`src/combat-lab/polygon-shell-exact.css`
+
+Не изменяются:
+
+- внутренности меню;
+- dropdown-функциональность;
+- aria/focus-поведение;
+- нижние панели;
+- History/viewTime;
+- LIVE Unit;
+- Инфо/Внимание/Память;
+- linked entities;
+- Save/Open;
+- контекстные меню;
+- Unit Editor.
+
+### Доказательства
+
+- реальный локальный браузер;
+- product URL `localhost:5173/combat-lab.html`;
+- прямое сравнение computed-style с prototype;
+- отсутствие product console errors.
+
+### Проверки
+
+Уже пройдены:
+
+- `npx tsc --noEmit`;
+- `node scripts/combat_lab_polygon_shell_contract_smoke.mjs`;
+- `npm run build`;
+- `git diff --check`.
+
+### SHA и ветка
+
+- ветка: `feature/20260816-polygon-arka-exact-shell`;
+- product commit: `277dc05a0c9683558d10de310bcdf55ddd39d4e7`;
+- docs-only HEAD: `8a8d5fa28df8381ede866933d44398f60739ebe8`;
+- коммит, пуш и деплой не выполнялись.
+
+### Важно
+
+Это принятое уточнение header-hover, а не заявление, что весь shell pixel-perfect или что все product capabilities реализованы.

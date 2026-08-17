@@ -24,6 +24,10 @@
   backdrop-filter: blur(7px);
 }
 
+.app-shell-menu-trigger__icon {
+  display: none;
+}
+
 .app-shell-menu-trigger:hover {
   background: rgba(35, 41, 29, 0.97);
 }

@@ -133,6 +133,14 @@ body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-top-but
   background: rgba(255, 255, 255, .15);
 }
 
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-top-button-label {
+  display: inline;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-top-button > svg {
+  display: none;
+}
+
 body.app-shell-mode-combat-lab .polygon-shell-run-toolbar {
   min-width: 0;
   max-width: min(620px, 48vw);
@@ -185,9 +193,9 @@ body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolba
   background: #e3c64f;
 }
 
-body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button:nth-of-type(4),
-body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button:nth-of-type(5),
-body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-toolbar > button:nth-of-type(6),
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-step,
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-stop,
+body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-run-batch,
 body.app-shell-mode-combat-lab .polygon-shell-run-toolbar .combat-lab-experiment-settings-summary {
   display: none !important;
 }

@@ -85,13 +85,13 @@ export class CombatLabWorkspaceTabs {
 
     const topbarCenter = node('div', 'polygon-shell-topbar-center');
     topbarCenter.append(
-      shellButton('ФАЙЛ', 'Файл'),
-      shellButton('РЕДАКТОРЫ', 'Редакторы'),
+      shellButton('ФАЙЛ', 'Файл', 'file'),
+      shellButton('РЕДАКТОРЫ', 'Редакторы', 'editors'),
     );
 
     const topbarRight = node('div', 'polygon-shell-topbar-right');
     topbarRight.append(
-      shellButton('ВИД ▾', 'Вид'),
+      shellButton('ВИД ▾', 'Вид', 'view'),
       shellButton('EN', 'Язык'),
     );
     topbar.append(topbarLeft, topbarCenter, topbarRight);
@@ -392,12 +392,55 @@ function requestWorkspaceResize(): void {
   window.requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
 }
 
-function shellButton(label: string, title = label): HTMLButtonElement {
-  const element = button(label, 'polygon-shell-top-button');
+function shellButton(label: string, title = label, icon = ''): HTMLButtonElement {
+  const element = button('', 'polygon-shell-top-button');
+  const labelElement = node('span', 'polygon-shell-top-button-label', label);
+  labelElement.setAttribute('aria-hidden', 'true');
+  element.append(labelElement);
+  if (icon === 'file' || icon === 'editors' || icon === 'view') {
+    element.append(shellIcon(icon));
+    if (icon === 'view') element.append(node('span', 'polygon-shell-top-button-caret', '▾'));
+  }
+  if (icon) element.classList.add(`polygon-shell-top-button--${icon}`);
   element.setAttribute('aria-disabled', 'true');
   element.setAttribute('aria-label', title);
   element.title = `${title}: команда будет подключена через штатный product owner в отдельной задаче.`;
   return element;
+}
+
+function shellIcon(icon: 'file' | 'editors' | 'view'): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+
+  if (icon === 'file') {
+    appendSvgPath(svg, 'M6 3h8l4 4v14H6z');
+    appendSvgPath(svg, 'M14 3v5h5M9 12h6M9 16h6');
+  } else if (icon === 'editors') {
+    appendSvgPath(svg, 'M4 6h10M18 6h2M4 12h3M11 12h9M4 18h8M16 18h4');
+    appendSvgCircle(svg, 16, 6, 2);
+    appendSvgCircle(svg, 9, 12, 2);
+    appendSvgCircle(svg, 14, 18, 2);
+  } else {
+    appendSvgPath(svg, 'M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z');
+    appendSvgCircle(svg, 12, 12, 2.5);
+  }
+
+  return svg;
+}
+
+function appendSvgPath(svg: SVGSVGElement, data: string): void {
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', data);
+  svg.append(path);
+}
+
+function appendSvgCircle(svg: SVGSVGElement, cx: number, cy: number, radius: number): void {
+  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  circle.setAttribute('cx', String(cx));
+  circle.setAttribute('cy', String(cy));
+  circle.setAttribute('r', String(radius));
+  svg.append(circle);
 }
 
 function historyButton(label: string, title = label): HTMLButtonElement {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [hosts, tabs, main, shellCss, compatCss, exactCss, settingsSummary] = await Promise.all([
+const [hosts, tabs, main, shellCss, compatCss, exactCss, settingsSummary, appShellMenu] = await Promise.all([
   readFile('src/combat-lab/ui/CombatLabWorkspaceHosts.ts', 'utf8'),
   readFile('src/combat-lab/ui/CombatLabWorkspaceTabs.ts', 'utf8'),
   readFile('src/combat-lab/main.ts', 'utf8'),
@@ -9,6 +9,7 @@ const [hosts, tabs, main, shellCss, compatCss, exactCss, settingsSummary] = awai
   readFile('src/combat-lab/polygon-shell-compat.css', 'utf8'),
   readFile('src/combat-lab/polygon-shell-exact.css', 'utf8'),
   readFile('src/combat-lab/ui/CombatLabExperimentSettingsSummary.ts', 'utf8'),
+  readFile('src/shared/AppShellMenu.ts', 'utf8'),
 ]);
 const visualCss = `${shellCss}\n${compatCss}\n${exactCss}`;
 
@@ -34,12 +35,15 @@ for (const label of ['Юнит', 'Инфо', 'Внимание', 'Память']
 
 assert.match(tabs, /polygon-shell-topbar/);
 assert.match(tabs, /polygon-shell-brand-mark/);
-assert.match(tabs, /topbarCenter\.append\(\s*shellButton\('ФАЙЛ',\s*'Файл'\),\s*shellButton\('РЕДАКТОРЫ',\s*'Редакторы'\),\s*\)/,
+assert.match(tabs, /function shellIcon\(icon: 'file' \| 'editors' \| 'view'\)/,
+  'Topbar action buttons must use the prototype SVG icon set.');
+assert.match(tabs, /M6 3h8l4 4v14H6z/);
+assert.match(tabs, /M4 6h10M18 6h2M4 12h3M11 12h9M4 18h8M16 18h4/);
+assert.match(tabs, /M2\.5 12s3\.5-6 9\.5-6 9\.5 6 9\.5 6-3\.5 6-9\.5 6-9\.5-6-9\.5-6z/);
+assert.match(tabs, /topbarCenter\.append\(\s*shellButton\('ФАЙЛ',\s*'Файл',\s*'file'\),\s*shellButton\('РЕДАКТОРЫ',\s*'Редакторы',\s*'editors'\),\s*\)/,
   'Prototype FILE and EDITORS controls must live in the centered topbar group.');
-assert.match(tabs, /topbarRight\.append\(\s*shellButton\('ВИД ▾',\s*'Вид'\),\s*shellButton\('EN',\s*'Язык'\),\s*\)/,
+assert.match(tabs, /topbarRight\.append\(\s*shellButton\('ВИД ▾',\s*'Вид',\s*'view'\),\s*shellButton\('EN',\s*'Язык'\),\s*\)/,
   'Prototype VIEW and EN controls must live in the right topbar group.');
-assert.doesNotMatch(tabs, /shellButton\('▤'|shellButton\('≛'|shellButton\('◉'/,
-  'The final exact shell must not replace prototype text controls with arbitrary icons.');
 assert.match(tabs, /polygon-shell-history-strip/);
 assert.match(tabs, /polygon-shell-history-track/);
 assert.match(tabs, /polygon-shell-history-live/);
@@ -118,22 +122,30 @@ assert.match(exactCss, /\.polygon-shell-tab\s*\{[\s\S]*padding:\s*5px\s+9px;[\s\
   'Panel tabs retain the prototype 10px typography.');
 assert.match(exactCss, /\.polygon-shell-left-tabs\s+\.polygon-shell-tab\s*\{[\s\S]*padding-left:\s*7px;[\s\S]*padding-right:\s*7px;/,
   'Left tabs must compensate for Linux font width without shrinking text, preserving the intended two-row grouping.');
-assert.match(exactCss, /button:nth-of-type\(2\)\s*\{[\s\S]*order:\s*1;/,
+assert.match(exactCss, /combat-lab-run-start\s*\{[\s\S]*order:\s*1;/,
   'The real Start control must lead the run-control group like the prototype.');
-assert.match(exactCss, /button:nth-of-type\(1\)\s*\{[\s\S]*order:\s*2;/,
+assert.match(exactCss, /combat-lab-run-reset\s*\{[\s\S]*order:\s*2;/,
   'The real Reset control must follow Start like the prototype.');
 assert.match(exactCss, /combat-lab-experiment-speed-field\s*\{[\s\S]*order:\s*3;/,
   'The real speed selector must follow Reset.');
 assert.match(exactCss, /combat-lab-experiment-settings-summary\s*\{[\s\S]*display:\s*flex\s*!important/,
   'Real duration and seed fields must be visible in the prototype-style topbar.');
-assert.match(settingsSummary, /this\.seed\.textContent\s*=\s*`# \$\{experiment\.defaults\.seed\}`/,
+assert.match(settingsSummary, /this\.seed\.value\s*=\s*String\(experiment\.defaults\.seed\)/,
   'Topbar seed must come from the real experiment draft, not demo data.');
-assert.match(settingsSummary, /this\.duration\.textContent\s*=\s*`⏱ \$\{formatSeconds\(experiment\.stopCondition\.maximumSimulationSeconds\)\}`/,
+assert.match(settingsSummary, /this\.duration\.value\s*=\s*String\(experiment\.stopCondition\.maximumSimulationSeconds\)/,
   'Topbar duration must come from the real experiment draft, not demo data.');
+assert.match(settingsSummary, /durationUnit\.className\s*=\s*['\"]combat-lab-experiment-settings-summary__unit['\"][\s\S]*durationField\.append\(symbol\('⏱'\), this\.duration, this\.durationUnit\)/,
+  'The duration unit must be a separate trailing element so the seconds marker stays on the right.');
+assert.match(exactCss, /@media \(max-width: 760px\)[\s\S]*padding:\s*0 48px 0 10px !important;[\s\S]*combat-lab-run-start-label[\s\S]*display:\s*none !important;/,
+  'The compact header must reserve the menu slot and collapse the Start label like the prototype.');
+assert.match(exactCss, /polygon-shell-run-toolbar[\s\S]*background:\s*transparent !important;[\s\S]*combat-lab-experiment-top-status[\s\S]*display:\s*none !important;/,
+  'The compact header must remove the dark runtime plate and hide the desktop-only timer.');
 assert.match(exactCss, /\.app-shell-menu-trigger\s*\{[\s\S]*min-width:\s*62px;[\s\S]*font-size:\s*0/,
   'The existing product menu trigger must visually occupy the prototype MENU button slot.');
-assert.match(exactCss, /\.app-shell-menu-trigger::before\s*\{[\s\S]*content:\s*'МЕНЮ'/,
-  'The product menu trigger must show the prototype MENU label instead of a hamburger icon.');
+assert.match(appShellMenu, /app-shell-menu-trigger__icon/,
+  'The product menu trigger must use the prototype SVG hamburger icon.');
+assert.match(exactCss, /\.app-shell-menu-trigger__icon\s*\{[\s\S]*width:\s*19px;[\s\S]*height:\s*19px;[\s\S]*stroke-width:\s*1\.8/,
+  'The product menu trigger must use the prototype icon geometry.');
 assert.match(visualCss, /left:\s*var\(--polygon-panel-gap\)/);
 assert.match(visualCss, /right:\s*var\(--polygon-panel-gap\)/);
 assert.match(visualCss, /width:\s*var\(--polygon-left-w\)/);
