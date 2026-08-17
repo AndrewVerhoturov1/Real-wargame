@@ -9,23 +9,23 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-polygon-editor-exact-deploy-0792cae
+  group: ci-polygon-editor-exact-deploy-13a70b7
   cancel-in-progress: false
 
 jobs:
   preview:
-    name: Verify and publish exact Polygon editor Preview
+    name: Verify and publish exact Polygon editors Preview
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       EXPECTED_VERCEL_PROJECT_NAME: repo
-      PRODUCT_REF: feature/20260817-polygon-editor-inner-parity
-      PRODUCT_SHA: 0792cae6ba353c781847d3e2f7f588cdf7047329
+      PRODUCT_REF: feat/20260817-polygon-editors-visual-parity
+      PRODUCT_SHA: 13a70b76bd5087b87c0767970eb378ba192a1b49
     steps:
       - name: Checkout exact product SHA
         uses: actions/checkout@v4
         with:
-          ref: 0792cae6ba353c781847d3e2f7f588cdf7047329
+          ref: 13a70b76bd5087b87c0767970eb378ba192a1b49
           fetch-depth: 0
 
       - name: Verify exact product source
@@ -145,13 +145,13 @@ jobs:
             url: process.env.DEPLOYMENT_URL,
             ref: process.env.PRODUCT_REF,
             sha: process.env.PRODUCT_SHA,
-            status: 'READY',
+            status: 'READY'
           }, null, 2));
           NODE
 
       - name: Upload deployment result
         uses: actions/upload-artifact@v4
         with:
-          name: polygon-editor-exact-deploy-${{ github.run_id }}
+          name: polygon-editors-exact-deploy-${{ github.run_id }}
           path: artifacts/deploy/result.json
           retention-days: 14
