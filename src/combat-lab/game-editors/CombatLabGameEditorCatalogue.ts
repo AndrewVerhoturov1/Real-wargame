@@ -25,8 +25,11 @@ export interface CombatLabGameEditorCatalogueItem {
 export interface CombatLabGameEditorCatalogueGroup {
   readonly group: GameEditorGroup;
   readonly labelRu: string;
-  readonly ids: readonly PolygonVisibleEditorId[];
   readonly items: readonly CombatLabGameEditorCatalogueItem[];
+}
+
+interface PolygonCombatLabGameEditorCatalogueGroup extends CombatLabGameEditorCatalogueGroup {
+  readonly ids: readonly PolygonVisibleEditorId[];
 }
 
 export interface CombatLabGameEditorCatalogueOptions {
@@ -38,26 +41,37 @@ export interface CombatLabGameEditorCatalogueOptions {
 export function listCombatLabGameEditorGroups(
   registry: GameEditorRegistry,
 ): readonly CombatLabGameEditorCatalogueGroup[] {
+  const grouped = new Map<GameEditorGroup, CombatLabGameEditorCatalogueItem[]>();
+  for (const definition of registry.listForSurface('combat-lab')) {
+    const activation = definition.activationFor('combat-lab');
+    const items = grouped.get(definition.group) ?? [];
+    items.push(Object.freeze({ definition, activation }));
+    grouped.set(definition.group, items);
+  }
+  return Object.freeze([...grouped.entries()].map(([group, items]) => Object.freeze({
+    group,
+    labelRu: GROUP_LABEL_RU[group],
+    items: Object.freeze(items),
+  })));
+}
+
+function listPolygonCombatLabGameEditorGroups(
+  registry: GameEditorRegistry,
+): readonly PolygonCombatLabGameEditorCatalogueGroup[] {
+  const discovered = listCombatLabGameEditorGroups(registry);
   const available = new Map(
-    registry.listForSurface('combat-lab').map((definition) => [definition.id, definition] as const),
+    discovered.flatMap((group) => group.items).map((item) => [item.definition.id, item] as const),
   );
-  return Object.freeze(POLYGON_GLOBAL_EDITOR_GROUPS.map(({ group, ids }) => {
-    const items = ids.flatMap((id): CombatLabGameEditorCatalogueItem[] => {
+  return Object.freeze(POLYGON_GLOBAL_EDITOR_GROUPS.map(({ group, ids }) => Object.freeze({
+    group,
+    labelRu: GROUP_LABEL_RU[group],
+    ids,
+    items: Object.freeze(ids.flatMap((id): CombatLabGameEditorCatalogueItem[] => {
       if (id === 'surfaceTypes') return [];
-      const definition = available.get(id);
-      if (!definition) return [];
-      return [{
-        definition,
-        activation: definition.activationFor('combat-lab'),
-      }];
-    });
-    return Object.freeze({
-      group,
-      labelRu: GROUP_LABEL_RU[group],
-      ids,
-      items: Object.freeze(items),
-    });
-  }));
+      const item = available.get(id);
+      return item ? [item] : [];
+    })),
+  })));
 }
 
 export class CombatLabGameEditorCatalogue {
@@ -84,7 +98,7 @@ export class CombatLabGameEditorCatalogue {
     this.disposeInstallation();
     this.removeListeners();
 
-    const groups = listCombatLabGameEditorGroups(this.options.registry);
+    const groups = listPolygonCombatLabGameEditorGroups(this.options.registry);
     const allItems = groups.flatMap((group) => [...group.items]);
     if (!allItems.some((item) => item.definition.id === this.selectedEditorId)) {
       this.selectedEditorId = allItems.find((item) => item.activation === 'embedded' && item.definition.mount)?.definition.id
@@ -121,7 +135,7 @@ export class CombatLabGameEditorCatalogue {
     this.options.host.replaceChildren();
   }
 
-  private renderNavigationGroup(group: CombatLabGameEditorCatalogueGroup): HTMLElement {
+  private renderNavigationGroup(group: PolygonCombatLabGameEditorCatalogueGroup): HTMLElement {
     const section = node('section', 'combat-lab-game-editor-nav-group');
     section.dataset.gameEditorGroup = group.group;
     section.append(node('div', 'combat-lab-game-editor-nav-group-title', group.labelRu));
