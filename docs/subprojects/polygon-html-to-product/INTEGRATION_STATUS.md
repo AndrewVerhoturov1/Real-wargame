@@ -1,64 +1,125 @@
-# Перенос Полигона — статус интеграции принятых результатов
+# Перенос Полигона — текущий статус после интеграции
 
 Дата: 2026-08-17
 
-## Решение пользователя
+## Текущая продуктовая база
 
-Пользователь лично проверил финальный внешний результат АРКИ и подтвердил, что он его устраивает. Поэтому прежний Route X-блокер, связанный только с отсутствием независимого pixel-perfect доказательства финального SHA АРКИ, считается снятым пользовательским приёмочным решением.
+```text
+repository: AndrewVerhoturov1/Real-wargame
+branch: real-wargame-preview
+current accepted baseline: 26e5f7f3681a4cf03e58ae7137cfe67387a1e015
+```
 
-## Интегрированные результаты
+Этот SHA уже содержит объединённые принятые результаты АРКИ, ПУЛЬСА, исправленной ЛИНЗЫ и ХРОНИСТА.
 
-Все четыре принятых направления собраны в одной интеграционной ветке от `real-wargame-preview @ 1246e1d612e648e7d7378db1c02be3bbf3d2a16a`.
+## Принятые результаты
 
-| Направление | Принятый exact SHA | Статус | Что переносится |
+| Направление | Принятый exact SHA | Статус | Что принято |
 |---|---|---|---|
-| АРКА | `0309b34d71d4bf4987c58a343576fbf79c185b44` | ACCEPT по пользовательской визуальной приёмке | Реальный продуктовый shell Полигона, панели, вкладки, topbar и UI-каркас без fake gameplay state |
+| АРКА | `0309b34d71d4bf4987c58a343576fbf79c185b44` | ACCEPT по пользовательской визуальной приёмке | Продуктовый shell Полигона, панели, вкладки, topbar и новый UI-каркас |
 | ПУЛЬС | `aa7965ca06df12453466a5f03efc723318b94e44` | ACCEPT | Контракт `map selection → unitId → UnitModel → LIVE Unit → штатная команда → readback` |
-| ЛИНЗА | `8040f5282b81d6465c02cc41b02ec024819ac575` | ACCEPT после ревизии | Контракт реальных владельцев данных `Инфо / Внимание / Память` и focused smoke; без LINZA-owned runtime/history/front |
+| ЛИНЗА | `8040f5282b81d6465c02cc41b02ec024819ac575` | ACCEPT после ревизии | Контракт реальных owners `Инфо / Внимание / Память`; без LINZA-owned runtime/history/front |
 | ХРОНИСТ | `9e2a7d819440ae82572134ff3caa690724f007d1` | ACCEPT | Контракт experiment identity, Program↔Journal, History, Metrics, Laboratory, Series, replay/persistence и Save/Open boundaries |
 
-## Интеграционная цепочка
+Общий integration PR #281 объединён в `real-wargame-preview` merge-коммитом:
 
-Ветка: `integration/20260817-polygon-accepted-results`
+`26e5f7f3681a4cf03e58ae7137cfe67387a1e015`
 
-- ARKA: PR #277 → merge `633e64b7674b4ddbef1fe00085f64656a65520c5`;
-- PULSE: PR #278 → merge `04e9d33e0ce9bf88852862e32933a7fc9356eec1`;
-- LINZA: PR #279 → merge `389af8a192966e5f92950d74260f0ba83d740631`;
-- CHRONIST: PR #280 → merge `7577894072fda4dce9c455cd8476d3111bd8a19b`.
+Перед transfer прошли `Preview Policy` и `Agent Docs Integrity`, включая проверку generated files/repository context.
 
-Все четыре результата объединились без merge-конфликтов.
+## Решение пользователя по АРКЕ
+
+Пользователь лично проверил финальный внешний результат АРКИ и подтвердил, что он его устраивает. Прежний Route X-блокер о недостаточной независимой pixel-perfect доказательности снят пользовательской приёмкой.
+
+Это решение не означает, что центральная поверхность карты уже закончена: ARKA exact-shell намеренно скрывает живой canvas и показывает placeholder до отдельной задачи интеграции карты.
 
 ## Что реально уже реализовано
 
-АРКА — продуктовая реализация нового интерфейсного shell.
+АРКА — реальная продуктовая оболочка нового Полигона.
 
-ПУЛЬС, ЛИНЗА и ХРОНИСТ в этом интеграционном пакете в основном являются утверждёнными контрактами следующей продуктовой разработки. Их наличие в ветке не означает, что уже реализованы все LIVE/HISTORY-возможности соответствующих вкладок.
+В продукте также уже существуют настоящие механизмы, которые следующая волна обязана переиспользовать:
 
-Особенно важно:
+- `GameApplication` / `PixiTacticalBoardApp` / `PixiMapRenderer` — настоящая карта;
+- `PixiUnitRenderer` — один текущий product owner отображения юнитов;
+- `BoardInputController` + `TacticalOrderRadialInput` — map selection/input/tactical right-button gestures;
+- `CombatLabGameEditors` + `GameEditorRegistry` — существующие общие редакторы;
+- product owners/write paths, зафиксированные контрактами ПУЛЬСА и ЛИНЗЫ.
 
-- ПУЛЬС ещё не означает готовый полный LIVE Unit UI;
-- ЛИНЗА не создаёт собственные `MapInfoReadModel`, `AttentionReadModel`, `UnitMemoryReadModel`, `EstimatedFront` или локальный HistoryProvider;
-- HISTORY для правой панели должен использовать общий canonical HistoryProvider;
-- ХРОНИСТ не объявляет replay, persistence, Series runtime или Laboratory полностью реализованными только на основании контракта.
+ПУЛЬС, ЛИНЗА и ХРОНИСТ, интегрированные ранее, в основном зафиксировали правильные контракты; полный UI/runtime объём их областей ещё не следует считать завершённым.
 
-## Следующая продуктовая точка
+## Новый ближайший приоритет пользователя
 
-Первый следующий вертикальный срез:
+Первый приоритет теперь — не Metrics/Series/replay, а сделать новый Полигон цельной игровой поверхностью.
 
-`АРКА + ПУЛЬС → настоящий выбранный unitId → тот же UnitModel → вкладка «Юнит» LIVE → штатная команда смены позы → readback того же UnitModel`.
+Запускается параллельная волна из шести направлений:
 
-После него:
+1. **КАРТА** — настоящая поверхность map renderer внутри нового shell вместо placeholder; presentation ближе к принятому прототипу.
+2. **ПУЛЬС** — настоящий `LIVE Unit`: selection → UnitModel → правый `Юнит` → posture command → readback.
+3. **РЕДАКТОРЫ** — существующие продуктовые редакторы в новом shell/design без переписывания domain logic.
+4. **ЛИНЗА** — `Инфо / Внимание / Память` LIVE по реальным owners.
+5. **КОНТЕКСТ** — единое entity context menu в новом дизайне с сохранением существующих tactical right-button controls.
+6. **ПЕШКА** — новая product-визуализация бойца по принятому `UNIT_SYMBOL_SYSTEM.md`, включая near/medium/far LOD.
 
-1. `Инфо LIVE` через существующих product owners и bounded queries;
-2. `Внимание LIVE` через существующие Attention write/read boundaries;
-3. supported `Память LIVE` без выдуманного Estimated Front;
-4. общий HistoryProvider до подключения HISTORY в Journal/Unit/Info/Attention/Memory;
-5. затем Program↔Journal, Metrics/telemetry, Laboratory, Series, replay и Save/Open по контракту ХРОНИСТА.
+Канонический coordination document:
 
-## Ограничения интеграции
+`docs/subprojects/polygon-html-to-product/IMPLEMENTATION_WAVE_20260817.md`
 
-- `main` не трогать;
-- deployment не является частью этой интеграции;
-- не считать контрактные документы доказательством уже реализованных capabilities;
-- не вводить второй selection store, второй gameplay truth, UI-owned LOS/perception/history или synthetic production data;
-- финальная передача в `real-wargame-preview` выполняется отдельным merge интеграционного PR после итоговых проверок.
+Подробные prompt-файлы:
+
+```text
+docs/subprojects/polygon-html-to-product/prompts/01_MAP_SURFACE.md
+docs/subprojects/polygon-html-to-product/prompts/02_PULSE_LIVE_UNIT.md
+docs/subprojects/polygon-html-to-product/prompts/03_EDITORS_NEW_DESIGN.md
+docs/subprojects/polygon-html-to-product/prompts/04_LINZA_RIGHT_PANEL_LIVE.md
+docs/subprojects/polygon-html-to-product/prompts/05_ENTITY_CONTEXT_MENU.md
+docs/subprojects/polygon-html-to-product/prompts/06_UNIT_MAP_TOKEN.md
+```
+
+Handoff оркестратору:
+
+`docs/subprojects/polygon-html-to-product/ORCHESTRATOR_HANDOFF_20260817.md`
+
+## Основные зависимости новой волны
+
+```text
+КАРТА + ПЕШКА + ПУЛЬС
+→ настоящая карта + настоящий знак бойца + selection + Юнит LIVE
+
+ПУЛЬС + ЛИНЗА
+→ единая выбранная сущность + Юнит/Инфо/Внимание/Память
+
+РЕДАКТОРЫ + КОНТЕКСТ
+→ entity → authoritative editor/open route
+
+КОНТЕКСТ + tactical input
+→ entity menu без потери quick move/right-drag/radial orders
+```
+
+ПУЛЬС владеет минимальным generic right-panel/selection seam. ЛИНЗА не создаёт второй selection и может параллельно подготовить свои installer/views, подключив их к общему seam отдельным маленьким integration commit после принятия ПУЛЬСА.
+
+## Что отложено, но не отменено
+
+После этой волны остаются:
+
+- Program↔Journal LIVE foundation;
+- общий canonical HistoryProvider;
+- Metrics/telemetry;
+- Laboratory runtime;
+- Series/run records;
+- replay;
+- Save/Open experiment envelope;
+- полный Unit Editor authoring/LIVE decision, если он не будет полностью закрыт текущей редакторской волной.
+
+Существующие старые feature-ветки по этим направлениям нужно сначала ревьюить, а не автоматически переписывать с нуля.
+
+## Общие ограничения
+
+- каждая новая кодовая задача стартует только после повторного получения exact current `real-wargame-preview` HEAD;
+- отдельная feature-ветка на каждого исполнителя;
+- не писать напрямую в `main`;
+- transfer в preview — только после независимого review и отдельного GO пользователя;
+- deployment — отдельное разрешение;
+- не вводить второй gameplay truth/selection/map/runtime;
+- не переносить mock/demo/localStorage architecture HTML в product;
+- visual tasks проверять свежими screenshots exact SHA через repository screenshot skill;
+- runtime/render/UI changes проверять по performance skill и `CI_RISK_BASED_ACCEPTANCE.md`.
