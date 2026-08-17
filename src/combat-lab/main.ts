@@ -12,7 +12,9 @@ import './ui/combat-lab-experiment-run.css';
 import './ui/combat-lab-batch-results.css';
 import './ui/combat-lab-live-unit.css';
 import './game-editors/combat-lab-game-editors.css';
+import './game-editors/combat-lab-game-editor-shell.css';
 import './polygon-map-surface.css';
+import { selectUnit, setMouseGridPosition } from '../core/simulation/SimulationState';
 import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
 import { collectGameApplicationElements, GameApplication } from '../game/GameApplication';
 import type {
@@ -23,13 +25,20 @@ import type {
 import { createDefaultGameEditorRegistry } from '../game-editors/createDefaultGameEditorRegistry';
 import { installAppShellMenu } from '../shared/AppShellMenu';
 import { getAppOverlayCoordinator } from '../shared/app-overlay/AppOverlayCoordinator';
+import { registerEntityContextMenuRoutes } from '../ui/EntityContextMenuRouteRegistry';
 import { CombatLabExtension } from './CombatLabExtension';
 import { getCombatLabWorkspaceServices } from './CombatLabWorkspaceServices';
+import { CombatLabEditorShellBridge } from './game-editors/CombatLabEditorShellBridge';
+import {
+  requestCombatLabGameEditorOpen,
+} from './game-editors/CombatLabGameEditorLinks';
 import { CombatLabGameEditors } from './game-editors/CombatLabGameEditors';
 import {
   installCombatLabQuickParameters,
   type CombatLabQuickParametersInstallationV1,
 } from './parameters/installCombatLabQuickParameters';
+import { preparePolygonInfoLiveOwners } from './right-panel/PolygonRightPanelLive';
+import { PolygonRightPanelLiveView } from './right-panel/PolygonRightPanelLiveView';
 import { CombatLabVisualSession } from './runtime/CombatLabVisualSession';
 import { CombatLabLiveUnitInspector } from './ui/CombatLabLiveUnitInspector';
 import { getCombatLabRightPanelSeam } from './ui/CombatLabRightPanelSeam';
@@ -41,6 +50,7 @@ import {
 let application: GameApplication | null = null;
 let quickParametersInstallation: CombatLabQuickParametersInstallationV1 | null = null;
 let gameEditorsInstallation: CombatLabGameEditors | null = null;
+let editorShellBridge: CombatLabEditorShellBridge | null = null;
 
 const shellMenuInstallation = installAppShellMenu({ mode: 'combat-lab' });
 void startCombatLab();
@@ -74,10 +84,16 @@ async function startCombatLab(): Promise<void> {
       registry: createDefaultGameEditorRegistry(),
       overlayCoordinator: getAppOverlayCoordinator(document),
     });
+    editorShellBridge = CombatLabEditorShellBridge.create({
+      root: workspaceRoot,
+      eventTarget: extensionRoot,
+    });
     quickParametersInstallation = installCombatLabQuickParameters(extensionRoot, session);
   } catch (error) {
     quickParametersInstallation?.destroy();
     quickParametersInstallation = null;
+    editorShellBridge?.destroy();
+    editorShellBridge = null;
     gameEditorsInstallation?.destroy();
     gameEditorsInstallation = null;
     application?.destroy();
@@ -94,6 +110,8 @@ async function startCombatLab(): Promise<void> {
 window.addEventListener('beforeunload', () => {
   quickParametersInstallation?.destroy();
   quickParametersInstallation = null;
+  editorShellBridge?.destroy();
+  editorShellBridge = null;
   gameEditorsInstallation?.destroy();
   gameEditorsInstallation = null;
   application?.destroy();
@@ -121,15 +139,99 @@ function installCombatLabWithLiveUnit(
       return role?.titleRu ?? null;
     },
   });
-  const removeTickerListener = context.addTickerListener(() => inspector.refresh());
-  const removeSelectionListener = rightPanel.selection.subscribe(() => inspector.refresh(true));
+
+  let infoOwners = preparePolygonInfoLiveOwners(rightPanel.state);
+  const linzaView = new PolygonRightPanelLiveView({
+    hosts: {
+      info: rightPanel.hosts.info,
+      attention: rightPanel.hosts.attention,
+      memory: rightPanel.hosts.memory,
+    },
+    getAttentionContext: () => ({
+      state: rightPanel.state,
+      unitId: rightPanel.state.selectedUnitId,
+    }),
+  });
+
+  const selectContextUnit = (unitId: string): void => {
+    selectUnit(rightPanel.state, unitId);
+    rightPanel.selection.reconcileFromState();
+    inspector.refresh(true);
+  };
+
+  const refreshLinza = (): void => {
+    const state = rightPanel.state;
+    if (rightPanel.isTabActive('info')) {
+      if (infoOwners.map !== state.map) infoOwners = preparePolygonInfoLiveOwners(state);
+      const point = state.mouseGridPosition
+        ? { x: state.mouseGridPosition.x, y: state.mouseGridPosition.y, pinned: false }
+        : null;
+      linzaView.renderInfo(state, point, infoOwners);
+      rightPanel.setHeader({ kickerRu: 'ТОЧКА КАРТЫ', titleRu: point ? 'Инфо' : 'Точка не выбрана' });
+      return;
+    }
+    if (rightPanel.isTabActive('attention')) {
+      linzaView.renderAttention(state, state.selectedUnitId);
+      const selected = state.units.find((unit) => unit.id === state.selectedUnitId);
+      rightPanel.setHeader({ kickerRu: 'ВНИМАНИЕ', titleRu: selected?.labels.ru ?? 'Юнит не выбран' });
+      return;
+    }
+    if (rightPanel.isTabActive('memory')) {
+      linzaView.renderMemory(state, state.selectedUnitId);
+      const selected = state.units.find((unit) => unit.id === state.selectedUnitId);
+      rightPanel.setHeader({ kickerRu: 'ПАМЯТЬ', titleRu: selected?.labels.ru ?? 'Юнит не выбран' });
+    }
+  };
+
+  const unregisterContextRoutes = registerEntityContextMenuRoutes({
+    openPanel: (target, view) => {
+      if (target.kind === 'unit') selectContextUnit(target.id);
+      if (view === 'info') {
+        setMouseGridPosition(rightPanel.state, target.anchorGrid);
+      }
+      rightPanel.activateTab(view);
+      linzaView.invalidate();
+      inspector.refresh(true);
+      refreshLinza();
+    },
+    openEditor: (target) => {
+      if (target.kind === 'unit') {
+        selectContextUnit(target.id);
+        requestCombatLabGameEditorOpen(extensionRoot, {
+          editorId: 'soldierData',
+          selectedUnitId: target.id,
+          returnTo: 'combat-lab:right-panel:unit',
+        });
+        return;
+      }
+      setMouseGridPosition(rightPanel.state, target.anchorGrid);
+      extensionRoot.dispatchEvent(new CustomEvent('combat-lab:activate-tab', {
+        bubbles: true,
+        detail: 'scene',
+      }));
+    },
+  });
+
+  const removeTickerListener = context.addTickerListener(() => {
+    inspector.refresh();
+    refreshLinza();
+  });
+  const removeSelectionListener = rightPanel.selection.subscribe(() => {
+    inspector.refresh(true);
+    linzaView.invalidate();
+    refreshLinza();
+  });
   const removeDraftListener = services.draft.subscribe(() => inspector.refresh(true));
+
+  refreshLinza();
 
   return {
     destroy(): void {
       removeDraftListener();
       removeSelectionListener();
       removeTickerListener();
+      unregisterContextRoutes();
+      linzaView.destroy();
       inspector.destroy();
       extension.destroy();
     },
