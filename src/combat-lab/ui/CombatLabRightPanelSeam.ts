@@ -3,8 +3,12 @@ import {
   getCombatLabWorkspaceServices,
   type CombatLabWorkspaceServices,
 } from '../CombatLabWorkspaceServices';
+import {
+  COMBAT_LAB_ACTIVATE_RIGHT_PANEL_EVENT,
+  type PolygonRightPanelTab,
+} from './CombatLabWorkspaceTabs';
 
-export type CombatLabRightPanelTab = 'unit' | 'info' | 'attention' | 'memory';
+export type CombatLabRightPanelTab = PolygonRightPanelTab;
 
 export interface CombatLabRightPanelHosts {
   readonly unit: HTMLElement;
@@ -71,12 +75,10 @@ export function getCombatLabRightPanelSeam(
     hosts,
     isTabActive: (tabId: CombatLabRightPanelTab) => !hosts[tabId].hidden,
     activateTab: (tabId: CombatLabRightPanelTab) => {
-      const button = requiredElement<HTMLButtonElement>(
-        rightPanel,
-        `[data-polygon-right-tab="${tabId}"]`,
-        `Не найдена кнопка правой панели Полигона: ${tabId}.`,
-      );
-      button.click();
+      workspaceRoot.dispatchEvent(new CustomEvent<CombatLabRightPanelTab>(
+        COMBAT_LAB_ACTIVATE_RIGHT_PANEL_EVENT,
+        { bubbles: true, detail: tabId },
+      ));
     },
     setHeader: (header: CombatLabRightPanelHeaderV1) => {
       kicker.textContent = header.kickerRu;
