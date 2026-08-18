@@ -19,6 +19,14 @@ body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors
   opacity: 1 !important;
 }
 
+/* The gameplay-tuning owner reserves exactly three direct grid rows:
+   heading / flexible fields / save bar. Perception adds one presentation-only flow strip
+   between heading and fields, so give that strip its own auto row and keep the authoritative
+   fields host in the flexible track. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--perceptionProfiles .gameplay-tuning-editor-form-panel {
+  grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+}
+
 /* The accepted perception overview uses a compact evidence-flow strip rather than a large
    empty diagram panel. This remains explanatory presentation; it does not calculate evidence. */
 body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--perceptionProfiles .polygon-perception-flow {
