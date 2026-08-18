@@ -2,7 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: '.',
-  testMatch: ['polygon-editors-wave3-local-audit.spec.ts'],
+  testMatch: [
+    'polygon-editors-wave3-local-audit.spec.ts',
+    'polygon-editors-wave3-perception-diagnostic.spec.ts',
+  ],
   timeout: 240_000,
   expect: { timeout: 20_000 },
   workers: 1,
