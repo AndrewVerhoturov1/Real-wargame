@@ -1,7 +1,7 @@
 name: Polygon Editors Wave 2 Visual Audit
 
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - ci/polygon-editors-wave2-audit-base-20260818t0024z-2c2a2d5
 
@@ -17,8 +17,10 @@ jobs:
       EXPECTED_PRODUCT_SHA: 2c2a2d5f0dcd3bf251622c0a47b6bdde61da2f6d
       EXPECTED_VERCEL_PROJECT_NAME: repo
     steps:
-      - name: Checkout CI harness
+      - name: Checkout trusted CI harness
         uses: actions/checkout@v4
+        with:
+          ref: ci/polygon-editors-wave2-audit-base-20260818t0024z-2c2a2d5
 
       - name: Checkout exact product source
         uses: actions/checkout@v4
