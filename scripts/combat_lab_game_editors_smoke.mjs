@@ -167,6 +167,8 @@ expectIncludes('src/combat-lab/game-editors/polygon-global-editor-feature-grid.c
   '.polygon-route-profile-editor .ge-field-card',
   '.polygon-route-profile-editor .ge-route-future',
   '.polygon-route-profile-editor .ge-route-limit',
+  'font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;',
+  'font: inherit !important;',
 ]);
 
 expectIncludes('src/game-editors/GameEditorReturnTarget.ts', [
