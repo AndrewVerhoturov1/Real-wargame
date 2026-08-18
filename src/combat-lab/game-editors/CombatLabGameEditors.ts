@@ -1,3 +1,4 @@
+import './polygon-global-editor-wave3.css';
 import type { GameEditorRegistry } from '../../game-editors/GameEditorRegistry';
 import type { GameEditorOpenRequest, GameEditorOpenResult } from '../../game-editors/GameEditorTypes';
 import type { AppOverlayCoordinator } from '../../shared/app-overlay/AppOverlayCoordinator';
