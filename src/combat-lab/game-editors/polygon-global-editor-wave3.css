@@ -20,9 +20,15 @@ body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors
 }
 
 /* The gameplay-tuning owner reserves exactly three direct grid rows:
-   heading / flexible fields / save bar. Perception adds one presentation-only flow strip
-   between heading and fields, so give that strip its own auto row and keep the authoritative
-   fields host in the flexible track. */
+   heading / flexible fields / save bar. Soldier archetypes and condition profiles add two
+   presentation-only rows (tabs and summary) before the authoritative fields host. Keep those
+   rows intrinsic and preserve the fields host as the flexible track. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal :is(.polygon-global-editor--soldierArchetypes,.polygon-global-editor--conditionProfiles) .gameplay-tuning-editor-form-panel {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto !important;
+}
+
+/* Perception adds one presentation-only flow strip between heading and fields, so give that
+   strip its own auto row and keep the authoritative fields host in the flexible track. */
 body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--perceptionProfiles .gameplay-tuning-editor-form-panel {
   grid-template-rows: auto auto minmax(0, 1fr) auto !important;
 }
