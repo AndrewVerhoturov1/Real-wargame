@@ -17,6 +17,12 @@ export interface PolygonGlobalEditorParityInstallation {
   destroy(): void;
 }
 
+interface LiveSummaryCardSpec {
+  readonly label: string;
+  readonly selector: string;
+  readonly format?: (element: HTMLElement) => string;
+}
+
 export function isPolygonGlobalEditorId(value: string): value is PolygonGlobalEditorId {
   return (POLYGON_GLOBAL_EDITOR_IDS as readonly string[]).includes(value);
 }
@@ -278,6 +284,27 @@ function decorateMovementEditor(host: HTMLElement, form: HTMLElement, heading: H
   const sections = [...form.querySelectorAll<HTMLElement>(':scope > .navigation-profile-group')];
   const status = form.querySelector<HTMLElement>(':scope > .movement-profile-status');
   const tabs = node('nav', 'polygon-editor-tabs polygon-movement-tabs');
+  const summary = buildControlSummary(heading, form, 'ЧТО ЭТО ЗА СПОСОБ ДВИЖЕНИЯ', [
+    {
+      label: 'Скорость',
+      selector: 'input[type="number"][data-movement-number="settings.speed.speedMultiplier"]',
+      format: (element) => withUnit(readControlValue(element), '×'),
+    },
+    {
+      label: 'Выносливость',
+      selector: 'input[type="number"][data-movement-number="settings.stamina.drainPerSecond"]',
+      format: (element) => withUnit(readControlValue(element), 'ед/с'),
+    },
+    {
+      label: 'Шум',
+      selector: 'input[type="number"][data-movement-number="settings.noise.loudness"]',
+    },
+    {
+      label: 'Огонь в движении',
+      selector: 'input[type="checkbox"][data-movement-checkbox="settings.weapon.allowFireWhileMoving"]',
+    },
+  ]);
+  summary.classList.add('polygon-movement-summary');
   const views = [
     { id: 'basic', label: 'Основное', titles: ['Основное'] },
     { id: 'movement', label: 'Движение', titles: ['Скорость и переходы', 'Выносливость'] },
@@ -290,8 +317,9 @@ function decorateMovementEditor(host: HTMLElement, form: HTMLElement, heading: H
   const activate = (id: string): void => {
     host.dataset.polygonMovementTab = id;
     const view = views.find((item) => item.id === id) ?? views[0];
-    if (nameCard) nameCard.hidden = view.id !== 'basic';
+    if (nameCard) nameCard.hidden = true;
     if (status) status.hidden = true;
+    summary.hidden = view.id !== 'basic';
     sections.forEach((section) => {
       const title = section.querySelector('h3')?.textContent?.trim() ?? '';
       section.hidden = !view.titles.includes(title as never);
@@ -300,7 +328,7 @@ function decorateMovementEditor(host: HTMLElement, form: HTMLElement, heading: H
   };
 
   for (const view of views) tabs.append(tabButton(view.label, 'polygonTab', view.id, () => activate(view.id)));
-  heading.after(tabs);
+  heading.after(tabs, summary);
   moveHeaderActionsToSavebar(form, heading, 'Профиль движения', status?.textContent?.trim());
   activate(views.some((view) => view.id === desired) ? desired : 'basic');
 }
@@ -342,13 +370,11 @@ function decorateDirectionalEditor(form: HTMLElement, heading: HTMLElement): voi
   const slope = node('article', 'polygon-directional-visual');
   slope.append(
     node('strong', '', 'Склон и силуэт'),
-    node('div', 'polygon-directional-slope', '●  ╱╲  ●'),
     node('p', '', 'Штрафы гребня и силуэта используют реальные коэффициенты выбранного профиля.'),
   );
   const compass = node('article', 'polygon-directional-visual');
   compass.append(
     node('strong', '', '8 секторов угрозы'),
-    node('div', 'polygon-directional-compass', 'N · NE · E · SE · S · SW · W · NW'),
     node('p', '', 'Направление остаётся частью субъективной информации бойца.'),
   );
   visuals.append(slope, compass);
@@ -379,9 +405,15 @@ function decorateTacticalPositionEditor(host: HTMLElement): void {
     ['ranking', 'Оценка'],
     ['display', 'Стабильность'],
   ] as const;
-  const summary = buildLiveSummary(heading, 'ТАКТИЧЕСКИЕ ПОЗИЦИИ');
+  const summary = buildControlSummary(heading, form, 'ТАКТИЧЕСКИЕ ПОЗИЦИИ', [
+    { label: 'Цель поиска', selector: '[data-default-objective]' },
+    { label: 'Опасность стоя', selector: 'input[data-tactical-setting="standingMaximumDanger"]' },
+    { label: 'Опасность пригнувшись', selector: 'input[data-tactical-setting="crouchedMaximumDanger"]' },
+    { label: 'Вес безопасности', selector: 'input[data-tactical-setting="safetyWeight"]' },
+  ]);
+  summary.classList.add('polygon-tactical-summary');
   const activate = (id: string): void => {
-    if (identity) identity.hidden = id !== 'main';
+    if (identity) identity.hidden = true;
     summary.hidden = id !== 'main';
     groups.forEach((group) => { group.hidden = group.dataset.settingsGroup !== id; });
     setActiveTab(tabs, 'polygonTab', id);
@@ -498,6 +530,58 @@ function decorateCombatCatalogue(host: HTMLElement): void {
   if (list) list.classList.add('polygon-profile-column');
   if (form) form.classList.add('polygon-editor-main');
   root.querySelector<HTMLElement>('.combat-catalog-subtabs')?.classList.add('polygon-editor-tabs');
+
+  const weaponSelected = root.querySelector<HTMLButtonElement>('[data-combat-kind="weapon"][aria-selected="true"]');
+  const formHeading = form?.querySelector<HTMLElement>('.combat-catalog-form-header');
+  if (!weaponSelected || !form || !formHeading) return;
+
+  const tabs = node('nav', 'polygon-editor-tabs polygon-weapon-tabs');
+  tabs.setAttribute('aria-label', 'Разделы оружия');
+  const summary = buildControlSummary(formHeading, form, 'КРАТКОЕ РЕЗЮМЕ', [
+    {
+      label: 'Темп огня',
+      selector: 'input[data-combat-path="roundsPerMinute"]',
+      format: (element) => withUnit(readControlValue(element), 'выстр./мин'),
+    },
+    {
+      label: 'Магазин',
+      selector: 'input[data-combat-path="capacityRounds"]',
+      format: (element) => withUnit(readControlValue(element), 'патронов'),
+    },
+    {
+      label: 'Режимы огня',
+      selector: '.combat-catalog-choice-grid',
+      format: (element) => String(element.querySelectorAll<HTMLInputElement>('[data-combat-fire-mode]:checked').length),
+    },
+    {
+      label: 'Огонь в движении',
+      selector: 'input[type="checkbox"][data-combat-path="allowFireWhileMoving"]',
+    },
+  ]);
+  summary.classList.add('polygon-weapon-summary');
+  const groups = [...form.querySelectorAll<HTMLElement>(':scope > .combat-catalog-group')];
+  const views = [
+    { id: 'overview', label: 'Основное', titles: ['Идентификация', 'Класс, боеприпас и режимы'] },
+    { id: 'fire', label: 'Огонь', titles: ['Огонь и ёмкость'] },
+    { id: 'accuracy', label: 'Точность', titles: ['Отдача и восстановление', 'Движение и поза'] },
+    { id: 'reload', label: 'Перезарядка', titles: ['Этапы перезарядки'] },
+    { id: 'use', label: 'Использование', titles: ['Установка и расчёт'] },
+    { id: 'signals', label: 'Демаскировка', titles: ['Звук, вспышка и ствол'] },
+  ] as const;
+
+  const activate = (id: string): void => {
+    const view = views.find((candidate) => candidate.id === id) ?? views[0];
+    summary.hidden = view.id !== 'overview';
+    groups.forEach((group) => {
+      const title = group.querySelector('h3')?.textContent?.trim() ?? '';
+      group.hidden = !view.titles.includes(title as never);
+    });
+    setActiveTab(tabs, 'polygonWeaponTab', view.id);
+  };
+
+  for (const view of views) tabs.append(tabButton(view.label, 'polygonWeaponTab', view.id, () => activate(view.id)));
+  formHeading.after(tabs, summary);
+  activate('overview');
 }
 
 function insertBreadcrumb(heading: HTMLElement, editorName: string): void {
@@ -537,18 +621,66 @@ function buildLiveSummary(heading: HTMLElement, kicker: string): HTMLElement {
   return summary;
 }
 
+function buildControlSummary(
+  heading: HTMLElement,
+  root: HTMLElement,
+  kicker: string,
+  specs: readonly LiveSummaryCardSpec[],
+): HTMLElement {
+  const summary = buildLiveSummary(heading, kicker);
+  const grid = node('div', 'polygon-editor-summary-grid');
+  for (const spec of specs) {
+    const card = node('article', 'polygon-editor-summary-card');
+    const value = node('strong', '');
+    const control = root.querySelector<HTMLElement>(spec.selector);
+    const render = (): void => {
+      value.textContent = control ? (spec.format?.(control) ?? readControlValue(control)) : '—';
+    };
+    if (control) {
+      control.addEventListener('input', render);
+      control.addEventListener('change', render);
+    }
+    card.append(node('span', '', spec.label), value);
+    grid.append(card);
+    render();
+  }
+  summary.append(grid);
+  return summary;
+}
+
 function buildFieldSummary(heading: HTMLElement, fields: readonly HTMLElement[]): HTMLElement {
   const summary = buildLiveSummary(heading, 'ОБЗОР');
   const grid = node('div', 'polygon-editor-summary-grid');
   for (const field of fields.filter((item) => !item.classList.contains('gameplay-tuning-editor-reference')).slice(0, 4)) {
     const label = field.querySelector<HTMLElement>('.gameplay-tuning-editor-field-label')?.textContent?.trim() ?? 'Параметр';
-    const value = field.querySelector<HTMLInputElement>('[data-tuning-path]')?.value ?? '—';
+    const input = field.querySelector<HTMLInputElement>('[data-tuning-path]');
+    const value = node('strong', '');
+    const render = (): void => { value.textContent = input?.value ?? '—'; };
+    input?.addEventListener('input', render);
+    input?.addEventListener('change', render);
     const card = node('article', 'polygon-editor-summary-card');
-    card.append(node('span', '', label), node('strong', '', value));
+    card.append(node('span', '', label), value);
     grid.append(card);
+    render();
   }
   summary.append(grid);
   return summary;
+}
+
+function readControlValue(element: HTMLElement): string {
+  if (element instanceof HTMLSelectElement) {
+    return element.selectedOptions[0]?.textContent?.trim() || element.value || '—';
+  }
+  if (element instanceof HTMLInputElement) {
+    if (element.type === 'checkbox') return element.checked ? 'Да' : 'Нет';
+    return element.value.trim() || '—';
+  }
+  if (element instanceof HTMLTextAreaElement) return element.value.trim() || '—';
+  return element.textContent?.trim() || '—';
+}
+
+function withUnit(value: string, unit: string): string {
+  return value === '—' ? value : `${value} ${unit}`;
 }
 
 function profileFeature(
