@@ -107,9 +107,8 @@ function decorateRouteProfileEditor(host: HTMLElement): void {
   host.classList.add('polygon-route-profile-editor');
   layout.classList.add('polygon-profile-editor-layout');
   listPanel.classList.add('polygon-profile-column');
-  form.classList.add('polygon-editor-main');
+  form.classList.add('polygon-editor-main', 'ge-route-main');
   formHeading.classList.add('polygon-editor-main-header');
-  insertBreadcrumb(formHeading, 'Профили маршрута');
 
   const profileButtons = [...list.querySelectorAll<HTMLButtonElement>('[data-profile-id]')];
   const selectedButton = profileButtons.find((button) => button.classList.contains('active')) ?? profileButtons[0];
@@ -119,19 +118,40 @@ function decorateRouteProfileEditor(host: HTMLElement): void {
     ?? 'Профиль';
   const description = formHeading.querySelector('p')?.textContent?.trim() ?? '';
   const kicker = formHeading.querySelector('.navigation-profile-kicker')?.textContent?.trim() ?? '';
+  const revision = kicker.match(/revision\s+(\d+)/i)?.[1] ?? '—';
+  const builtIn = kicker.toLowerCase().includes('встроенный');
 
-  const headingCount = listHeading.querySelector<HTMLElement>('span');
-  if (headingCount) {
-    headingCount.textContent = String(profileButtons.length);
-    headingCount.title = 'Количество доступных профилей';
+  const profileHeading = node('div', '');
+  profileHeading.append(node('span', '', 'Профили'), node('strong', '', 'Профили маршрута'));
+  const profileCount = node('span', 'ge-count', String(profileButtons.length));
+  profileCount.title = 'Количество доступных профилей';
+  listHeading.classList.add('ge-profile-head');
+  listHeading.replaceChildren(profileHeading, profileCount);
+
+  const builtInButtons: HTMLButtonElement[] = [];
+  const customButtons: HTMLButtonElement[] = [];
+  for (const button of profileButtons) {
+    const detail = button.querySelector<HTMLElement>('small, span:last-child');
+    const builtInProfile = detail?.textContent?.toLowerCase().includes('встроенн') ?? true;
+    if (detail) detail.textContent = builtInProfile ? 'Встроенный' : detail.textContent?.replace(/^[^.]+\.\s*/u, '') ?? 'Свой профиль';
+    button.classList.add('ge-profile-row');
+    (builtInProfile ? builtInButtons : customButtons).push(button);
   }
-  const headingTitle = listHeading.querySelector<HTMLElement>('h2');
-  if (headingTitle) headingTitle.textContent = 'Профили маршрута';
-  const headingDescription = listHeading.querySelector<HTMLElement>('p');
-  if (headingDescription) headingDescription.textContent = 'Выберите профиль';
+  list.classList.add('ge-profile-scroll');
+  list.replaceChildren(
+    node('div', 'ge-profile-section-label', 'Встроенные'),
+    ...builtInButtons,
+    node('div', 'ge-profile-section-label ge-profile-section-label--spaced', 'Мои профили'),
+    ...(customButtons.length > 0
+      ? customButtons
+      : [node('div', 'ge-profile-empty', 'Пока нет собственных профилей')]),
+  );
 
   const createButton = listActions.querySelector<HTMLButtonElement>('[data-profile-action="create"]');
-  if (createButton) createButton.textContent = '+ Создать профиль';
+  if (createButton) {
+    createButton.textContent = '+ Создать профиль';
+    createButton.classList.add('action-button');
+  }
   const copyButton = listActions.querySelector<HTMLButtonElement>('[data-profile-action="copy"]');
   const management = document.createElement('details');
   management.className = 'polygon-route-profile-management polygon-editor-management';
@@ -144,6 +164,7 @@ function decorateRouteProfileEditor(host: HTMLElement): void {
     if (child === createButton || child === copyButton) continue;
     managementBody.append(child);
   }
+  listActions.classList.add('ge-profile-actions');
   listActions.append(management);
 
   if (formActions) {
@@ -156,45 +177,160 @@ function decorateRouteProfileEditor(host: HTMLElement): void {
     managementBody.append(copyButton);
   }
 
-  const tabs = node('nav', 'polygon-route-profile-tabs polygon-editor-tabs');
-  tabs.setAttribute('aria-label', 'Разделы профиля маршрута');
-  const summary = node('section', 'polygon-route-profile-summary polygon-editor-summary');
-  summary.append(
-    node('span', 'polygon-route-profile-summary-kicker', 'КРАТКОЕ РЕЗЮМЕ'),
-    node('strong', '', profileName),
+  const title = node('div', 'ge-route-title');
+  const titleRow = node('div', 'ge-title-row');
+  titleRow.append(
+    node('h2', '', profileName),
+    node('span', `ge-profile-chip ${builtIn ? 'is-built-in' : 'is-custom'}`, builtIn ? 'Встроенный' : 'Свой профиль'),
+  );
+  title.append(
+    node('div', 'ge-breadcrumb', `Профили маршрута / ${profileName}`),
+    titleRow,
     node('p', '', description || 'Описание хранится в авторитетном профиле маршрута.'),
   );
+  const headerActions = node('div', 'ge-route-header-actions');
+  if (copyButton) headerActions.append(copyButton);
+  formHeading.classList.add('ge-route-header');
+  formHeading.replaceChildren(title, headerActions);
 
-  const primary = node('section', 'polygon-route-profile-primary polygon-editor-primary');
-  primary.append(node('header', '', 'Основное ограничение'));
+  const tabs = node('nav', 'ge-route-tabs polygon-route-profile-tabs polygon-editor-tabs');
+  tabs.setAttribute('aria-label', 'Разделы профиля маршрута');
+  const summary = node('section', 'ge-tab-intro polygon-route-profile-summary polygon-editor-summary');
+  const summaryCopy = node('div', '');
+  summaryCopy.append(
+    node('span', '', 'Краткое резюме'),
+    node('h3', '', 'Как будет вести себя боец'),
+    node('p', '', 'Это расшифровка текущих чисел, а не отдельная игровая настройка.'),
+  );
+  summary.append(summaryCopy);
+
+  const primary = node('section', 'ge-section polygon-route-profile-primary polygon-editor-primary');
+  const primaryHead = node('div', 'ge-section-head');
+  const primaryTitle = node('div', '');
+  primaryTitle.append(
+    node('h3', '', 'Основное ограничение'),
+    node('p', '', 'Насколько длинный обход профиль готов принять ради безопасности, укрытия и других факторов.'),
+  );
+  primaryHead.append(primaryTitle);
+  const detourCard = node('div', 'ge-detour-card');
+  const detourCopy = node('div', '');
+  const detourOutput = node('output', '');
+  const detourText = node('span', '');
+  detourText.append('до +', detourOutput, '% относительно короткого допустимого пути');
+  detourCopy.append(node('strong', '', 'Максимальный обход'), detourText);
   const maximumInput = host.querySelector<HTMLInputElement>('input[type="number"][data-profile-number="maximumDetourRatio"]');
+  const maximumRange = host.querySelector<HTMLInputElement>('input[type="range"][data-profile-number="maximumDetourRatio"]');
   const maximumField = maximumInput?.closest<HTMLElement>('.navigation-profile-field');
-  if (maximumField) primary.append(maximumField);
-  else primary.append(node('p', '', 'Параметр максимального обхода недоступен.'));
+  const detourControl = node('div', 'ge-detour-control');
+  if (maximumInput && maximumRange) {
+    const initialRatio = Number(maximumInput.value);
+    const percentInput = document.createElement('input');
+    percentInput.type = 'number';
+    percentInput.min = '0';
+    percentInput.max = '200';
+    percentInput.step = '5';
+    percentInput.dataset.polygonRouteDetourPercent = 'true';
+    const renderDetour = (): void => {
+      const percent = Math.round((Number(maximumInput.value) - 1) * 100);
+      percentInput.value = String(Number.isFinite(percent) ? percent : 0);
+      detourOutput.textContent = percentInput.value;
+    };
+    const writeDetour = (): void => {
+      const percent = Math.min(200, Math.max(0, Number(percentInput.value) || 0));
+      const ratio = 1 + percent / 100;
+      maximumInput.value = String(ratio);
+      maximumRange.value = String(ratio);
+      maximumInput.dispatchEvent(new Event('input', { bubbles: true }));
+      maximumInput.dispatchEvent(new Event('change', { bubbles: true }));
+      renderDetour();
+    };
+    percentInput.addEventListener('input', writeDetour);
+    maximumInput.addEventListener('input', renderDetour);
+    maximumRange.addEventListener('input', renderDetour);
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.textContent = '↺';
+    reset.title = 'Вернуть исходное значение профиля';
+    reset.addEventListener('click', () => {
+      maximumInput.value = String(initialRatio);
+      maximumRange.value = String(initialRatio);
+      maximumInput.dispatchEvent(new Event('input', { bubbles: true }));
+      maximumInput.dispatchEvent(new Event('change', { bubbles: true }));
+      renderDetour();
+    });
+    maximumField?.remove();
+    maximumInput.hidden = true;
+    detourControl.append(maximumRange, percentInput, node('span', '', '%'), reset, maximumInput);
+    renderDetour();
+  } else {
+    detourControl.append(node('span', '', 'Параметр максимального обхода недоступен.'));
+  }
+  detourCard.append(detourCopy, detourControl);
+  primary.append(primaryHead, detourCard);
 
-  const featureGrid = node('section', 'polygon-route-profile-feature-grid');
+  const featureGrid = node('section', 'ge-route-summary polygon-route-profile-feature-grid');
   featureGrid.append(
-    profileFeature(host, 'Опасность', 'dangerWeight'),
-    profileFeature(host, 'Укрытия', 'coverWeight'),
-    profileFeature(host, 'Цена дороги', 'terrainCosts.road'),
-    profileFeature(host, 'Допустимый обход', 'maximumDetourRatio', (value) => {
+    routeProfileFeature(host, 'Опасность', 'dangerWeight', (value) => routeStrength(Number(value))),
+    routeProfileFeature(host, 'Укрытия', 'coverWeight', (value) => routeStrength(Number(value), [.02, .1, .25, .4])),
+    routeProfileFeature(host, 'Дороги', 'terrainCosts.road', (value) => routeTerrainMeaning(Number(value))),
+    routeProfileFeature(host, 'Допустимый обход', 'maximumDetourRatio', (value) => {
       const numeric = Number(value);
-      return Number.isFinite(numeric) ? `+${Math.round((numeric - 1) * 100)}%` : '—';
+      return Number.isFinite(numeric) ? `до +${Math.round((numeric - 1) * 100)}%` : '—';
     }),
   );
+  const detourFeatureValue = featureGrid.lastElementChild?.querySelector<HTMLElement>('strong');
+  const renderDetourFeature = (): void => {
+    const ratio = Number(maximumInput?.value);
+    if (detourFeatureValue) {
+      detourFeatureValue.textContent = Number.isFinite(ratio) ? `до +${Math.round((ratio - 1) * 100)}%` : '—';
+    }
+  };
+  maximumInput?.addEventListener('input', renderDetourFeature);
+  maximumInput?.addEventListener('change', renderDetourFeature);
+  renderDetourFeature();
 
-  const metadata = node('section', 'polygon-route-profile-metadata polygon-editor-metadata');
-  metadata.append(
-    node('header', '', 'О ПРОФИЛЕ'),
-    metaRow('Название', profileName),
-    metaRow('Тип', kicker.toLowerCase().includes('встроенный') ? 'Встроенный' : 'Пользовательский'),
-    metaRow('Технический ID', profileId),
-    metaRow('Ревизия', kicker.match(/revision\s+(\d+)/i)?.[1] ?? '—'),
+  const metadata = node('section', 'ge-section polygon-route-profile-metadata polygon-editor-metadata');
+  const metadataHead = node('div', 'ge-section-head');
+  const metadataTitle = node('div', '');
+  metadataTitle.append(
+    node('h3', '', 'О профиле'),
+    node('p', '', 'Технические данные спрятаны, но доступны для проверки.'),
   );
+  metadataHead.append(metadataTitle);
+  const metadataGrid = node('div', 'ge-profile-meta-grid');
+  metadataGrid.append(
+    metaRow('Русское название', profileName),
+    metaRow('Тип', builtIn ? 'Встроенный' : 'Пользовательский'),
+    metaRow('Технический ID', profileId),
+    metaRow('Ревизия', revision),
+  );
+  metadata.append(metadataHead, metadataGrid);
 
   const groups = [...form.querySelectorAll<HTMLElement>(':scope > .navigation-profile-group')];
-  if (nameCard) form.append(nameCard);
-  formHeading.after(tabs, summary, primary, featureGrid, metadata);
+  const scroll = node('div', 'ge-route-scroll');
+  scroll.append(summary, featureGrid, primary, metadata);
+  if (nameCard) scroll.append(nameCard);
+  for (const group of groups) scroll.append(group);
+  const savebar = node('footer', 'ge-savebar');
+  savebar.append(
+    node(
+      'span',
+      '',
+      builtIn
+        ? 'Встроенный профиль · изменения разрешены, исходные значения можно вернуть сбросом.'
+        : 'Пользовательский профиль · изменения применяются к текущему продукту.',
+    ),
+  );
+  const usage = node('div', 'ge-route-usage');
+  usage.dataset.polygonRouteUsagePending = 'true';
+  usage.append(
+    node('strong', '', 'Используется'),
+    node('span', '', 'Бойцы: 0'),
+    node('span', '', 'Программа: 0'),
+    node('span', '', 'Лаборатория: 0'),
+  );
+  savebar.append(usage);
+  form.replaceChildren(formHeading, tabs, scroll, savebar);
 
   const views = [
     { id: 'main', label: 'Основное', groups: [] as HTMLElement[], showName: false },
@@ -697,6 +833,39 @@ function profileFeature(
   card.append(node('span', '', label), value);
   render();
   return card;
+}
+
+function routeProfileFeature(
+  host: HTMLElement,
+  label: string,
+  path: string,
+  format: (value: string) => string,
+): HTMLElement {
+  const card = node('article', '');
+  const value = node('strong', '');
+  const input = host.querySelector<HTMLInputElement>(`input[type="number"][data-profile-number="${path}"]`);
+  const render = (): void => { value.textContent = format(input?.value.trim() ?? ''); };
+  input?.addEventListener('input', render);
+  input?.addEventListener('change', render);
+  card.append(node('span', '', label), value);
+  render();
+  return card;
+}
+
+function routeStrength(value: number, thresholds = [.2, .7, 1.4, 2.2]): string {
+  if (!Number.isFinite(value)) return '—';
+  if (value <= thresholds[0]) return 'почти не учитывает';
+  if (value <= thresholds[1]) return 'слабо';
+  if (value <= thresholds[2]) return 'умеренно';
+  if (value <= thresholds[3]) return 'сильно';
+  return 'очень сильно';
+}
+
+function routeTerrainMeaning(value: number): string {
+  if (!Number.isFinite(value)) return '—';
+  if (value < .9) return 'предпочитает';
+  if (value > 1.1) return 'избегает';
+  return 'нейтрально';
 }
 
 function metaRow(label: string, value: string): HTMLElement {

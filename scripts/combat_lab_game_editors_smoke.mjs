@@ -146,6 +146,21 @@ expectIncludes('src/combat-lab/game-editors/combat-lab-game-editor-shell.css', [
   'overflow: auto',
 ]);
 
+expectIncludes('src/combat-lab/game-editors/PolygonGlobalEditorParity.ts', [
+  "'Как будет вести себя боец'",
+  "'Встроенные'",
+  "'Мои профили'",
+  'polygonRouteDetourPercent',
+  "'ge-route-scroll'",
+  "'ge-profile-meta-grid'",
+]);
+
+expectIncludes('src/combat-lab/game-editors/polygon-global-editor-feature-grid.css', [
+  '.polygon-route-profile-editor .ge-route-main',
+  '.polygon-route-profile-editor .ge-detour-control',
+  '.polygon-route-profile-editor .ge-profile-meta-grid',
+]);
+
 expectIncludes('src/game-editors/GameEditorReturnTarget.ts', [
   'getSafeGameEditorReturnTarget',
   "'/combat-lab.html'",
