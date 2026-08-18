@@ -67,8 +67,8 @@ jobs:
           exit 1
       - name: Install Playwright test runner
         run: npm install --no-save --package-lock=false @playwright/test@1.55.0
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Verify system Chrome
+        run: google-chrome --version
       - name: Run exact browser visual audit
         run: npx playwright test --config=ci/playwright.polygon-editors-wave4-local-audit.config.ts
       - name: Upload exact visual evidence
