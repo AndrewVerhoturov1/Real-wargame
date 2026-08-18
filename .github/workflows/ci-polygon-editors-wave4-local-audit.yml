@@ -1,0 +1,84 @@
+name: Polygon Editors Wave 4 Local Visual Audit
+
+on:
+  pull_request:
+    branches:
+      - ci/polygon-editors-wave4-local-audit-base-20260818t0109z-3bc23f8
+
+permissions:
+  contents: read
+
+jobs:
+  exact-browser-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      EXPECTED_PRODUCT_SHA: 3bc23f8e25173786e64af55c47022d772d1cae2a
+      CANONICAL_FEATURE_BRANCH: feat/20260817-polygon-editors-visual-parity
+      TARGET_URL: http://127.0.0.1:4173/combat-lab.html
+    steps:
+      - name: Checkout CI harness
+        uses: actions/checkout@v4
+      - name: Checkout exact product source
+        uses: actions/checkout@v4
+        with:
+          ref: 3bc23f8e25173786e64af55c47022d772d1cae2a
+          fetch-depth: 0
+          path: product
+      - name: Verify exact product source
+        working-directory: product
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_PRODUCT_SHA"
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install exact product dependencies
+        working-directory: product
+        run: npm ci --no-audit --no-fund
+      - name: Run full Preview gate
+        working-directory: product
+        run: npm run verify:preview -- --report "$RUNNER_TEMP/preview-verification.json"
+      - name: Build exact application
+        working-directory: product
+        run: npm run build:app
+      - name: Write exact local source identity
+        working-directory: product
+        run: >-
+          node scripts/write_deployment_source.mjs
+          --root dist
+          --ref "$CANONICAL_FEATURE_BRANCH"
+          --sha "$EXPECTED_PRODUCT_SHA"
+          --report "$RUNNER_TEMP/preview-verification.json"
+      - name: Verify built pages and identity
+        working-directory: product
+        run: npm run verify:deployment-pages -- --root dist --require-source
+      - name: Start exact local Preview server
+        working-directory: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npm run preview -- --host 127.0.0.1 --port 4173 > "$RUNNER_TEMP/polygon-preview.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:4173/deployment-source.json >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/polygon-preview.log"
+          exit 1
+      - name: Install Playwright test runner
+        run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run exact browser visual audit
+        run: npx playwright test --config=ci/playwright.polygon-editors-wave4-local-audit.config.ts
+      - name: Upload exact visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: polygon-editors-wave4-local-visual-audit-${{ github.run_id }}
+          path: |
+            artifacts/polygon-editors-visual-audit/**
+            test-results/polygon-editors-wave4-local-audit/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
