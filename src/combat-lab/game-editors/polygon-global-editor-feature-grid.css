@@ -1113,3 +1113,36 @@ body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Exact approved-prototype route limit and a light native scroll surface.
+ * The portal inherits the dark Combat Lab color scheme otherwise, so its
+ * transparent native scrollbar track reveals the application behind it. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-route-limit {
+  width: 100% !important;
+  grid-column: 1 / -1 !important;
+  grid-template-columns: minmax(0, 1fr) 260px !important;
+  gap: 8px !important;
+  align-items: center !important;
+  padding: 8px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-route-scroll {
+  color-scheme: light !important;
+  scrollbar-color: #9da291 #f8f8f4 !important;
+  scrollbar-width: thin !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-route-scroll::-webkit-scrollbar {
+  width: 10px;
+  background: #f8f8f4;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-route-scroll::-webkit-scrollbar-track {
+  background: #f8f8f4;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-route-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid #f8f8f4;
+  border-radius: 8px;
+  background: #9da291;
+}

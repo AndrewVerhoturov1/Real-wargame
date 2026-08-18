@@ -157,6 +157,7 @@ expectIncludes('src/combat-lab/game-editors/PolygonGlobalEditorParity.ts', [
   'routeSubtabIntro',
   'ge-route-future',
   'ge-route-limit',
+  "number.placeholder = 'введите цену';",
   'tabSurfaces.forEach((surface) => { surface.hidden = true; });',
 ]);
 
@@ -167,6 +168,10 @@ expectIncludes('src/combat-lab/game-editors/polygon-global-editor-feature-grid.c
   '.polygon-route-profile-editor .ge-field-card',
   '.polygon-route-profile-editor .ge-route-future',
   '.polygon-route-profile-editor .ge-route-limit',
+  '.ge-route-limit {\n  width: 100% !important;',
+  'grid-column: 1 / -1 !important;',
+  'scrollbar-color: #9da291 #f8f8f4 !important;',
+  'color-scheme: light !important;',
   'font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;',
   'font: inherit !important;',
 ]);

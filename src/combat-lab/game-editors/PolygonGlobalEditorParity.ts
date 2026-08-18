@@ -738,6 +738,7 @@ function decorateRouteLimit(group: HTMLElement): void {
   const reset = field?.querySelector<HTMLButtonElement>('[data-reset-field="maximumRouteCost"]');
   if (!field || !number || !range) return;
   field.classList.add('ge-route-limit');
+  number.placeholder = 'введите цену';
   const toggle = document.createElement('input');
   toggle.type = 'checkbox';
   toggle.checked = number.value.trim().length > 0;

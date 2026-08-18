@@ -234,6 +234,17 @@ Product/gameplay owners, persistence и write paths ради визуально�
 - Save/Open experiment envelope;
 - полный Unit Editor authoring/LIVE decision.
 
+## Точечная визуальная доводка «Маршрут» — 2026-08-18
+
+По пользовательскому замечанию приведён к HTML-прототипу блок `Ограничивать максимальную цену маршрута` во внутренней вкладке `Маршрут`:
+
+- блок занимает обе колонки product-сетки, как блочный `.ge-route-limit` прототипа, а не сжимается в первую;
+- сохранены настоящий `maximumRouteCost`, штатный включатель и disabled readback; временные данные не создавались;
+- placeholder поля приведён к `введите цену` из утверждённого HTML;
+- вертикальная прокрутка получила светлые track/thumb без просвечивающего тёмного фона Combat Lab.
+
+Проверено в локальном реальном продукте: ширина блока `722.8px` внутри секции `740.8px`, `grid-column: 1 / -1`; native scrollbar имеет светлые `#f8f8f4` track и `#9da291` thumb. Пройдены focused smoke, `npm run typecheck` и `npm run build`. Это presentation-only изменение: product owner, runtime и сохранение не менялись. Деплой, перенос в `real-wargame-preview` и изменения `main` не выполнялись.
+
 ## Следующий порядок работы
 
 Кодексу рекомендуется:
