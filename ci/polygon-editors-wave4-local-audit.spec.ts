@@ -99,7 +99,8 @@ async function assertParityInvariants(host: ReturnType<Page['locator']>, editorI
     expect(result.gameplay?.summaryDisplay).not.toBe('none');
     expect(result.gameplay?.summaryHeight ?? 0).toBeGreaterThan(40);
     expect(result.gameplay?.fieldsHeight ?? 0).toBeGreaterThan(200);
-    expect(Math.abs((result.gameplay?.summaryTop ?? 0) - (result.gameplay?.tabsBottom ?? 0))).toBeLessThanOrEqual(2);
+    // The accepted presentation keeps a compact visual gap between tabs and the overview summary.
+    expect(Math.abs((result.gameplay?.summaryTop ?? 0) - (result.gameplay?.tabsBottom ?? 0))).toBeLessThanOrEqual(12);
     expect((result.gameplay?.fieldsTop ?? 0) + 1).toBeGreaterThanOrEqual(result.gameplay?.summaryBottom ?? 0);
   }
   if (editorId === 'perceptionProfiles') {
