@@ -1,4 +1,4 @@
-name: Polygon Editors Wave 2 Exact Deploy
+name: Polygon Editors Final Exact Deploy
 
 on:
   push:
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      EXPECTED_SHA: 2c2a2d5f0dcd3bf251622c0a47b6bdde61da2f6d
+      EXPECTED_SHA: f695c9b1c035340de319e769b2ada4c993d2b83b
       EXPECTED_REF: feat/20260817-polygon-editors-visual-parity
       EXPECTED_VERCEL_PROJECT_NAME: repo
     steps:
@@ -23,7 +23,7 @@ jobs:
       - name: Checkout exact product source
         uses: actions/checkout@v4
         with:
-          ref: 2c2a2d5f0dcd3bf251622c0a47b6bdde61da2f6d
+          ref: f695c9b1c035340de319e769b2ada4c993d2b83b
           fetch-depth: 0
           path: product
 
@@ -76,7 +76,7 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           REAL_WARGAME_BRANCH: feat/20260817-polygon-editors-visual-parity
-          REAL_WARGAME_COMMIT_SHA: 2c2a2d5f0dcd3bf251622c0a47b6bdde61da2f6d
+          REAL_WARGAME_COMMIT_SHA: f695c9b1c035340de319e769b2ada4c993d2b83b
         run: npx --yes vercel@56.4.1 build --token="$VERCEL_TOKEN"
 
       - name: Add exact deployment identity
@@ -113,15 +113,19 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: npx --yes vercel@56.4.1 inspect "${{ steps.deploy.outputs.url }}" --wait --token="$VERCEL_TOKEN"
 
-      - name: Verify published exact identity
+      - name: Verify published pages and exact identity
         working-directory: product
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
+          deployment="${{ steps.deploy.outputs.url }}"
+          npx --yes vercel@56.4.1 curl / --deployment "$deployment" --token="$VERCEL_TOKEN" > /dev/null
+          npx --yes vercel@56.4.1 curl /ai-node-editor.html --deployment "$deployment" --token="$VERCEL_TOKEN" > /dev/null
+          npx --yes vercel@56.4.1 curl /combat-lab.html --deployment "$deployment" --token="$VERCEL_TOKEN" > /dev/null
           identity="$RUNNER_TEMP/deployment-source.json"
-          npx --yes vercel@56.4.1 curl /deployment-source.json --deployment "${{ steps.deploy.outputs.url }}" --token="$VERCEL_TOKEN" > "$identity"
+          npx --yes vercel@56.4.1 curl /deployment-source.json --deployment "$deployment" --token="$VERCEL_TOKEN" > "$identity"
           SOURCE_FILE="$identity" node <<'NODE'
           const fs = require('node:fs');
           const source = JSON.parse(fs.readFileSync(process.env.SOURCE_FILE, 'utf8'));
@@ -129,5 +133,5 @@ jobs:
           if (source.ref !== process.env.EXPECTED_REF) throw new Error(`ref mismatch: ${source.ref}`);
           if (source.verificationStatus !== 'passed') throw new Error(`verification status: ${source.verificationStatus}`);
           if ((source.skippedChecks ?? []).length !== 0) throw new Error('Preview verification contains skipped checks.');
-          console.log(JSON.stringify(source, null, 2));
+          console.log(`Verified deployment source: ${source.ref} @ ${source.sourceSha}`);
           NODE
