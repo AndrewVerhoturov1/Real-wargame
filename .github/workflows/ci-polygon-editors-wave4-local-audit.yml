@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      EXPECTED_PRODUCT_SHA: 3bc23f8e25173786e64af55c47022d772d1cae2a
+      EXPECTED_PRODUCT_SHA: f695c9b1c035340de319e769b2ada4c993d2b83b
       CANONICAL_FEATURE_BRANCH: feat/20260817-polygon-editors-visual-parity
       TARGET_URL: http://127.0.0.1:4173/combat-lab.html
     steps:
@@ -22,7 +22,7 @@ jobs:
       - name: Checkout exact product source
         uses: actions/checkout@v4
         with:
-          ref: 3bc23f8e25173786e64af55c47022d772d1cae2a
+          ref: f695c9b1c035340de319e769b2ada4c993d2b83b
           fetch-depth: 0
           path: product
       - name: Verify exact product source
