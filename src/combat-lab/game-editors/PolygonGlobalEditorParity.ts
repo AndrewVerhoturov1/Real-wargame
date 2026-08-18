@@ -307,10 +307,22 @@ function decorateRouteProfileEditor(host: HTMLElement): void {
   metadata.append(metadataHead, metadataGrid);
 
   const groups = [...form.querySelectorAll<HTMLElement>(':scope > .navigation-profile-group')];
+  const subtabs = decorateRouteProfileSubtabs(groups);
   const scroll = node('div', 'ge-route-scroll');
-  scroll.append(summary, featureGrid, primary, metadata);
+  scroll.append(
+    summary,
+    featureGrid,
+    primary,
+    metadata,
+    subtabs.terrain,
+    subtabs.tactics,
+    subtabs.territoryFuture,
+    subtabs.routeIntro,
+    subtabs.limits,
+    subtabs.rules,
+    subtabs.replanning,
+  );
   if (nameCard) scroll.append(nameCard);
-  for (const group of groups) scroll.append(group);
   const savebar = node('footer', 'ge-savebar');
   savebar.append(
     node(
@@ -334,10 +346,19 @@ function decorateRouteProfileEditor(host: HTMLElement): void {
 
   const views = [
     { id: 'main', label: 'Основное', groups: [] as HTMLElement[], showName: false },
-    { id: 'terrain', label: 'Местность', groups: groups.slice(0, 1), showName: false },
-    { id: 'tactics', label: 'Тактика', groups: groups.slice(1, 3), showName: false },
-    { id: 'route', label: 'Маршрут', groups: groups.slice(3), showName: true },
+    { id: 'terrain', label: 'Местность', groups: [subtabs.terrain], showName: false },
+    { id: 'tactics', label: 'Тактика', groups: [subtabs.tactics, subtabs.territoryFuture], showName: false },
+    { id: 'route', label: 'Маршрут', groups: [subtabs.routeIntro, subtabs.limits, subtabs.rules, subtabs.replanning], showName: true },
   ] as const;
+  const tabSurfaces = [
+    subtabs.terrain,
+    subtabs.tactics,
+    subtabs.territoryFuture,
+    subtabs.routeIntro,
+    subtabs.limits,
+    subtabs.rules,
+    subtabs.replanning,
+  ];
 
   const activate = (id: string): void => {
     const main = id === 'main';
@@ -345,7 +366,7 @@ function decorateRouteProfileEditor(host: HTMLElement): void {
     primary.hidden = !main;
     featureGrid.hidden = !main;
     metadata.hidden = !main;
-    groups.forEach((group) => { group.hidden = true; });
+    tabSurfaces.forEach((surface) => { surface.hidden = true; });
     if (nameCard) nameCard.hidden = true;
     const view = views.find((candidate) => candidate.id === id) ?? views[0];
     for (const group of view.groups) group.hidden = false;
@@ -516,6 +537,241 @@ function decorateDirectionalEditor(form: HTMLElement, heading: HTMLElement): voi
   visuals.append(slope, compass);
   heading.after(visuals);
   moveHeaderActionsToSavebar(form, heading, 'Направленный рельеф');
+}
+
+function decorateRouteProfileSubtabs(groups: HTMLElement[]): {
+  terrain: HTMLElement;
+  tactics: HTMLElement;
+  territoryFuture: HTMLElement;
+  routeIntro: HTMLElement;
+  limits: HTMLElement;
+  rules: HTMLElement;
+  replanning: HTMLElement;
+} {
+  const [terrain, tactics, territory, limits, replanning, rules] = groups;
+  const fallback = (): HTMLElement => node('section', 'ge-route-missing', 'Параметры профиля недоступны.');
+  if (!terrain || !tactics || !territory || !limits || !replanning || !rules) {
+    const missing = fallback();
+    return {
+      terrain: missing,
+      tactics: missing.cloneNode(true) as HTMLElement,
+      territoryFuture: missing.cloneNode(true) as HTMLElement,
+      routeIntro: missing.cloneNode(true) as HTMLElement,
+      limits: missing.cloneNode(true) as HTMLElement,
+      rules: missing.cloneNode(true) as HTMLElement,
+      replanning: missing.cloneNode(true) as HTMLElement,
+    };
+  }
+
+  decorateRouteFieldGroup(terrain, {
+    label: 'Местность',
+    title: 'Что маршрут предпочитает проходить, а что обходить',
+    description: 'Для большинства типов 1,0 — нейтральная цена; меньше — предпочтение, больше — избегание.',
+    fields: {
+      'terrainCosts.road': ['Дорога', 'Меньше 1,0 — маршрут охотнее использует дорогу; больше 1,0 — избегает.', '×', true],
+      'terrainCosts.field': ['Поле', 'Открытая земля. 1,0 — нейтральная цена.', '×', true],
+      'terrainCosts.sparseForest': ['Редкий лес', 'Можно сделать редкий лес предпочтительным скрытым путём.', '×', true],
+      'terrainCosts.denseForest': ['Густой лес', 'Чем выше значение, тем сильнее боец избегает густого леса.', '×', true],
+      'terrainCosts.rough': ['Пересечённая местность', 'Цена камней, неровностей и сложной поверхности.', '×', true],
+      'terrainCosts.swamp': ['Болото', 'Высокое значение заставляет искать обход болота.', '×', true],
+      'terrainCosts.bridge': ['Мост', 'Цена прохода по мосту. Непроходимая вода от этого не становится проходимой.', '×', true],
+      'terrainCosts.ditch': ['Канава', 'Канава может быть выгодным скрытым путём или неудобным препятствием.', '×', true],
+      slopeWeight: ['Уклон', 'Чем выше значение, тем сильнее маршрут избегает перепадов высоты.', 'вес', false],
+    },
+  });
+
+  decorateRouteFieldGroup(tactics, {
+    label: 'Тактика',
+    title: 'Как знания бойца меняют цену пути',
+    description: 'Редактор использует только субъективно известную бойцу информацию. Неподключённые факторы отмечены явно.',
+    fields: {
+      dangerWeight: ['Избегание известной опасности', 'Использует только угрозы, которые известны выбранному бойцу.', 'вес', false],
+      coverWeight: ['Предпочтение укрытий и маскировки', 'Положительное значение снижает цену укрытых и маскирующих участков.', 'вес', false],
+      exposureWeight: ['Избегание видимости противнику', 'Пока честные субъективные данные видимости недоступны, этот фактор фактически не участвует в расчёте.', 'вес', false, 'Ещё не подключено'],
+      enemyDistanceWeight: ['Отношение к близости противника', 'Точная субъективная дистанция до противника пока не используется.', 'вес', false, 'Ещё не подключено'],
+    },
+  });
+
+  decorateRouteFieldGroup(territory, {
+    fields: {
+      'territoryWeights.friendly': ['Своя территория', 'Будущий штраф или бонус этой категории территории.', 'вес', false, 'Будущая механика'],
+      'territoryWeights.neutral': ['Серая зона', 'Будущий штраф или бонус этой категории территории.', 'вес', false, 'Будущая механика'],
+      'territoryWeights.enemy': ['Вражеская территория', 'Будущий штраф или бонус этой категории территории.', 'вес', false, 'Будущая механика'],
+    },
+  });
+  territory.classList.add('ge-route-future-body');
+  const territoryFuture = document.createElement('details');
+  territoryFuture.className = 'ge-route-future';
+  const territorySummary = document.createElement('summary');
+  territorySummary.className = 'ge-future-head';
+  territorySummary.append(
+    node('span', '', 'Территориальные предпочтения'),
+    node('small', '', 'Будущая механика · сейчас не влияет на маршрут'),
+  );
+  territoryFuture.append(territorySummary, territory);
+
+  decorateRouteSection(limits, 'Ограничения', 'Жёсткие границы допустимого маршрута.');
+  decorateRouteLimit(limits);
+
+  decorateRouteSection(rules, 'Когда искать новый маршрут', 'Причины, которые разрешают пересчёт уже выбранного пути.');
+  decorateRouteChecks(rules, {
+    allowGoalAdjustment: ['Если конечная точка недоступна', 'Найти ближайшую доступную клетку вместо точного назначения.'],
+    'replanRules.replanOnBlocked': ['Если путь оказался заблокирован', 'Искать обход при блокировке ближайших клеток.'],
+    'replanRules.replanOnProfileChange': ['Если изменился профиль', 'Применять сохранённые изменения к активному маршруту.'],
+    'replanRules.replanOnDangerChange': ['Если изменилась известная опасность', 'Учитывать новые знания после минимального интервала.'],
+  });
+
+  decorateRouteSection(replanning, 'Чувствительность перестроения', 'Защищает движение от постоянного дёрганья из-за мелких изменений.');
+  decorateRouteFieldGroup(replanning, {
+    fields: {
+      'replanRules.minimumCostImprovement': ['Минимальное улучшение', 'Новый путь принимается только при достаточном выигрыше.', 'доля', false],
+      'replanRules.minimumDangerRevisionInterval': ['Минимум изменений опасности', 'Не перестраивать путь после каждого небольшого обновления знаний.', 'изменений', false],
+      'replanRules.replanCooldownSeconds': ['Пауза между перестроениями', 'Минимальное время между двумя пересчётами маршрута.', 'с', false],
+    },
+    keepSectionHead: true,
+  });
+
+  return {
+    terrain,
+    tactics,
+    territoryFuture,
+    routeIntro: routeSubtabIntro('Маршрут', 'Ограничения и перестроение пути', 'Когда текущий путь можно менять и насколько существенным должно быть улучшение.'),
+    limits,
+    rules,
+    replanning,
+  };
+}
+
+function routeSubtabIntro(label: string, title: string, description: string): HTMLElement {
+  const intro = node('section', 'ge-tab-intro');
+  const copy = node('div', '');
+  copy.append(node('span', '', label), node('h3', '', title), node('p', '', description));
+  intro.append(copy);
+  return intro;
+}
+
+type RouteFieldPresentation = [label: string, help: string, unit: string, showMeaning: boolean, badge?: string];
+
+function decorateRouteFieldGroup(
+  group: HTMLElement,
+  options: {
+    label?: string;
+    title?: string;
+    description?: string;
+    fields: Record<string, RouteFieldPresentation>;
+    keepSectionHead?: boolean;
+  },
+): void {
+  group.classList.add('ge-route-fields-surface');
+  const heading = group.querySelector<HTMLElement>(':scope > h3');
+  const grid = group.querySelector<HTMLElement>(':scope > .navigation-profile-field-grid');
+  if (options.label && options.title && options.description) {
+    heading?.replaceWith(routeSubtabIntro(options.label, options.title, options.description));
+  } else if (!options.keepSectionHead) {
+    heading?.remove();
+  }
+  grid?.classList.add('ge-field-grid');
+  for (const [path, presentation] of Object.entries(options.fields)) {
+    const field = group.querySelector<HTMLElement>(`[data-field-card="${path}"]`);
+    if (field) decorateRouteField(field, presentation);
+  }
+}
+
+function decorateRouteField(field: HTMLElement, presentation: RouteFieldPresentation): void {
+  const [label, help, unit, showMeaning, badge] = presentation;
+  field.classList.add('ge-field-card');
+  const title = field.querySelector<HTMLElement>('.navigation-profile-field-title');
+  const strong = title?.querySelector<HTMLElement>('strong');
+  const unitNode = title?.querySelector<HTMLElement>('span');
+  if (strong) strong.textContent = label;
+  if (unitNode) unitNode.textContent = unit;
+  if (title && strong && !title.querySelector('.ge-field-title-copy')) {
+    const copy = node('div', 'ge-field-title-copy');
+    strong.replaceWith(copy);
+    copy.append(strong);
+    if (showMeaning) {
+      const meaning = node('span', 'ge-field-meaning');
+      copy.append(meaning);
+      const input = field.querySelector<HTMLInputElement>('input[type="number"]');
+      const renderMeaning = (): void => { meaning.textContent = routeTerrainMeaning(Number(input?.value)); };
+      input?.addEventListener('input', renderMeaning);
+      input?.addEventListener('change', renderMeaning);
+      renderMeaning();
+    }
+  }
+  const description = field.querySelector<HTMLElement>('p');
+  if (description) description.textContent = help;
+  if (badge && !field.querySelector('.ge-field-badge')) {
+    const badgeNode = node('span', 'ge-field-badge', badge);
+    description?.insertAdjacentElement('afterend', badgeNode);
+  }
+}
+
+function decorateRouteSection(group: HTMLElement, title: string, description: string): void {
+  group.classList.add('ge-section', 'ge-route-section');
+  const heading = group.querySelector<HTMLElement>(':scope > h3');
+  const head = node('div', 'ge-section-head');
+  const copy = node('div', '');
+  copy.append(node('h3', '', title), node('p', '', description));
+  head.append(copy);
+  heading?.replaceWith(head);
+}
+
+function decorateRouteChecks(group: HTMLElement, labels: Record<string, [string, string]>): void {
+  const grid = group.querySelector<HTMLElement>(':scope > .navigation-profile-checkbox-grid');
+  grid?.classList.add('ge-check-grid');
+  for (const [path, [label, help]] of Object.entries(labels)) {
+    const check = group.querySelector<HTMLElement>(`[data-profile-checkbox="${path}"]`)?.closest<HTMLElement>('.navigation-profile-checkbox');
+    if (!check) continue;
+    check.classList.add('ge-check');
+    const strong = check.querySelector<HTMLElement>('strong');
+    const small = check.querySelector<HTMLElement>('small');
+    if (strong) strong.textContent = label;
+    if (small) small.textContent = help;
+  }
+}
+
+function decorateRouteLimit(group: HTMLElement): void {
+  const field = group.querySelector<HTMLElement>('[data-field-card="maximumRouteCost"]');
+  const number = field?.querySelector<HTMLInputElement>('input[type="number"]');
+  const range = field?.querySelector<HTMLInputElement>('input[type="range"]');
+  const reset = field?.querySelector<HTMLButtonElement>('[data-reset-field="maximumRouteCost"]');
+  if (!field || !number || !range) return;
+  field.classList.add('ge-route-limit');
+  const toggle = document.createElement('input');
+  toggle.type = 'checkbox';
+  toggle.checked = number.value.trim().length > 0;
+  const toggleLabel = document.createElement('label');
+  toggleLabel.className = 'ge-check ge-check--compact';
+  const toggleCopy = node('span', '');
+  toggleCopy.append(
+    node('strong', '', 'Ограничивать максимальную цену маршрута'),
+    node('small', '', 'Если выключено, верхнего предела нет.'),
+  );
+  toggleLabel.append(toggle, toggleCopy);
+  const inline = node('div', 'ge-inline-number');
+  inline.append(node('span', '', 'Предел'), number, node('span', '', 'цена'));
+  const sync = (): void => {
+    const enabled = toggle.checked;
+    inline.classList.toggle('is-disabled', !enabled);
+    number.disabled = !enabled;
+    range.disabled = !enabled;
+    if (!enabled) {
+      number.value = '';
+    } else if (!number.value.trim()) {
+      number.value = number.min || '1';
+    }
+    number.dispatchEvent(new Event('input', { bubbles: true }));
+    number.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  toggle.addEventListener('change', sync);
+  number.addEventListener('input', () => { toggle.checked = number.value.trim().length > 0; });
+  range.hidden = true;
+  reset?.setAttribute('hidden', '');
+  field.replaceChildren(toggleLabel, inline, range, reset ?? document.createTextNode(''));
+  inline.classList.toggle('is-disabled', !toggle.checked);
+  number.disabled = !toggle.checked;
+  range.disabled = !toggle.checked;
 }
 
 function decorateTacticalPositionEditor(host: HTMLElement): void {

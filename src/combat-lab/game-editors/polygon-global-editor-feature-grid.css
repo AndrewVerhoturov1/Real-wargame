@@ -242,6 +242,267 @@ body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors
   line-height: 1.4 !important;
 }
 
+/* Accepted HTML route-profile sub-tabs: presentation over the mounted owner fields only. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-route-fields-surface {
+  margin: 0 0 9px !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+  padding: 0 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-card {
+  min-width: 0 !important;
+  padding: 9px !important;
+  border: 1px solid var(--polygon-line) !important;
+  border-radius: 5px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-card .navigation-profile-field-title {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-title-copy {
+  display: flex !important;
+  min-width: 0 !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-card .navigation-profile-field-title strong {
+  font-size: 9px !important;
+  line-height: 1.2 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-card .navigation-profile-field-title > span {
+  flex: 0 0 auto !important;
+  color: #676b61 !important;
+  font-size: 7px !important;
+  font-weight: 800 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-meaning {
+  padding: 2px 5px !important;
+  border-radius: 8px !important;
+  background: #e8ebdf !important;
+  color: #52623f !important;
+  font-size: 6.5px !important;
+  font-weight: 900 !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-card p {
+  min-height: 22px !important;
+  margin: 4px 0 7px !important;
+  color: var(--polygon-muted) !important;
+  font-size: 7.3px !important;
+  line-height: 1.38 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-badge {
+  display: inline-flex !important;
+  margin: -2px 0 7px !important;
+  padding: 2px 5px !important;
+  border: 1px solid #c5b062 !important;
+  border-radius: 8px !important;
+  background: #fff3c9 !important;
+  color: #705b18 !important;
+  font-size: 6.5px !important;
+  font-weight: 900 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-card .navigation-profile-field-control {
+  display: grid !important;
+  grid-template-columns: minmax(120px, 1fr) 68px 27px !important;
+  gap: 6px !important;
+  align-items: center !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-card .navigation-profile-field-control input[type='range'] {
+  width: 100% !important;
+  accent-color: var(--polygon-top) !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-card .navigation-profile-field-control input[type='number'] {
+  width: 100% !important;
+  height: 29px !important;
+  border: 1px solid var(--polygon-line-strong) !important;
+  border-radius: 4px !important;
+  background: #fff !important;
+  padding: 4px 6px !important;
+  text-align: right !important;
+  font: 8.5px var(--polygon-mono) !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-card .navigation-profile-field-control button {
+  height: 29px !important;
+  border: 1px solid #a38a2c !important;
+  border-radius: 4px !important;
+  background: #fff8d7 !important;
+  color: #5e511f !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-card .navigation-profile-field-meta {
+  display: flex !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  margin-top: 5px !important;
+  color: #85877f !important;
+  font-size: 6.8px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-route-future {
+  margin: 9px 0 !important;
+  border: 1px solid var(--polygon-line) !important;
+  border-radius: 5px !important;
+  background: #fff !important;
+  overflow: hidden !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-future-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  padding: 9px 10px !important;
+  background: #f0efe8 !important;
+  color: #34372f !important;
+  cursor: pointer !important;
+  list-style: none !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-future-head::-webkit-details-marker {
+  display: none !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-future-head > span {
+  font-size: 9px !important;
+  font-weight: 900 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-future-head small {
+  margin-left: auto !important;
+  color: var(--polygon-muted) !important;
+  font-size: 7px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-route-future-body {
+  margin: 0 !important;
+  padding: 8px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-route-section {
+  margin: 0 0 9px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-check-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+  padding: 8px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-check {
+  display: flex !important;
+  min-height: 53px !important;
+  align-items: flex-start !important;
+  gap: 7px !important;
+  padding: 8px !important;
+  border: 1px solid var(--polygon-line) !important;
+  border-radius: 5px !important;
+  background: #fff !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-check input {
+  width: 13px !important;
+  min-width: 13px !important;
+  height: 13px !important;
+  min-height: 13px !important;
+  margin-top: 2px !important;
+  accent-color: var(--polygon-top) !important;
+  appearance: auto !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-check strong,
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-check small {
+  display: block !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-check strong {
+  font-size: 8.5px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-check small {
+  margin-top: 3px !important;
+  color: var(--polygon-muted) !important;
+  font-size: 7px !important;
+  line-height: 1.35 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-route-limit {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 260px !important;
+  gap: 8px !important;
+  align-items: center !important;
+  padding: 8px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-check--compact {
+  min-height: 48px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-inline-number {
+  display: grid !important;
+  grid-template-columns: auto minmax(90px, 1fr) auto !important;
+  gap: 6px !important;
+  align-items: center !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-inline-number span {
+  color: var(--polygon-muted) !important;
+  font-size: 7px !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-inline-number input {
+  height: 30px !important;
+  border: 1px solid var(--polygon-line-strong) !important;
+  border-radius: 4px !important;
+  background: #fff !important;
+  padding: 5px 7px !important;
+  font: 9px var(--polygon-mono) !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-inline-number.is-disabled {
+  opacity: .5 !important;
+}
+
+@media (max-width: 1250px) {
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-field-grid,
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-check-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .ge-route-limit {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 /* Direct structural transfer of the accepted Route Profiles prototype. */
 body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-route-profile-editor .navigation-profile-list-panel {
   min-width: 0 !important;

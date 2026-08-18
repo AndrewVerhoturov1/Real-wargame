@@ -153,12 +153,20 @@ expectIncludes('src/combat-lab/game-editors/PolygonGlobalEditorParity.ts', [
   'polygonRouteDetourPercent',
   "'ge-route-scroll'",
   "'ge-profile-meta-grid'",
+  'decorateRouteProfileSubtabs',
+  'routeSubtabIntro',
+  'ge-route-future',
+  'ge-route-limit',
+  'tabSurfaces.forEach((surface) => { surface.hidden = true; });',
 ]);
 
 expectIncludes('src/combat-lab/game-editors/polygon-global-editor-feature-grid.css', [
   '.polygon-route-profile-editor .ge-route-main',
   '.polygon-route-profile-editor .ge-detour-control',
   '.polygon-route-profile-editor .ge-profile-meta-grid',
+  '.polygon-route-profile-editor .ge-field-card',
+  '.polygon-route-profile-editor .ge-route-future',
+  '.polygon-route-profile-editor .ge-route-limit',
 ]);
 
 expectIncludes('src/game-editors/GameEditorReturnTarget.ts', [
