@@ -17,5 +17,5 @@ export default defineConfig({
     video: 'off',
     launchOptions: { args: ['--use-gl=swiftshader', '--ignore-gpu-blocklist'] },
   },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+  projects: [{ name: 'chrome', use: { browserName: 'chromium', channel: 'chrome' } }],
 });
