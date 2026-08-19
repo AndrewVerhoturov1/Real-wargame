@@ -29,6 +29,15 @@ Generated from canonical repository and subproject metadata.
 - **Last verified commit:** `86071bb3d0c4ebd95adf4e87ee4d575fa7108da3`
 - **Status:** [generated status](../subprojects/infantry-combat-prototype-v1/STATUS.md)
 
+## Active subproject: Перенос Полигона из HTML-прототипа в продукт
+
+- **ID:** `polygon-html-to-product`
+- **Updated:** 2026-08-15
+- **Current focus:** Аналитическая фаза завершена; четыре независимых Q-handoff для АРКИ, ПУЛЬСА, ЛИНЗЫ и ХРОНИСТА подготовлены, а рабочая карта проекта создана. Q пока не запущены.
+- **Next step:** После отдельного разрешения пользователя заново получить exact current HEAD real-wargame-preview и запустить четыре Q параллельно на назначенных feature-ветках. Первая точка интеграции после принятия результатов: АРКА + ПУЛЬС → первый настоящий LIVE Unit.
+- **Last verified commit:** not recorded
+- **Status:** [generated status](../subprojects/polygon-html-to-product/STATUS.md)
+
 ## Active subproject: Полигон — редактор эксперимента
 
 - **ID:** `polygon-prototype`
