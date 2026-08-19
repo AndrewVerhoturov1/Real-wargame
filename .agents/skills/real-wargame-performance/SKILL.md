@@ -1,3 +1,8 @@
+---
+name: real-wargame-performance
+description: Use this project skill for tasks that can affect runtime cost, not for documentation or repository-process changes that cannot alter the program or measured scenario.
+---
+
 # Real-Wargame Performance
 
 Use this project skill for tasks that can affect runtime cost, not for documentation or repository-process changes that cannot alter the program or measured scenario.
