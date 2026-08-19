@@ -1,123 +1,80 @@
-# Handoff оркестратору — поэлементный перенос Полигона 2026-08-17
+# Handoff оркестратору — актуальная точка входа
 
-## Текущая задача: поэлементный перенос (новый принятый подход)
+Дата актуализации: 2026-08-18
 
-Текущий способ работы подпроекта зафиксирован пользователем: Полигон переносится по одному элементу/вертикальному срезу (вкладка, карта или другой конкретный элемент).
+Этот файл первоначально описывал six-X/checkpoint этап от 2026-08-17. Дальнейшую работу по подпроекту теперь продолжает **Кодекс**, а текущий подробный handoff перенесён в:
 
-Для каждого элемента:
+`docs/subprojects/polygon-html-to-product/CODEX_HANDOFF_20260818.md`
 
-1. параллельно запускаются два исполнителя:
-   - **визуальный** — переносит вёрстку, графику, отступы, цвета, размеры, шрифты и иконки из утверждённого HTML-прототипа пиксель в пиксель; функциональные связи пока не подключает;
-   - **аналитик** — сравнивает прототип и продукт, определяет, что уже есть, что частично есть, чего нет, настоящих владельцев данных, точки подключения и назначение каждой кнопки;
-2. затем запускаются отдельные исполнители: подключающий уже готовые функции, доделывающий отсутствующие/неполные возможности и реализующий новые запланированные функции прототипа; при необходимости их может быть несколько.
+Текущий статус подпроекта:
 
-Весь функциональный объём HTML-прототипа, включая запланированные возможности, остаётся целью подпроекта.
+`docs/subprojects/polygon-html-to-product/INTEGRATION_STATUS.md`
 
-Канонический процесс и критерии перехода элемента:
-
-`docs/subprojects/polygon-html-to-product/ELEMENT_MIGRATION_WORKFLOW.md`
-
-Важно для оркестратора:
-
-- результаты прежней six-X волны сохраняются как историческое исследование и технический контекст, но **не являются автоматическим основанием для объединения кода**;
-- текущий checkpoint — техническая база, но **визуально не принят**;
-- запрещены автоматический перенос в `real-wargame-preview`, изменения `main`, merge и deploy без отдельного явного разрешения пользователя.
-
-Канонический документ статуса checkpoint:
-
-`docs/subprojects/polygon-html-to-product/CHECKPOINT_20260817_APPROACH_RESET.md`
-
-Ниже сохранён **исторический handoff исходной six-X волны**, чтобы не потерять причины и границы уже выполненной работы.
-
----
-
-## Что изменилось на старте six-X волны
-
-После объединения АРКИ, ПУЛЬСА, ЛИНЗЫ и ХРОНИСТА пользователь изменил ближайший приоритет: сначала сделать новый Полигон цельной игровой поверхностью, а не уходить глубже в Metrics/Series/replay.
-
-Была подготовлена параллельная волна из шести исполнителей:
-
-1. **КАРТА** — живая product map вместо ARKA placeholder, visual presentation ближе к принятому прототипу.
-2. **ПУЛЬС** — selection → UnitModel → `Юнит` LIVE → posture command → readback.
-3. **РЕДАКТОРЫ** — существующие product editors в новом shell/design; не переписывать editor logic.
-4. **ЛИНЗА** — `Инфо / Внимание / Память` LIVE по принятому contract.
-5. **КОНТЕКСТ** — entity context menu с сохранением существующих right-button tactical orders.
-6. **ПЕШКА** — принятая система тактических знаков в `PixiUnitRenderer` + near/medium/far LOD.
-
-Полный historical coordination contract:
-
-`docs/subprojects/polygon-html-to-product/IMPLEMENTATION_WAVE_20260817.md`
-
-Prompt-файлы:
+## Точная передаваемая product-идентичность
 
 ```text
-docs/subprojects/polygon-html-to-product/prompts/01_MAP_SURFACE.md
-docs/subprojects/polygon-html-to-product/prompts/02_PULSE_LIVE_UNIT.md
-docs/subprojects/polygon-html-to-product/prompts/03_EDITORS_NEW_DESIGN.md
-docs/subprojects/polygon-html-to-product/prompts/04_LINZA_RIGHT_PANEL_LIVE.md
-docs/subprojects/polygon-html-to-product/prompts/05_ENTITY_CONTEXT_MENU.md
-docs/subprojects/polygon-html-to-product/prompts/06_UNIT_MAP_TOKEN.md
+repository: AndrewVerhoturov1/Real-wargame
+base_branch: real-wargame-preview
+base_commit: bd25f5debc312db7021b1515a525697ad248fff1
+feature_branch: feat/20260817-polygon-editors-visual-parity
+verified_product_sha: f695c9b1c035340de319e769b2ada4c993d2b83b
 ```
 
-## Историческая база запуска
+Документационные commits после `f695c9b1...` не меняют факт, что именно этот product snapshot прошёл финальные проверки и опубликован. При старте Кодекс обязан заново получить свежий remote HEAD ветки.
 
-Planning anchor:
+## Опубликованный Preview
 
 ```text
-real-wargame-preview @ 26e5f7f3681a4cf03e58ae7137cfe67387a1e015
+Vercel project: repo
+deployment: dpl_5LcLrP6Me3RVCQ7ibQavpJRstXYF
+URL: https://repo-mb33ew0x4-111s-projects-807221af.vercel.app/combat-lab.html
+status: READY
+sourceSha: f695c9b1c035340de319e769b2ada4c993d2b83b
+verification: 31/31 Preview checks passed
+browser audit: 32088591178 — SUCCESS
 ```
 
-Позже общая planning/documentation база дошла до `8292bf25bf241712901090fcb565dded939e7a08`, от которой стартовали шесть X-исполнителей.
+## Текущий рабочий принцип
 
-## Что было важно при раздаче
+Полигон переносится **поэлементно** из принятого HTML-прототипа в продукт.
 
-- Не смешивать зоны между исполнителями.
-- КАРТА не меняет unit renderer/selection.
-- ПЕШКА не меняет map terrain/selection.
-- ПУЛЬС владеет selection и минимальным generic right-panel seam.
-- ЛИНЗА не создаёт второй selection; её views/adapters принимают hosts/state извне.
-- РЕДАКТОРЫ сохраняют стабильный editor-open API.
-- КОНТЕКСТ сохраняет quick move/right-drag/hold radial tactical orders; его задача — arbitration, а не замена tactical order system.
+Для каждого элемента необходимо разделять:
 
-Эти ownership-инварианты остаются полезными техническими знаниями и после смены визуального подхода.
+1. visual/presentation gap;
+2. presentation-adapter на существующем owner;
+3. owner/read-model dependency;
+4. реально отсутствующую product capability.
 
-## Что не запускалось в первой очереди
+HTML не становится новым runtime или registry. Реальные owners продукта остаются источником данных и команд.
 
-ХРОНИСТ/Metrics/Series/replay/Save/Open не отменялись, но не ставились выше six-X волны. Они по-прежнему отдельные незавершённые направления.
+## Главные незакрытые editor-зависимости
 
-## Исторический integration order
+- `Типы поверхностей` — отсутствует standalone authoritative product owner; пункт остаётся `НЕДОСТУПНО`;
+- `Профили местности` — требуется проверить aggregate Environment Profile owner/read-model;
+- `Направленный рельеф` — нужны live silhouette/8-sector diagrams из authoritative values;
+- остальные редакторы допускают дальнейшую presentation-полировку без создания второй истины.
+
+## Границы для Кодекса
+
+- не создавать fake data/registry/localStorage architecture ради визуальной похожести;
+- не создавать второй selection/map/runtime/editor owner;
+- не переносить в `real-wargame-preview` без отдельного GO пользователя;
+- не трогать `main`;
+- новый deploy — только по отдельному явному запросу;
+- visual QA делать свежими screenshot exact SHA;
+- после code-wave запускать TypeScript + `verify:preview` + production build.
+
+## Исторические документы
+
+Six-X/checkpoint история сохранена отдельно и не потеряна:
 
 ```text
-КАРТА
-→ ПЕШКА
-→ ПУЛЬС
-→ ЛИНЗА
-→ РЕДАКТОРЫ
-→ КОНТЕКСТ
+docs/subprojects/polygon-html-to-product/CHECKPOINT_20260817_APPROACH_RESET.md
+docs/subprojects/polygon-html-to-product/IMPLEMENTATION_WAVE_20260817.md
+docs/subprojects/polygon-html-to-product/ARKA_IMPLEMENTATION_HANDOFF.md
+docs/subprojects/polygon-html-to-product/ARKA_PLANNED_SCOPE_CHECK.md
+docs/subprojects/polygon-html-to-product/LINZA_RIGHT_PANEL_CONTRACT.md
+docs/subprojects/polygon-html-to-product/CHRONIST_EXPERIMENT_CONTRACT.md
 ```
 
-Фактическая six-X сборка уже выполнена в integration lineage; следующий исполнитель не должен повторять этот merge-процесс с нуля.
-
-## Старые ветки, которые можно исследовать, но нельзя вливать вслепую
-
-```text
-feature/20260816-polygon-live-unit-complete
-feature/20260808-soldier-topdown-appearance*
-feature/20260812-polygon-global-editors
-feature/20260805-map-diorama-prototype
-```
-
-Причины:
-
-- live-unit ветка построена до новой общей базы;
-- soldier branches сильно разошлись с текущим preview;
-- global-editors уже присутствуют в истории продукта;
-- map-diorama — старый standalone визуальный ориентир, не product base.
-
-## Приёмка следующей итерации
-
-Новый подход пользователя должен получить собственный scope и собственные acceptance criteria. Нельзя автоматически переиспользовать формулировку «pixel-perfect как HTML» как текущую задачу без нового подтверждения.
-
-Для визуальных задач по-прежнему использовать repository screenshot skill и свежие PNG exact SHA. Runtime/render задачи проверять по performance/risk-based правилам.
-
-`main` не transfer/merge без отдельного пользовательского GO.
+Для следующей сессии **не начинать с этого исторического файла**. Начинать с `CODEX_HANDOFF_20260818.md` и затем читать `INTEGRATION_STATUS.md`.

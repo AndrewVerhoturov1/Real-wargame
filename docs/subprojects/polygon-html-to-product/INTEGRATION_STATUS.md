@@ -1,163 +1,232 @@
-# Перенос Полигона — текущий статус: поэлементный перенос
+# Перенос Полигона — текущий статус
 
-Дата: 2026-08-17
+Дата актуализации: 2026-08-18
 
-## Новый текущий статус — поэлементный перенос
+## Текущая точка входа
 
-Текущий способ работы подпроекта зафиксирован: Полигон переносится из утверждённого HTML-прототипа в продукт **по одному элементу/вертикальному срезу** (вкладка, карта или другой конкретный элемент).
+Дальнейшую доработку подпроекта после текущей Web Chat-волны продолжает **Кодекс**.
 
-Для каждого элемента параллельно работают два исполнителя:
+Главный handoff:
 
-- **визуальный** — перенос вёрстки, графики, отступов, цветов, размеров, шрифтов и иконок из HTML-прототипа пиксель в пиксель, без подключения функциональных связей;
-- **аналитик** — сравнение прототипа и продукта: что уже есть, что частично есть, чего нет, настоящие владельцы данных, точки подключения, назначение каждой кнопки.
+`docs/subprojects/polygon-html-to-product/CODEX_HANDOFF_20260818.md`
 
-Затем запускаются отдельные исполнители: подключающий уже готовые функции, доделывающий отсутствующие/неполные возможности и реализующий новые запланированные функции прототипа (при необходимости их может быть несколько). Весь функциональный объём HTML-прототипа, включая запланированные возможности, остаётся целью подпроекта.
+Канонический рабочий подход остаётся поэлементным: принятый HTML-прототип задаёт presentation/композицию, а продуктовые owners задают реальные данные, команды, persistence и readback.
 
-Канонический процесс и критерии перехода элемента:
+Процесс:
 
 `docs/subprojects/polygon-html-to-product/ELEMENT_MIGRATION_WORKFLOW.md`
 
-Старый порядок (параллельная six-X волна и последующая parity-попытка) **больше не является текущим способом работы**. Он сохранён ниже как историческое исследование и технический контекст и не считается автоматическим основанием для объединения кода.
+## Профили маршрута — локальная visual-полировка 2026-08-18
 
-Запрещены без отдельного явного разрешения пользователя: автоматический перенос в `real-wargame-preview`, изменения `main`, merge и deploy.
-
-## CHECKPOINT 2026-08-17 — историческая запись переноса в preview
-
-Пользователь решил сохранить текущий результат в `real-wargame-preview` как **технический checkpoint**, а дальнейшую реализацию продолжать уже по другому подходу.
-
-Ключевой статус:
+Точный локальный product commit:
 
 ```text
-product snapshot before checkpoint docs:
-feature/20260817-polygon-editor-inner-parity
-@ 0792cae6ba353c781847d3e2f7f588cdf7047329
-
-target before transfer:
-real-wargame-preview
-@ 8292bf25bf241712901090fcb565dded939e7a08
-
-user visual verdict:
-NOT ACCEPTED AS FINAL DESIGN
+c30a2bfb3ec24322b384ee192c2c16b84fe45f64
 ```
 
-Перенос в preview означает только сохранение уже сделанной инженерной работы и рабочих product contracts. Он **не означает**:
+Он **не отправлен, не перенесён в `real-wargame-preview` и не задеплоен**.
 
-- визуальную приёмку текущей карты;
-- визуальную приёмку Map Editor / Unit Editor / Global Editors;
-- подтверждение pixel-perfect соответствия HTML-прототипу;
-- утверждение текущих presentation adapters как окончательной архитектуры;
-- требование следующему исполнителю продолжать ту же стратегию полировки.
+Для состояния `Осторожный / Основное` перенесены из принятого HTML-прототипа:
 
-Пользователь прямо указал, что текущий результат его пока не устраивает и подход будет изменён.
+- структура списка `Встроенные / Мои профили`, пустое состояние и размеры строк;
+- шапка профиля, чип, вкладки, резюме и четыре семантические карточки;
+- горизонтальное ограничение обхода с процентным readback и кнопкой сброса;
+- компактные четыре колонки метаданных;
+- закреплённая нижняя полоса.
 
-Каноническая запись checkpoint и правила следующего старта:
+Визуальная проверка сделана локально во встроенном браузере при `1442×740` по приложенному утверждённому скриншоту. Ползунок и процентный ввод меняют один и тот же настоящий `maximumDetourRatio`; проверен readback `50% → 55% → 50%`.
 
-`docs/subprojects/polygon-html-to-product/CHECKPOINT_20260817_APPROACH_RESET.md`
+Принятое исключение: пункт **«Типы поверхностей»** остаётся таким, как в продукте — недоступным с меткой `НЕДОСТУПНО`.
 
-Все секции ниже сохраняются как **история предыдущих решений и волн**. Если старая формулировка ниже выглядит более оптимистичной по визуальной готовности, верхний checkpoint имеет приоритет для текущего состояния.
+Счётчики `Бойцы / Программа / Лаборатория` в нижней полосе пока являются только presentation-оболочкой с нулевыми значениями. У них ещё нет одного authoritative owner/read-model, поэтому нельзя считать их функционально подключёнными.
 
-## Текущая продуктовая база до checkpoint-transfer
+## Профили маршрута — внутренние вкладки 2026-08-18
+
+Локальный product commit:
+
+```text
+e26116d6f7cf19f02e895319a38f8fb372e5222c
+```
+
+Он **не отправлен, не перенесён в `real-wargame-preview` и не задеплоен**.
+
+Из утверждённого HTML перенесены на реальные product-owner поля три внутренних вкладки профиля маршрута:
+
+- `Местность`: вводная карточка и сетка из девяти реальных параметров; названия, пояснения, единицы, состояния предпочтения/избегания, ползунки, вводы и сброс соответствуют прототипу;
+- `Тактика`: четыре настоящих веса, две честные метки `Ещё не подключено` и сворачиваемые `Территориальные предпочтения` с меткой будущей механики;
+- `Маршрут`: прототипный порядок `Ограничения → Когда искать новый маршрут → Чувствительность перестроения`, компактные чекбоксы и настоящий `maximumRouteCost`.
+
+Для ограничения цены переключатель и числовой ввод меняют тот же owner path: readback во встроенном браузере подтверждён как `без предела → 1 → без предела`. Блок территориальных предпочтений проверен скрытым вне вкладки `Тактика`.
+
+Визуальная проверка проведена в настоящем локальном приложении во встроенном браузере при `1442×740`; экраны `Местность`, `Тактика` и `Маршрут` сняты и просмотрены. Новый layout не вводит второй state, registry или runtime-owner.
+
+## Профили маршрута — точная типографика 2026-08-18
+
+Локальный product commit:
+
+```text
+c5c060f75f3753a229516ffff1e6f230d33252cd
+```
+
+Для всего дерева `Профили маршрута` восстановлен прямой шрифтовой стек принятого HTML: `Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif`. До этого дерево наследовало legacy-стек `Arial, Helvetica, sans-serif` от старой оболочки Combat Lab. Кнопки и стандартные поля теперь наследуют тот же стек; числовой ввод ограничения маршрута отдельно остаётся с точным prototype mono-стеком `ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`.
+
+Во встроенном браузере при `1442×740` проверены `Основное`, `Местность`, `Тактика` и `Маршрут`: семейство, размеры, насыщенность, межбуквенные интервалы, межстрочные интервалы и отступы существующих перенесённых блоков соответствуют правилам HTML-прототипа. Ошибок страницы не обнаружено. Изменение presentation-only: product owners, данные, команды и persistence не менялись. Commit не отправлен, не перенесён в `real-wargame-preview` и не задеплоен.
+
+## Точный текущий product snapshot
 
 ```text
 repository: AndrewVerhoturov1/Real-wargame
-branch: real-wargame-preview
-current pre-transfer HEAD: 8292bf25bf241712901090fcb565dded939e7a08
-previous accepted baseline inside its history: 26e5f7f3681a4cf03e58ae7137cfe67387a1e015
+base_branch: real-wargame-preview
+base_commit: bd25f5debc312db7021b1515a525697ad248fff1
+feature_branch: feat/20260817-polygon-editors-visual-parity
+verified_product_sha: f695c9b1c035340de319e769b2ada4c993d2b83b
 ```
 
-SHA `26e5f7f...` уже содержит объединённые принятые результаты АРКИ, ПУЛЬСА, исправленной ЛИНЗЫ и ХРОНИСТА. Позднее preview был продвинут документирующей волной до `8292bf25...`. Текущий checkpoint будет перенесён поверх этой линии отдельным пользовательским GO.
+После `f695c9b1...` на feature-ветку могут добавляться documentation-only commits. Следующий исполнитель обязан получать свежий remote HEAD, а `f695c9b1...` использовать как идентичность уже проверенного и опубликованного product snapshot.
 
-## Принятые результаты предыдущего этапа
-
-| Направление | Принятый exact SHA | Статус | Что принято |
-|---|---|---|---|
-| АРКА | `0309b34d71d4bf4987c58a343576fbf79c185b44` | ACCEPT по пользовательской визуальной приёмке предыдущего этапа | Продуктовый shell Полигона, панели, вкладки, topbar и новый UI-каркас |
-| ПУЛЬС | `aa7965ca06df12453466a5f03efc723318b94e44` | ACCEPT | Контракт `map selection → unitId → UnitModel → LIVE Unit → штатная команда → readback` |
-| ЛИНЗА | `8040f5282b81d6465c02cc41b02ec024819ac575` | ACCEPT после ревизии | Контракт реальных owners `Инфо / Внимание / Память`; без LINZA-owned runtime/history/front |
-| ХРОНИСТ | `9e2a7d819440ae82572134ff3caa690724f007d1` | ACCEPT | Контракт experiment identity, Program↔Journal, History, Metrics, Laboratory, Series, replay/persistence и Save/Open boundaries |
-
-Общий integration PR #281 объединён в `real-wargame-preview` merge-коммитом:
-
-`26e5f7f3681a4cf03e58ae7137cfe67387a1e015`
-
-Перед transfer прошли `Preview Policy` и `Agent Docs Integrity`, включая проверку generated files/repository context.
-
-## Решение пользователя по АРКЕ предыдущего этапа
-
-Пользователь лично проверил финальный внешний результат АРКИ и подтвердил, что он его устраивает на том этапе. Прежний Route X-блокер о недостаточной независимой pixel-perfect доказательности был снят пользовательской приёмкой.
-
-Это историческое решение **не распространяется автоматически** на последующую six-X интеграцию и текущие редакторские presentation-слои. Для них действует новый checkpoint-статус выше: технически сохраняем, визуально финальным не считаем.
-
-## Что реально уже реализовано
-
-АРКА — реальная продуктовая оболочка нового Полигона.
-
-В продукте также существуют настоящие механизмы, которые следующие итерации должны по возможности переиспользовать:
-
-- `GameApplication` / `PixiTacticalBoardApp` / `PixiMapRenderer` — настоящая карта;
-- `PixiUnitRenderer` — текущий product owner отображения юнитов;
-- `BoardInputController` + `TacticalOrderRadialInput` — map selection/input/tactical right-button gestures;
-- `CombatLabGameEditors` + `GameEditorRegistry` — существующие общие редакторы;
-- product owners/write paths, зафиксированные контрактами ПУЛЬСА и ЛИНЗЫ.
-
-Six-X integration и последующая parity-попытка дополнительно собрали live map, unit token/LOD, LIVE Unit, LINZA views, editor routes и entity context menu в одной ветке. Эти технические связи сохраняются checkpoint'ом, даже если presentation будет переделан.
-
-## Предыдущий ближайший приоритет пользователя
-
-На предыдущей итерации первым приоритетом было не Metrics/Series/replay, а сделать новый Полигон цельной игровой поверхностью.
-
-Была запущена параллельная волна из шести направлений:
-
-1. **КАРТА** — настоящая поверхность map renderer внутри нового shell вместо placeholder; presentation ближе к принятому прототипу.
-2. **ПУЛЬС** — настоящий `LIVE Unit`: selection → UnitModel → правый `Юнит` → posture command → readback.
-3. **РЕДАКТОРЫ** — существующие продуктовые редакторы в новом shell/design без переписывания domain logic.
-4. **ЛИНЗА** — `Инфо / Внимание / Память` LIVE по реальным owners.
-5. **КОНТЕКСТ** — единое entity context menu в новом дизайне с сохранением существующих tactical right-button controls.
-6. **ПЕШКА** — новая product-визуализация бойца по принятому `UNIT_SYMBOL_SYSTEM.md`, включая near/medium/far LOD.
-
-Канонический historical coordination document:
-
-`docs/subprojects/polygon-html-to-product/IMPLEMENTATION_WAVE_20260817.md`
-
-Подробные prompt-файлы:
+## Vercel Preview
 
 ```text
-docs/subprojects/polygon-html-to-product/prompts/01_MAP_SURFACE.md
-docs/subprojects/polygon-html-to-product/prompts/02_PULSE_LIVE_UNIT.md
-docs/subprojects/polygon-html-to-product/prompts/03_EDITORS_NEW_DESIGN.md
-docs/subprojects/polygon-html-to-product/prompts/04_LINZA_RIGHT_PANEL_LIVE.md
-docs/subprojects/polygon-html-to-product/prompts/05_ENTITY_CONTEXT_MENU.md
-docs/subprojects/polygon-html-to-product/prompts/06_UNIT_MAP_TOKEN.md
+project: repo
+deployment_id: dpl_5LcLrP6Me3RVCQ7ibQavpJRstXYF
+preview: https://repo-mb33ew0x4-111s-projects-807221af.vercel.app/
+polygon: https://repo-mb33ew0x4-111s-projects-807221af.vercel.app/combat-lab.html
+status: READY
 ```
 
-Historical handoff оркестратору:
-
-`docs/subprojects/polygon-html-to-product/ORCHESTRATOR_HANDOFF_20260817.md`
-
-## Основные зависимости предыдущей волны
+Публикация выполнена через exact-source fallback из repo deployment skill. В опубликованном `/deployment-source.json` подтверждены:
 
 ```text
-КАРТА + ПЕШКА + ПУЛЬС
-→ настоящая карта + настоящий знак бойца + selection + Юнит LIVE
-
-ПУЛЬС + ЛИНЗА
-→ единая выбранная сущность + Юнит/Инфо/Внимание/Память
-
-РЕДАКТОРЫ + КОНТЕКСТ
-→ entity → authoritative editor/open route
-
-КОНТЕКСТ + tactical input
-→ entity menu без потери quick move/right-drag/radial orders
+ref: feat/20260817-polygon-editors-visual-parity
+sourceSha: f695c9b1c035340de319e769b2ada4c993d2b83b
+verificationStatus: passed
+skippedChecks: []
 ```
 
-ПУЛЬС владеет минимальным generic right-panel/selection seam. ЛИНЗА не создаёт второй selection. Этот invariant остаётся полезным независимо от нового визуального подхода.
+## Проверки текущего результата
 
-## Что отложено, но не отменено
+Для `f695c9b1...`:
 
-Остаются отдельные задачи:
+- Preview verification gate — **31/31 passed**;
+- TypeScript — passed;
+- production build — passed;
+- deployment pages contract — passed;
+- `/`, `/ai-node-editor.html`, `/combat-lab.html`, `/deployment-source.json` — опубликованы и проверены;
+- exact system-Chrome audit `32088591178` — **SUCCESS**;
+- viewport visual QA — `1440x900`;
+- 11 состояний редакторов сняты;
+- 0 console errors;
+- 0 page errors;
+- 0 failed requests.
 
-- Program↔Journal LIVE foundation;
-- общий canonical HistoryProvider;
+Validation/audit PR #311 и #312 закрыты без merge.
+
+## Текущий статус раздела «Редакторы»
+
+Принятая навигация содержит ровно 11 пунктов:
+
+1. Профили маршрута
+2. Тактические позиции
+3. Архетипы бойцов
+4. Профили внимания
+5. Профили восприятия
+6. Профили движения
+7. Вооружение
+8. Ранения и подавление
+9. Типы поверхностей
+10. Профили местности
+11. Направленный рельеф
+
+Группы:
+
+```text
+Поведение:
+- Профили маршрута
+- Тактические позиции
+
+Боец:
+- Архетипы бойцов
+- Профили внимания
+- Профили восприятия
+- Профили движения
+
+Бой:
+- Вооружение
+- Ранения и подавление
+
+Мир:
+- Типы поверхностей
+- Профили местности
+- Направленный рельеф
+```
+
+`Данные бойца` и `Граф поведения` не входят в визуальную навигацию Полигона. Их код не удаляется.
+
+## Что закрыто текущей visual-parity волной
+
+Общее:
+
+- modal/shell и nav геометрически сближены с принятым HTML;
+- устранён legacy inset рабочей области;
+- унифицированы tabs/cards/forms/footer presentation;
+- secondary mode label убран из первого визуального плана;
+- устранён конфликт `[hidden]` с owner `display:grid !important`.
+
+По редакторам:
+
+- `Тактические позиции` — semantic summary строится из реальных owner fields;
+- `Профили движения` — live summary использует настоящий owner state;
+- `Вооружение` — live summary и presentation-tabs поверх существующих authoritative sections;
+- `Архетипы бойцов` — исправлены compact tabs/summary/owner-grid;
+- `Ранения и подавление` — исправлены compact tabs/summary/owner-grid;
+- `Профили восприятия` — flow больше не забирает flexible owner row;
+- `Направленный рельеф` — статические псевдодиаграммы не выдаются за live визуализацию.
+
+Product/gameplay owners, persistence и write paths ради визуальной подгонки не заменялись.
+
+## Незавершённые области
+
+### 1. Типы поверхностей — BLOCKED
+
+Отдельный authoritative product owner отсутствует. До его появления пункт должен оставаться честно `НЕДОСТУПНО`.
+
+Нельзя переносить prototype static registry/localStorage как product capability.
+
+### 2. Профили местности — PARTIAL
+
+Прототип ожидает aggregate environment profile, а текущий product UI во многих состояниях представляет вложенный material/environment контекст.
+
+Если агрегированного read-model нет, нужна product owner/read-model задача; CSS сам по себе этот semantic gap не решает.
+
+### 3. Направленный рельеф — PARTIAL
+
+Для принятого вида нужны live silhouette и 8-sector diagram, построенные из authoritative values. Статическая имитация запрещена.
+
+### 4. Остальные редакторы
+
+Основная presentation-структура улучшена, но Кодекс может продолжить поэлементную визуальную полировку и перераскладку live owner controls. Любые reset/slider/readback улучшения должны сохранять один authoritative state/command path.
+
+## Ключевые архитектурные границы
+
+Следующая итерация не должна создавать вторую продуктовую истину ради соответствия HTML.
+
+Не делать без отдельного решения:
+
+- fake Surface Types registry;
+- fake Journal/telemetry/Series;
+- prototype localStorage architecture в product;
+- hardcoded gameplay values ради совпадения со screenshot;
+- второй selection store;
+- второй map/runtime/editor owner;
+- прямую запись в UnitModel из UI вместо штатной команды;
+- статическую directional-terrain графику, выдаваемую за live data.
+
+## Что ещё остаётся за пределами текущей editor-волны
+
+Не отменены и не объявлены завершёнными:
+
+- Program ↔ Journal LIVE foundation;
+- canonical HistoryProvider;
 - Metrics/telemetry;
 - Laboratory runtime;
 - Series/run records;
@@ -165,28 +234,43 @@ Historical handoff оркестратору:
 - Save/Open experiment envelope;
 - полный Unit Editor authoring/LIVE decision.
 
-Checkpoint-transfer не объявляет эти области завершёнными.
+## Точечная визуальная доводка «Маршрут» — 2026-08-18
 
-## Общие ограничения следующей итерации
+По пользовательскому замечанию приведён к HTML-прототипу блок `Ограничивать максимальную цену маршрута` во внутренней вкладке `Маршрут`:
 
-- каждая новая кодовая задача стартует только после повторного получения exact current `real-wargame-preview` HEAD;
-- отдельная feature-ветка на каждого исполнителя;
-- не писать напрямую в `main`;
-- новый подход пользователя сначала зафиксировать, а не предполагать продолжение старого;
-- не вводить второй gameplay truth/selection/map/runtime без явной архитектурной причины;
-- не переносить mock/demo/localStorage architecture HTML в product;
-- visual tasks проверять свежими screenshots exact SHA через repository screenshot skill;
-- runtime/render/UI changes проверять по performance skill и `CI_RISK_BASED_ACCEPTANCE.md`.
+- блок занимает обе колонки product-сетки, как блочный `.ge-route-limit` прототипа, а не сжимается в первую;
+- сохранены настоящий `maximumRouteCost`, штатный включатель и disabled readback; временные данные не создавались;
+- placeholder поля приведён к `введите цену` из утверждённого HTML;
+- вертикальная прокрутка получила светлые track/thumb без просвечивающего тёмного фона Combat Lab.
 
-## ПЕШКА — исторический handoff новой волны
+Проверено в локальном реальном продукте: ширина блока `722.8px` внутри секции `740.8px`, `grid-column: 1 / -1`; native scrollbar имеет светлые `#f8f8f4` track и `#9da291` thumb. Пройдены focused smoke, `npm run typecheck` и `npm run build`. Это presentation-only изменение: product owner, runtime и сохранение не менялись. Деплой, перенос в `real-wargame-preview` и изменения `main` не выполнялись.
 
-ПЕШКА первоначально выполнила реализацию unit token в отдельной ветке. Этот блок ниже описывает состояние до общей six-X интеграции и сохранён только как история выполнения.
+## Следующий порядок работы
+
+Кодексу рекомендуется:
+
+1. получить свежие remote HEAD `real-wargame-preview` и feature-ветки;
+2. прочитать `CODEX_HANDOFF_20260818.md`;
+3. провести собственный screenshot review опубликованного Preview против принятого HTML;
+4. каждое расхождение классифицировать как CSS/DOM, presentation-adapter, owner/read-model dependency или missing capability;
+5. не маскировать `Surface Types` visual-only реализацией;
+6. Environment и Directional Terrain сначала проверять по owner/read-model контракту;
+7. после каждой содержательной волны запускать TypeScript + `verify:preview` + build + fresh screenshot QA exact SHA;
+8. deploy делать только по отдельному явному запросу пользователя;
+9. transfer/merge в `real-wargame-preview` делать только после отдельного пользовательского GO;
+10. `main` не трогать.
+
+## Исторический контекст
+
+Предыдущие этапы не удалены и остаются источником истории/ownership решений:
 
 ```text
-branch: feature/20260817-polygon-unit-map-token-x
-implementation_head: bdae5ea0a5e3d282370b1401429d194ec2787da7
-PR: #286
-historical status at that moment: PAUSED BY USER / NOT INTEGRATED
+docs/subprojects/polygon-html-to-product/CHECKPOINT_20260817_APPROACH_RESET.md
+docs/subprojects/polygon-html-to-product/IMPLEMENTATION_WAVE_20260817.md
+docs/subprojects/polygon-html-to-product/ARKA_IMPLEMENTATION_HANDOFF.md
+docs/subprojects/polygon-html-to-product/PULSE_LIVE_UNIT_CONTRACT.md
+docs/subprojects/polygon-html-to-product/LINZA_RIGHT_PANEL_CONTRACT.md
+docs/subprojects/polygon-html-to-product/CHRONIST_EXPERIMENT_CONTRACT.md
 ```
 
-Впоследствии работа ПЕШКИ была включена в six-X integration lineage, которая входит в текущий checkpoint source.
+Старые более оптимистичные или более пессимистичные формулировки visual readiness следует читать как историю соответствующего этапа. Для текущего состояния редакторов приоритет имеют этот файл и `CODEX_HANDOFF_20260818.md`.

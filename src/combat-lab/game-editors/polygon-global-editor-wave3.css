@@ -1,0 +1,81 @@
+/* Wave 3 visual-parity corrections for the accepted Polygon shared Editors.
+   Presentation only: owner DOM, values, commands, persistence and registries remain authoritative. */
+
+/* Several owner styles force cards/sections to display:grid !important. The parity adapter
+   deliberately uses the native hidden attribute to switch Overview/tab content, so make that
+   contract authoritative inside the decorated editor root. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-editor-parity-root [hidden] {
+  display: none !important;
+}
+
+/* Gameplay tuning tabs are presentation controls created by PolygonGlobalEditorParity.
+   Keep them visible even when an owner form has stronger layout rules. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--soldierArchetypes .gameplay-tuning-editor-form-panel > .polygon-editor-tabs {
+  min-height: 42px !important;
+  height: auto !important;
+  display: flex !important;
+  position: static !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* The gameplay-tuning owner reserves exactly three direct grid rows:
+   heading / flexible fields / save bar. Soldier archetypes and condition profiles add two
+   presentation-only rows (tabs and summary) before the authoritative fields host. Keep those
+   rows intrinsic and preserve the fields host as the flexible track. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal :is(.polygon-global-editor--soldierArchetypes,.polygon-global-editor--conditionProfiles) .gameplay-tuning-editor-form-panel {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto !important;
+}
+
+/* Perception adds one presentation-only flow strip between heading and fields, so give that
+   strip its own auto row and keep the authoritative fields host in the flexible track. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--perceptionProfiles .gameplay-tuning-editor-form-panel {
+  grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+}
+
+/* The accepted perception overview uses a compact evidence-flow strip rather than a large
+   empty diagram panel. This remains explanatory presentation; it does not calculate evidence. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--perceptionProfiles .polygon-perception-flow {
+  min-height: 52px !important;
+  height: auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-wrap: wrap !important;
+  gap: 5px !important;
+  margin: 10px 14px 0 !important;
+  padding: 8px 10px !important;
+  border: 1px solid rgba(69, 84, 48, .22) !important;
+  border-radius: 5px !important;
+  background: #eef1e7 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--perceptionProfiles .polygon-perception-flow > span {
+  min-height: 24px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 4px 7px !important;
+  border: 1px solid #d0cfc6 !important;
+  border-radius: 4px !important;
+  color: #4f534a !important;
+  background: #fff !important;
+  font-size: 7.5px !important;
+  font-weight: 850 !important;
+  line-height: 1.15 !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal .polygon-global-editor--perceptionProfiles .polygon-perception-flow > b {
+  color: #777b70 !important;
+  font-size: 9px !important;
+  line-height: 1 !important;
+}
+
+/* Once the adapter hides raw Overview fields, keep the remaining live summary compact like
+   the accepted first screen instead of stretching to fill the former form area. */
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal :is(.polygon-global-editor--soldierArchetypes,.polygon-global-editor--conditionProfiles) .polygon-editor-summary {
+  align-self: start !important;
+}
+
+body.app-shell-mode-combat-lab #combat-lab-extension-root .polygon-shell-editors-portal :is(.polygon-global-editor--soldierArchetypes,.polygon-global-editor--conditionProfiles) .polygon-editor-summary-grid {
+  align-items: stretch !important;
+}
