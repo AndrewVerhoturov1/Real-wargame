@@ -2,6 +2,8 @@
 
 Use this table after reading `docs/ai/WEB_CHAT_START.md` and creating the canonical feature branch from the exact current `real-wargame-preview` head.
 
+For the Codex/OpenCode execution routes (A/B/C/D/L/Q/R/W/X) and a ready Route Q handoff package for an external GitHub-only agent, see `docs/ai/OPENCODE_ROUTES.md` and `docs/ai/OPENCODE_ROUTES_EXTERNAL_Q.md`.
+
 ## Default implementation route
 
 ```text
