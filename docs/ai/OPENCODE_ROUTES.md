@@ -212,6 +212,36 @@ Codex выступает оркестратором и независимым п
 | Навыки | `x-route-control` — читать перед использованием Route X; `opencode-github-mcp-control` — читать перед любым GitHub-чтением/записью внутри X. |
 | Real Wargame | цель доставки — `real-wargame-preview`; нацеливание на `main` — нарушение preview-политики, если нет явного `MAIN_GO_APPROVED_BY_USER`. Текущая политика проекта сильнее глобальной X-инструкции (см. раздел 6). |
 
+#### Обновлённый транспорт Route X
+
+Актуальная публичная копия навыка и скриптов находится в
+`.agents/skills/route-public/x-route-control/` и перечислена в
+`docs/ai/ROUTE_SKILLS_MANIFEST.md`. Для X обязательна последовательность:
+
+```text
+Run-X-Chrome.ps1 → Open-X-Auto-Chat.ps1 → Send-X-Route-Prompt.ps1
+```
+
+Рабочий транспорт — только выделенный видимый Chrome-профиль
+`chrome-zworker-plus-next` с CDP `9223`. Встроенный браузер, `browser-client.mjs`,
+`node_repl`, `agent.browsers`, расширение Chrome и `playwright.browser_tabs` не
+являются транспортом X. После временного сбоя сначала повторяется штатная
+проверка того же CDP через тот же скрипт; затем маршрут останавливается с точной
+причиной, без выбора другого браузера.
+
+Скрипты учитывают отрисовку интерфейса: пауза после готовности Chrome — `1000`
+мс, после открытия/переключения страницы — `750` мс, после маркера ответа перед
+поиском ссылки — `2000` мс, перед проверкой ссылки — `750` мс. Это не повторная
+отправка запроса.
+
+Если модель явно сообщает, что запись остановила система безопасности OpenAI до
+выполнения записи, она добавляет сигнал
+`<!-- X_ROUTE_RETRY: safety_write_block -->`. Скрипт только распознаёт этот
+сигнал: ждёт `10` секунд, создаёт новый `request_id`, открывает новый чат и
+делает ровно одну повторную попытку. Обычный `status: blocked`, отказ GitHub,
+недостаток прав или предположение о причине повтор не запускают. После одной
+повторной попытки дальнейшие повторы запрещены.
+
 ### 3.10 R-init (интеграция: Route X как транспорт для preview-цикла)
 
 R-init preview-доставка использует Route X как транспортный слой: Route X работает
@@ -382,23 +412,11 @@ feature-ветку и переносится в preview только после 
 `local-only / unavailable`, а их несекретные правила переносятся в этот документ
 и в `docs/ai/OPENCODE_ROUTES_EXTERNAL_Q.md`.
 
-Локальные исходники (для справки, не публикуются как ссылки):
-
-```text
-C:\Users\andre\.agents\skills\opencode-mcp-windows-control\SKILL.md
-C:\Users\andre\.codex\skills\routing-reminder\SKILL.md
-C:\Users\andre\.agents\skills\d-route-control\SKILL.md
-C:\Users\andre\.agents\skills\x-route-control\SKILL.md
-C:\Users\andre\.agents\skills\opencode-zworker-control\SKILL.md
-C:\Users\andre\.agents\skills\zworker-auto\SKILL.md
-C:\Users\andre\.agents\skills\opencode-deepseek-pro-jobs-control\SKILL.md
-C:\Users\andre\.agents\skills\opencode-github-mcp-control\SKILL.md
-```
-
-Навык ведения документации проекта `real-wargame-documentation` существует в
-локальном окружении, но на момент написания не отслеживается репозиторием, поэтому
-для внешнего агента он тоже `local-only / unavailable` (его правила изложены в
-канонических документах, перечисленных в разделе 6).
+Публичные копии этих навыков теперь входят в репозиторий: см. [манифест
+маршрутных навыков](ROUTE_SKILLS_MANIFEST.md) и каталог
+`.agents/skills/route-public/`. Внешний агент читает репозиторные копии по
+GitHub/raw-ссылкам; локальные исходники окружения не требуются и не должны
+публиковаться.
 
 Приоритет при любом расхождении: проектные канонические источники (раздел 6,
 пункт 1) сильнее локальных маршрутных навыков (раздел 6, пункт 2).
