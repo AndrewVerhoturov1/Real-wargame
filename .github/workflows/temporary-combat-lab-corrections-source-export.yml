@@ -1,0 +1,46 @@
+name: Temporary Apply Combat Lab Corrections
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temporary-combat-lab-corrections-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'work/20260728-combat-lab-prone-ui-fixes'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout writable corrections branch
+        uses: actions/checkout@v4
+        with:
+          ref: work/20260728-combat-lab-prone-ui-fixes
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Apply exact reviewed patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(git log -1 --pretty=%s)" != 'chore: upload corrections patch final' ]]; then
+            echo 'Patch transport is incomplete; nothing to apply.'
+            exit 0
+          fi
+          prefix='.github/temporary-combat-lab-corrections.patch.b64.part-'
+          patch_file='/tmp/combat-lab-corrections.patch'
+          cat "${prefix}"{00..06} | base64 --decode > "$patch_file"
+          git apply --check "$patch_file"
+          git apply "$patch_file"
+          rm -f "${prefix}"{00..06} .github/workflows/temporary-combat-lab-corrections-source-export.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: correct Combat Lab targets and UI'
+          git push origin HEAD:work/20260728-combat-lab-prone-ui-fixes
